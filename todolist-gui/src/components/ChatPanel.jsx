@@ -9,6 +9,7 @@ import {
   clearAiConfig,
   loadAiConfig,
   saveAiConfig,
+  testAiConnection,
 } from '../lib/aiFallback';
 import Icon from './Icon.jsx';
 import ToolCallCard from './ToolCallCard.jsx';
@@ -49,6 +50,8 @@ export default function ChatPanel({ store, onOpenList }) {
   const [histIdx, setHistIdx] = useState(-1);
   const [showAi, setShowAi] = useState(false);
   const [aiCfg, setAiCfg] = useState(() => loadAiConfig() || { ...DEFAULT_AI_CONFIG });
+  const [aiTesting, setAiTesting] = useState(false);
+  const [aiTest, setAiTest] = useState(null);
   const streamRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -76,6 +79,19 @@ export default function ChatPanel({ store, onOpenList }) {
     clearAiConfig();
     setAiCfg({ ...DEFAULT_AI_CONFIG });
     setShowAi(false);
+  };
+
+  // 端到端自检：测的是表单当前值（未保存也能测），走 callAiFallback 的真实链路。
+  const doTestAi = async () => {
+    setAiTesting(true);
+    setAiTest(null);
+    try {
+      setAiTest(await testAiConnection(aiCfg));
+    } catch (err) {
+      setAiTest({ ok: false, stage: 'error', detail: `自检本身异常：${(err && err.message) || err}`, latencyMs: 0 });
+    } finally {
+      setAiTesting(false);
+    }
   };
 
   // 自动滚动到底部
@@ -248,10 +264,19 @@ export default function ChatPanel({ store, onOpenList }) {
               <button type="button" className="btn" onClick={doClearAi}>
                 清除
               </button>
+              <button type="button" className="btn" onClick={doTestAi} disabled={aiTesting}>
+                {aiTesting ? '测试中…' : '测试连接'}
+              </button>
               <span className="ai-cfg-where">
                 {aiOn ? `当前会发往：${aiTarget}` : '当前不会发出任何网络请求'}
               </span>
             </div>
+            {aiTest && (
+              <div className={`ai-test-result ${aiTest.ok ? 'ok' : 'fail'}`}>
+                {aiTest.ok ? '✓ ' : '✕ '}
+                {aiTest.detail}
+              </div>
+            )}
           </div>
         )}
 

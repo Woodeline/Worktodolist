@@ -13,6 +13,7 @@ import {
   loadAiConfig,
   normalizeAiIntent,
   saveAiConfig,
+  testAiConnection,
 } from './aiFallback.js';
 
 const TASKS = [
@@ -343,5 +344,120 @@ describe('callAiFallback —— 只在已配置时才联网', () => {
       fetchImpl,
     });
     expect(fetchImpl.mock.calls[0][1].headers['x-ai-target']).toBe('https://api.example.com/v1');
+  });
+});
+
+describe('testAiConnection 链路自检（分档诊断）', () => {
+  const GOOD_CFG = { enabled: true, apiKey: 'sk-test', baseUrl: 'https://api.example.com/v1', model: 'm' };
+  const okCompletion = (content) => async () => ({
+    ok: true,
+    status: 200,
+    async json() {
+      return { choices: [{ message: { content } }] };
+    },
+  });
+
+  it('未配置 → stage=config，不发任何请求', async () => {
+    const fetchImpl = vi.fn();
+    const r = await testAiConnection({ enabled: false, apiKey: '', baseUrl: '', model: '' }, { fetchImpl });
+    expect(r.ok).toBe(false);
+    expect(r.stage).toBe('config');
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('全链路成功 → stage=success，intent 来自模型', async () => {
+    const r = await testAiConnection(GOOD_CFG, {
+      fetchImpl: okCompletion('{"intent":"add","title":"测试任务"}'),
+      today: '2026-10-01',
+    });
+    expect(r.ok).toBe(true);
+    expect(r.stage).toBe('success');
+    expect(r.intent.slots.title).toBe('测试任务');
+    expect(r.detail).toContain('新增任务');
+    expect(r.latencyMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('HTTP 401 → stage=auth', async () => {
+    const r = await testAiConnection(GOOD_CFG, {
+      fetchImpl: async () => ({ ok: false, status: 401, async json() { return {}; } }),
+      today: '2026-10-01',
+    });
+    expect(r.ok).toBe(false);
+    expect(r.stage).toBe('auth');
+    expect(r.detail).toContain('401');
+  });
+
+  it('HTTP 404 → stage=model', async () => {
+    const r = await testAiConnection(GOOD_CFG, {
+      fetchImpl: async () => ({ ok: false, status: 404, async json() { return {}; } }),
+      today: '2026-10-01',
+    });
+    expect(r.stage).toBe('model');
+  });
+
+  it('200 但模型输出不是有效意图 → stage=format', async () => {
+    const r = await testAiConnection(GOOD_CFG, {
+      fetchImpl: okCompletion('好的，我帮你完成。'),
+      today: '2026-10-01',
+    });
+    expect(r.ok).toBe(false);
+    expect(r.stage).toBe('format');
+    expect(r.detail).toContain('200');
+  });
+
+  it('本地代理 403（target rejected 文案）→ stage=proxy，与上游 403 区分', async () => {
+    const r = await testAiConnection(GOOD_CFG, {
+      fetchImpl: async () => ({
+        ok: false,
+        status: 403,
+        async json() { return {}; },
+        // 真 Response.clone() 是同步的，桩也要保持一致
+        clone() {
+          return { async text() { return 'ai-proxy: target rejected (not in allowlist / not public http[s])'; } };
+        },
+      }),
+      today: '2026-10-01',
+    });
+    expect(r.ok).toBe(false);
+    expect(r.stage).toBe('proxy');
+    expect(r.detail).toContain('TODOLIST_AI_ALLOW_HOSTS');
+  });
+
+  it('上游自己的 403（无特殊文案）→ 仍按 auth 分档', async () => {
+    const r = await testAiConnection(GOOD_CFG, {
+      fetchImpl: async () => ({
+        ok: false,
+        status: 403,
+        async json() { return {}; },
+        clone() {
+          return { async text() { return '{"error":"forbidden"}'; } };
+        },
+      }),
+      today: '2026-10-01',
+    });
+    expect(r.stage).toBe('auth');
+  });
+
+  it('fetch 抛网络异常 → stage=network', async () => {
+    const r = await testAiConnection(GOOD_CFG, {
+      fetchImpl: async () => {
+        throw new TypeError('Failed to fetch');
+      },
+      today: '2026-10-01',
+    });
+    expect(r.ok).toBe(false);
+    expect(r.stage).toBe('network');
+  });
+
+  it('超时（TimeoutError）→ stage=timeout', async () => {
+    const timeoutErr = new Error('The operation timed out.');
+    timeoutErr.name = 'TimeoutError';
+    const r = await testAiConnection(GOOD_CFG, {
+      fetchImpl: async () => {
+        throw timeoutErr;
+      },
+      today: '2026-10-01',
+    });
+    expect(r.stage).toBe('timeout');
   });
 });

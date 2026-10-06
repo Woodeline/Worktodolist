@@ -1093,6 +1093,27 @@ mark {
   text-decoration: underline;
 }
 
+/* —— AI 兜底「测试连接」自检结果 —— */
+.ai-test-result {
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+  line-height: 1.7;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  margin-top: var(--sp-2);
+  word-break: break-all;
+}
+
+.ai-test-result.ok {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.ai-test-result.fail {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
 /* —— AI 兜底设置面板 —— */
 .ai-cfg {
   flex-shrink: 0;

@@ -135,13 +135,29 @@ function buildSystemPrompt(today, tasks) {
 
 // —— 网络调用 ——
 
+// 页面是否由本机服务（启动器的 preview/dev）提供。
+// 关键：dist 构建里 import.meta.env.DEV 恒为 false，若只看 DEV 标志，
+// 日常双击跑的 preview 模式会绕过本地代理直连上游，被 CORS 拦截——
+// 代理在 preview 里配了也白配。判据改为「origin 是本机回环」，
+// 与部署模型一致：这个应用永远由启动器服务在 localhost 上。
+export function isLocalOrigin() {
+  try {
+    if (typeof location === 'undefined') return false;
+    // WHATWG URL 规范里 IPv6 的 hostname 保留方括号，两种写法都认
+    return /^(localhost|127\.0\.0\.1|\[::1\]|::1)$/.test(location.hostname);
+  } catch {
+    return false;
+  }
+}
+
 // dev 环境走 Vite 代理绕开 CORS（第三方 API 一般不返回 Access-Control-Allow-Origin）。
 // 目标源通过自定义请求头传给代理，代理侧在 vite.config.js 里读。
+// 本机来源（preview）同样走代理——见 isLocalOrigin 的注释。
 function resolveEndpoint(baseUrl) {
   const base = String(baseUrl || '').replace(/\/+$/, '');
   if (!base) return null;
   const dev = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV;
-  if (dev) {
+  if (dev || isLocalOrigin()) {
     return { url: '/ai-proxy/chat/completions', targetHeader: base };
   }
   return { url: `${base}/chat/completions`, targetHeader: '' };
@@ -273,4 +289,136 @@ export async function callAiFallback(text, opts = {}) {
   const normalized = normalizeAiIntent(parsed, tasks, today);
   if (normalized) normalized.raw = String(text || '');
   return normalized;
+}
+
+// —— 链路自检（应用内「测试连接」按钮用）——
+//
+// AI 兜底是「最需要它时才第一次真跑」的路径：平时静默，用的时候才发现
+// 代理不通 / Key 失效 / 模型名写错就晚了。这里用与 callAiFallback 完全相同的
+// 请求路径发一条测试句，把结果分档报告，让问题在配置时暴露而不是使用时。
+// 2026-10-06 的教训：代理的 router 选项从未生效过，全绿测试与成功构建都
+// 发现不了这种「配置层静默失效」——所以必须有真发请求的端到端自检。
+const TEST_SENTENCE = '加一条 测试任务';
+const TEST_TASKS = [{ id: 't-test', title: '样例任务' }];
+
+function describeIntent(intent) {
+  const s = (intent && intent.slots) || {};
+  const bits = [];
+  if (s.title) bits.push(`「${s.title}」`);
+  if (s.dueDate) bits.push(`截止 ${s.dueDate}`);
+  if (s.priority) bits.push(`优先级 ${s.priority}`);
+  const label = {
+    add: '新增任务',
+    complete: '完成任务',
+    uncomplete: '取消完成',
+    delete: '删除任务',
+    postpone: '延期',
+    setDue: '设截止日',
+    setPriority: '设优先级',
+    star: '星标',
+    addContext: '加分类',
+    addProject: '加标签',
+    query: '查询',
+    undo: '撤销',
+  }[intent && intent.intent] || (intent && intent.intent) || '未知意图';
+  return `${label} ${bits.join(' ')}`.trim();
+}
+
+/**
+ * 对 AI 兜底链路做一次端到端自检。
+ * 复用 callAiFallback 的真实请求路径（代理 → 鉴权 → 模型 → JSON 解析），
+ * 不另造第二条链路——测的就是以后真正会走的那条。
+ * @param {object} [cfg] 未传时读 localStorage 配置；UI 会传表单当前值（未保存也能测）
+ * @param {{fetchImpl?:Function, today?:string, timeoutMs?:number}} [opts]
+ * @returns {Promise<{ok:boolean, stage:string, detail:string, latencyMs:number, intent?:object}>}
+ *   stage: config|proxy|timeout|auth|model|request|upstream|network|format|success
+ */
+export async function testAiConnection(cfg, opts = {}) {
+  const c = cfg || loadAiConfig();
+  const t0 = Date.now();
+  if (!isAiConfigured(c)) {
+    return {
+      ok: false,
+      stage: 'config',
+      detail: '还没有配置：需要打开「启用」，并填写服务地址和 API Key。',
+      latencyMs: 0,
+    };
+  }
+
+  let status = null;
+  let proxyRejected = false;
+  const recordingFetch = async (url, init) => {
+    const res = await (opts.fetchImpl || fetch)(url, init);
+    status = res ? res.status : null;
+    if (res && res.status === 403) {
+      // 本地代理拒绝内网目标时返回 403 + 固定文案；与上游自己的 403 区分开
+      try {
+        const body = await res.clone().text();
+        if (body.includes('target rejected')) proxyRejected = true;
+      } catch {
+        // 忽略读取失败，按普通 403 处理
+      }
+    }
+    return res;
+  };
+
+  let intent = null;
+  let err = null;
+  try {
+    intent = await callAiFallback(TEST_SENTENCE, {
+      tasks: TEST_TASKS,
+      today: opts.today || new Date().toISOString().slice(0, 10),
+      config: c,
+      fetchImpl: recordingFetch,
+      timeoutMs: opts.timeoutMs || 20000,
+    });
+  } catch (e) {
+    err = e;
+  }
+  const latencyMs = Date.now() - t0;
+
+  if (proxyRejected) {
+    return {
+      ok: false,
+      stage: 'proxy',
+      detail:
+        '本地代理拒绝了该目标：服务地址指向回环/内网网段。若是有意使用本地大模型，'
+        + '启动应用前设置环境变量 TODOLIST_AI_ALLOW_HOSTS=localhost,127.0.0.1（逗号分隔主机名）。',
+      latencyMs,
+    };
+  }
+  if (err) {
+    const msg = String((err && err.message) || err);
+    if (/HTTP 40[13]\b/.test(msg)) {
+      return { ok: false, stage: 'auth', detail: `认证被拒绝（${msg}）。检查 API Key 是否正确、账户是否有余额/权限。`, latencyMs };
+    }
+    if (/HTTP 404\b/.test(msg)) {
+      return { ok: false, stage: 'model', detail: `接口或模型不存在（HTTP 404）。检查服务地址是否为 OpenAI 兼容接口、模型名拼写是否正确。`, latencyMs };
+    }
+    if (/HTTP 4\d\d\b/.test(msg)) {
+      return { ok: false, stage: 'request', detail: `请求被上游拒绝（${msg}）。检查 baseUrl 路径与请求参数。`, latencyMs };
+    }
+    if (/HTTP 5\d\d\b/.test(msg)) {
+      return { ok: false, stage: 'upstream', detail: `上游服务端错误（${msg}）。服务商侧问题，稍后重试。`, latencyMs };
+    }
+    if ((err && err.name === 'TimeoutError') || /timed?\s*out|abort/i.test(msg)) {
+      return { ok: false, stage: 'timeout', detail: `请求超时（${latencyMs}ms）。检查网络与上游服务可用性。`, latencyMs };
+    }
+    return { ok: false, stage: 'network', detail: `网络不可达（${msg}）。检查网络；非本机来源打开时还可能是上游未放行 CORS。`, latencyMs };
+  }
+  if (!intent) {
+    return {
+      ok: false,
+      stage: 'format',
+      detail: `网络已通（HTTP ${status}），但模型返回无法解析为有效意图。确认该模型支持 JSON 输出、baseUrl 指向 OpenAI 兼容的 /chat/completions 接口。`,
+      latencyMs,
+    };
+  }
+  return {
+    ok: true,
+    stage: 'success',
+    detail: `链路正常（${latencyMs}ms）：模型把「${TEST_SENTENCE}」解析为 → ${describeIntent(intent)}`,
+    latencyMs,
+    intent,
+  };
 }

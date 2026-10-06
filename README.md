@@ -43,6 +43,8 @@ python scripts/register_reminder_task.py
 
 对话页右上「AI 兜底」里配置 baseUrl / 模型 / API Key。仅当本地规则引擎没听懂时，那一句话才会发往你配置的服务（界面上会明示发往哪个域）。
 
+- **配置完点「测试连接」**：端到端自检真实链路（配置 → 本地代理 → 认证 → 模型 → JSON 解析），分档报告问题所在——未配置 / 代理拒绝 / Key 失效 / 模型名错误 / 超时 / 返回格式异常 / 正常。
+- 不想配真实 Key、只想验证本机转发层：`npm run test:ai`（在 `todolist-gui/` 下，自动起 mock 上游 + 生产 preview，六项断言）。
 - API Key 只存本机 localStorage。
 - 本地转发代理会**拒绝回环/内网网段目标**（防跳板）。若要用本地大模型（如 Ollama），启动前设环境变量：`TODOLIST_AI_ALLOW_HOSTS=localhost,127.0.0.1`（逗号分隔，精确匹配主机名）。
 

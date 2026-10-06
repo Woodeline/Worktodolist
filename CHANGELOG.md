@@ -1,5 +1,23 @@
 # 更新日志
 
+## v0.1.1 · 2026-10-06
+
+AI 兜底接入检测工具 + preview 模式下代理缺口的修复。
+
+### 修复
+
+- **preview 模式下 AI 兜底绕过本地代理**：`resolveEndpoint` 原本只看 `import.meta.env.DEV` 标志，而构建产物里 DEV 恒为 false——日常双击跑的 preview 会直连上游、被 CORS 拦截，代理在 preview 里配了也白配。改为「DEV 或本机回环来源」即走代理（`isLocalOrigin()`），与"应用永远由启动器服务在 localhost"的部署模型一致。
+
+### 新增：AI 接入检测（双层）
+
+- **应用内「测试连接」按钮**（对话页 → AI 兜底设置面板）：用 `callAiFallback` 的真实请求路径发一条测试句，分档报告诊断结果——`config` 未配置 / `proxy` 代理拒绝内网目标（提示 TODOLIST_AI_ALLOW_HOSTS）/ `timeout` / `auth` Key 失效 / `model` 模型名或地址错误 / `request` / `upstream` 服务商 5xx / `network` 不可达（含 CORS 提示）/ `format` 返回无法解析为有效意图 / `success` 成功并展示模型解析出的意图。测的是表单当前值，未保存也能测。
+- **命令行回归 `npm run test:ai`**（`scripts/qa-ai-link.mjs`）：不需要真实 API Key——自动起 mock OpenAI 上游 + 生产 preview，断言六件事：转发到达上游、路径拼接正确、Authorization 透传、`x-ai-target` 不泄漏、未放行内网目标 403、缺失目标头 403。这条脚本的存在理由：router 存量 bug 已证明「全绿测试 + 成功构建」发现不了配置层静默失效。
+
+### 质量
+
+- 测试基线 199 → **208 例全绿**（testAiConnection 九个分档用例）。
+- 生产构建 226.25 KB JS（gzip 78.20 KB）。
+
 ## v0.1.0 · 2026-10-06
 
 首个对外版本。基于 2026-10-06 两轮代码评审（自评 + 外部评审建议）合并落地。
