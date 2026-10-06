@@ -1850,6 +1850,44 @@ mark {
   margin-top: var(--sp-5);
 }
 
+/* --- 对话内的提议按钮行（新建/修改/跳过，挂在提议气泡内部） --- */
+.proposal-actions {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+
+.proposal-actions .btn {
+  padding: 4px var(--sp-4);
+  font-size: var(--fs-xs);
+}
+
+/* --- 新建提议修改弹窗：居中对话框，表单复用 drawer 的 .field 体系 --- */
+.proposal-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 380px;
+  max-width: 92vw;
+  max-height: 86vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-3);
+  z-index: 40;
+  padding: var(--sp-5) var(--sp-5) var(--sp-6);
+  animation: modal-in var(--dur-2) var(--ease) backwards;
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px));
+  }
+}
+
 /* --- 按钮 --- */
 .btn {
   display: inline-flex;

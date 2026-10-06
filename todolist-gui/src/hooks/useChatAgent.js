@@ -160,8 +160,12 @@ export function useChatAgent(store) {
   );
 
   // 生成一条 Agent 文本回复（先落事件，再流式展示）。
+  //
+  // extra：附加到消息对象上的"纯内存"字段（如按钮所需的 proposal），不写入事件日志。
+  // 刷新回放后这些字段消失 —— 与澄清态（pending）不持久化的语义一致，
+  // 历史提议消息上不会出现还能点的按钮。
   const respond = useCallback(
-    async (text, kind = 'text') => {
+    async (text, kind = 'text', extra = null) => {
       const event = await persist('agent', { text, kind });
       const id = `a-${event.seq}`;
       pushMessage({
@@ -174,8 +178,10 @@ export function useChatAgent(store) {
         full: text,
         streaming: true,
         raw: event,
+        ...(extra || {}),
       });
       await typeInto(id, text);
+      return id;
     },
     [persist, pushMessage, typeInto]
   );
@@ -275,12 +281,6 @@ export function useChatAgent(store) {
     async (intent) => {
       const slots = (intent && intent.slots) || {};
       const title = String(slots.title || '').trim();
-      setPending({
-        kind: 'create',
-        keyword: title,
-        slots,
-        note: (intent && intent.note) || null,
-      });
 
       const lines = [`· 标题：${title}`];
       if (slots.dueDate) lines.push(`· 截止：${slots.dueDate}`);
@@ -288,9 +288,20 @@ export function useChatAgent(store) {
       if (slots.contexts && slots.contexts.length) lines.push(`· 分类：@${slots.contexts.join(' @')}`);
       if (slots.projects && slots.projects.length) lines.push(`· 标签：+${slots.projects.join(' +')}`);
       if (intent && intent.note) lines.push(`· 提示：${intent.note}`);
-      lines.push('回「是」新建，回「不是」跳过（不改动文件）。');
+      lines.push('回「是」新建，回「不是」跳过；也可以直接点下方按钮（确认前不改动文件）。');
 
-      await respond(`这句听着像一条待办，要我新建吗？\n${lines.join('\n')}`);
+      // proposal 挂在内存消息上，按钮由 ChatPanel 按 pending.msgId 匹配渲染；
+      // setPending 放在 respond 之后以拿到消息 id —— 期间 busy 为真，不会有输入插进来。
+      const msgId = await respond(`这句听着像一条待办，要我新建吗？\n${lines.join('\n')}`, 'text', {
+        proposal: {
+          title,
+          dueDate: slots.dueDate || '',
+          priority: slots.priority || '',
+          contexts: [...(slots.contexts || [])],
+          projects: [...(slots.projects || [])],
+        },
+      });
+      setPending({ kind: 'create', keyword: title, slots, note: (intent && intent.note) || null, msgId });
     },
     [respond]
   );
@@ -482,6 +493,50 @@ export function useChatAgent(store) {
     [busy, pending, persist, pushMessage, executeIntent, respond, route]
   );
 
+  // 「修改」弹窗确认后：带着编辑过的槽位直接落盘新建。
+  //
+  // 不走 send() —— readConfirm 识别不了"改过的内容"，而这里的用户意图就是明确的
+  // 同意+改写。执行路径与 create 澄清态的 yes 分支完全同一条（executeIntent('add')），
+  // 工具卡片 / 事件日志 / 回复文案全部复用；日志里另记一条可读的 user 事件，
+  // 回放时能看出这条任务是按钮修改后新建的，而不是凭空出现。
+  const confirmCreate = useCallback(
+    async (patch) => {
+      const carried = pending;
+      if (!carried || carried.kind !== 'create' || busy) return;
+      const slots = { ...(carried.slots || { title: carried.keyword }), ...patch };
+      slots.title = String(slots.title || '').trim();
+      if (!slots.title) return; // 与弹窗的禁用态双保险：没标题就不消费提议
+      setPending(null);
+      setBusy(true);
+      try {
+        const text = `修改后新建「${slots.title}」`;
+        const userEvent = await persist('user', { text });
+        pushMessage({
+          id: `u-${userEvent.seq}`,
+          seq: userEvent.seq,
+          ts: userEvent.ts,
+          role: 'user',
+          text,
+          raw: userEvent,
+        });
+        await executeIntent({
+          intent: 'add',
+          target: null,
+          slots,
+          matches: [],
+          nearMatches: [],
+          confidence: 'high',
+          note: carried.note || null,
+          raw: text,
+          needsConfirm: false,
+        });
+      } finally {
+        setBusy(false);
+      }
+    },
+    [pending, busy, persist, pushMessage, executeIntent]
+  );
+
   // 撤销最后一步动作（复用 store.undo），并写入撤销事件。
   const undo = useCallback(async () => {
     if (busy) return;
@@ -558,6 +613,7 @@ export function useChatAgent(store) {
     busy,
     pending,
     send,
+    confirmCreate,
     undo,
     snapshotTasks,
     logCount,

@@ -436,3 +436,124 @@ describe('澄清候选（多命中 / 弱匹配兜底）', () => {
     expect(texts).not.toMatch(/请确认：\s*$/);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('提议按钮化：proposal 消息 + confirmCreate', () => {
+  it('suggestAdd 消息携带 proposal 字段，pending 绑定该消息 id（按钮只挂当前提议）', async () => {
+    const { store } = makeStore();
+    const render = makeRenderer(store);
+    let agent = render();
+
+    await agent.send('后天上午9点有月报会议要开');
+    agent = render();
+
+    const proposalMsg = agent.messages.find((m) => m.proposal);
+    expect(proposalMsg).toBeTruthy();
+    expect(proposalMsg.proposal.title).toContain('月报会议');
+    expect(agent.pending.kind).toBe('create');
+    expect(agent.pending.msgId).toBe(proposalMsg.id);
+  });
+
+  it('按钮「新建」等价回「是」：send("新建") 用原槽位落盘', async () => {
+    const { store } = makeStore();
+    const render = makeRenderer(store);
+    let agent = render();
+
+    await agent.send('后天上午9点有月报会议要开');
+    agent = render();
+    await agent.send('新建');
+    agent = render();
+
+    expect(store.addTask).toHaveBeenCalledTimes(1);
+    expect(store.addTask.mock.calls[0][0]).toContain('月报会议');
+    expect(store.addTask.mock.calls[0][0]).toContain(`due:${dayjs().add(2, 'day').format('YYYY-MM-DD')}`);
+    expect(agent.pending).toBeFalsy();
+  });
+
+  it('按钮「跳过」等价回「不是」：send("跳过") 不落盘', async () => {
+    const { store } = makeStore();
+    const render = makeRenderer(store);
+    let agent = render();
+
+    await agent.send('后天上午9点有月报会议要开');
+    agent = render();
+    await agent.send('跳过');
+    agent = render();
+
+    expect(store.addTask).not.toHaveBeenCalled();
+    expect(agent.pending).toBeFalsy();
+    expect(agentTexts(agent)).toContain('已跳过');
+  });
+
+  it('confirmCreate 用编辑后的槽位落盘，日志里记为「修改后新建」', async () => {
+    const { store, fs } = makeStore();
+    const render = makeRenderer(store);
+    let agent = render();
+
+    await agent.send('后天上午9点有月报会议要开');
+    agent = render();
+    await agent.confirmCreate({
+      title: '月度例会',
+      priority: 'A',
+      dueDate: '2027-01-01',
+      contexts: ['工作'],
+      projects: [],
+    });
+    agent = render();
+
+    expect(store.addTask).toHaveBeenCalledTimes(1);
+    const arg = store.addTask.mock.calls[0][0];
+    // 编辑值生效：新标题 / 新截止 / 优先级 / 分类
+    expect(arg).toContain('月度例会');
+    expect(arg).toContain('(A)');
+    expect(arg).toContain('due:2027-01-01');
+    expect(arg).toContain('@工作');
+    // runAdd 只取 slots.dueDate 一个值 —— 含新截止即证明旧截止（后天）已被覆盖
+    expect(arg).not.toContain('月报会议');
+
+    const events = readLog(fs);
+    const userEvents = events.filter((e) => e.type === 'user');
+    expect(userEvents.some((e) => String(e.payload.text).includes('修改后新建'))).toBe(true);
+    expect(agent.pending).toBeFalsy();
+  });
+
+  it('confirmCreate 清空可选槽位 → 对应字段不写入', async () => {
+    const { store } = makeStore();
+    const render = makeRenderer(store);
+    let agent = render();
+
+    await agent.send('后天上午9点有月报会议要开');
+    agent = render();
+    await agent.confirmCreate({ title: '临时任务', dueDate: null, priority: null, contexts: [], projects: [] });
+    agent = render();
+
+    expect(store.addTask).toHaveBeenCalledTimes(1);
+    expect(store.addTask.mock.calls[0][0]).toBe('临时任务');
+  });
+
+  it('没有存活提议时 confirmCreate 是空操作', async () => {
+    const { store } = makeStore();
+    const render = makeRenderer(store);
+    let agent = render();
+
+    await agent.confirmCreate({ title: '不该出现的任务' });
+    agent = render();
+
+    expect(store.addTask).not.toHaveBeenCalled();
+  });
+
+  it('confirmCreate 空标题 → 不消费提议（pending 保留，可重新修改）', async () => {
+    const { store } = makeStore();
+    const render = makeRenderer(store);
+    let agent = render();
+
+    await agent.send('后天上午9点有月报会议要开');
+    agent = render();
+    await agent.confirmCreate({ title: '   ' });
+    agent = render();
+
+    expect(store.addTask).not.toHaveBeenCalled();
+    expect(agent.pending).toBeTruthy();
+    expect(agent.pending.kind).toBe('create');
+  });
+});

@@ -13,6 +13,7 @@ import {
 } from '../lib/aiFallback';
 import Icon from './Icon.jsx';
 import ToolCallCard from './ToolCallCard.jsx';
+import ProposalModal from './ProposalModal.jsx';
 
 // 新手示例：点一下填进输入框，再按 Enter 就行
 const SAMPLES = [
@@ -52,6 +53,8 @@ export default function ChatPanel({ store, onOpenList }) {
   const [aiCfg, setAiCfg] = useState(() => loadAiConfig() || { ...DEFAULT_AI_CONFIG });
   const [aiTesting, setAiTesting] = useState(false);
   const [aiTest, setAiTest] = useState(null);
+  // 「修改」弹窗当前编辑的提议（来自提议消息上的 proposal 字段；null = 关闭）
+  const [editingProposal, setEditingProposal] = useState(null);
   const streamRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -100,20 +103,28 @@ export default function ChatPanel({ store, onOpenList }) {
     if (el) el.scrollTop = el.scrollHeight;
   }, [agent.messages]);
 
-  // 对话页签内：Ctrl+Z 回退最后一步动作（复用 store.undo），Esc 清空输入框
+  // 对话页签内：Ctrl+Z 回退最后一步动作（复用 store.undo），Esc 关闭修改弹窗或清空输入框
   useEffect(() => {
     const onKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         agent.undo();
       } else if (e.key === 'Escape') {
-        setInput('');
-        setHistIdx(-1);
+        if (editingProposal) setEditingProposal(null);
+        else {
+          setInput('');
+          setHistIdx(-1);
+        }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [agent.undo]);
+  }, [agent.undo, editingProposal]);
+
+  // 提议按钮只挂在当前存活的 create 提议消息上：pending 被回复/新命令消费后
+  // 按钮随之消失；刷新回放的历史消息没有 proposal 字段，也不会出现按钮。
+  const liveProposalMsgId =
+    agent.pending && agent.pending.kind === 'create' ? agent.pending.msgId : null;
 
   const showHints = input.startsWith('/');
   const hintFilter = input.slice(1).trim().toLowerCase();
@@ -323,6 +334,31 @@ export default function ChatPanel({ store, onOpenList }) {
             return (
               <div key={m.id} className={`msg msg-agent${m.kind === 'error' ? ' msg-error' : ''}`}>
                 <MessageText message={m} />
+                {m.id === liveProposalMsgId && m.proposal && (
+                  <div className="proposal-actions">
+                    <button
+                      className="btn btn-primary"
+                      disabled={agent.busy}
+                      onClick={() => agent.send('新建')}
+                    >
+                      新建
+                    </button>
+                    <button
+                      className="btn"
+                      disabled={agent.busy}
+                      onClick={() => setEditingProposal(m.proposal)}
+                    >
+                      修改…
+                    </button>
+                    <button
+                      className="btn"
+                      disabled={agent.busy}
+                      onClick={() => agent.send('跳过')}
+                    >
+                      跳过
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -337,6 +373,18 @@ export default function ChatPanel({ store, onOpenList }) {
 
           {agent.busy && <div className="chat-busy">▍处理中…</div>}
         </div>
+
+        {editingProposal && (
+          <ProposalModal
+            proposal={editingProposal}
+            busy={agent.busy}
+            onCancel={() => setEditingProposal(null)}
+            onConfirm={(slots) => {
+              setEditingProposal(null);
+              agent.confirmCreate(slots);
+            }}
+          />
+        )}
 
         <div className="chat-input-wrap">
           {showHints && (
