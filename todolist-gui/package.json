@@ -1,0 +1,34 @@
+{
+  "name": "todolist-gui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:guard": "node scripts/assert-tests.mjs",
+    "test:nl": "node scripts/qa-nl-coverage.mjs",
+    "test:nl:verbose": "node scripts/qa-nl-coverage.mjs --verbose",
+    "test:ui": "node scripts/qa-css-check.mjs && node scripts/qa-contrast.mjs",
+    "test:responsive": "node scripts/qa-responsive.mjs",
+    "test:responsive:shots": "node scripts/qa-responsive.mjs --shots",
+    "test:responsive:report": "node scripts/qa-responsive.mjs --report=qa-artifacts/responsive.json",
+    "test:attack": "node --import ./scripts/register-qa-loader.mjs scripts/qa-independent.mjs",
+    "test:attack-chat": "node --import ./scripts/register-qa-loader.mjs scripts/qa-chat-attack.mjs",
+    "test:attack-chat2": "node --import ./scripts/register-qa-loader.mjs scripts/qa-chat-attack2.mjs",
+    "test:attack-chat3": "node --import ./scripts/register-qa-loader.mjs scripts/qa-chat-attack3.mjs"
+  },
+  "dependencies": {
+    "dayjs": "^1.11.13",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@esbuild/win32-x64": "0.21.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,9 @@
+node_modules
+dist
+dist-*
+.qa-*
+.tmp
+qa-artifacts
+vite.config.js.timestamp-*.mjs
+*.local
+.DS_Store

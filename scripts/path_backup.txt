@@ -1,0 +1,6 @@
+# 备份时间 2026-09-30 / 注册表值类型 REG_EXPAND_SZ
+# 还原命令：见文件末尾注释
+C:\Users\王佐成\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\王佐成\AppData\Local\Programs\Python\Python313\;C:\Users\王佐成\AppData\Local\Programs\Python\Launcher\;%USERPROFILE%\AppData\Local\Microsoft\WindowsApps;C:\Users\王佐成\AppData\Local\Programs\Microsoft VS Code\bin;C:\Users\王佐成\AppData\Roaming\npm
+
+# 还原方式（PowerShell，需重开终端）：
+# [Environment]::SetEnvironmentVariable("Path", "<上面备份的原始值>", "User")

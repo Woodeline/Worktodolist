@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TodoList · UI 样式指南</title>
+    <!--
+      样式指南（开发用，不是产品页面）。
+      用途：① 设计令牌与图标的一览参考  ② 改样式后的视觉回归对照
+      运行：npm run dev 后打开 http://localhost:&lt;端口&gt;/styleguide.html
+      （端口见项目根 .todolist-server.port，默认 15180）
+      这里的外壳样式刻意不放进 index.css，避免污染产品样式表。
+    -->
+    <style>
+      .sg-nav {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-wrap: wrap;
+        padding: 6px 12px;
+        min-height: 34px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+      .sg-nav a {
+        padding: 3px 9px;
+        border-radius: var(--r-sm);
+        border: 1px solid transparent;
+        color: var(--muted);
+        text-decoration: none;
+      }
+      .sg-nav a:hover {
+        background: var(--surface-2);
+        color: var(--text);
+      }
+      .sg-nav a[aria-current='page'] {
+        background: var(--accent-soft);
+        border-color: var(--accent-line);
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .sg-nav .sg-title {
+        color: var(--text-2);
+        font-weight: 600;
+        margin-right: 6px;
+      }
+
+      /* 全屏视图：让里头的 .app / .welcome（本来高 100vh）填满演示区 */
+      .sg-stage {
+        height: calc(100vh - 34px);
+        overflow: hidden;
+      }
+      .sg-stage .app,
+      .sg-stage .welcome {
+        height: 100%;
+      }
+
+      /* 文档视图：正常滚动 */
+      .sg-doc {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 24px 20px 72px;
+      }
+      .sg-doc section {
+        margin-bottom: 40px;
+      }
+      .sg-doc h2 {
+        font-family: var(--font-display);
+        font-size: var(--fs-xl);
+        margin: 0 0 4px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border);
+      }
+      .sg-doc h3 {
+        font-family: var(--font-mono);
+        font-size: var(--fs-xs);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 24px 0 10px;
+      }
+      .sg-note {
+        font-size: var(--fs-xs);
+        color: var(--muted);
+        margin: 0 0 16px;
+        line-height: 1.7;
+      }
+      .sg-swatches {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 10px;
+      }
+      .sg-sw {
+        border: 1px solid var(--border);
+        border-radius: var(--r-md);
+        overflow: hidden;
+        background: var(--surface);
+      }
+      .sg-sw i {
+        display: block;
+        height: 46px;
+      }
+      .sg-sw span {
+        display: block;
+        padding: 6px 9px;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      .sg-sw b {
+        color: var(--text-2);
+        font-weight: 600;
+      }
+      .sg-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+      }
+      .sg-box {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-md);
+        padding: 14px;
+      }
+      .sg-icons {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+        gap: 8px;
+      }
+      .sg-icon-cell {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        padding: 12px 6px;
+        border: 1px solid var(--border);
+        border-radius: var(--r-md);
+        background: var(--surface);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--muted);
+      }
+      .sg-type-row {
+        display: flex;
+        align-items: baseline;
+        gap: 14px;
+        padding: 7px 0;
+        border-bottom: 1px dashed var(--border);
+      }
+      .sg-type-row code {
+        flex-shrink: 0;
+        min-width: 190px;
+      }
+      .sg-space-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 6px;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--muted);
+      }
+      .sg-space-row i {
+        display: block;
+        height: 14px;
+        background: var(--accent-soft);
+        border: 1px solid var(--accent-line);
+        border-radius: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="sg-root"></div>
+    <script type="module" src="/src/styleguide.jsx"></script>
+  </body>
+</html>

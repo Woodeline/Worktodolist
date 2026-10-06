@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>topydo 本地安装与配置指南</title>
+<style>
+:root{
+  --bg:#ffffff; --panel:#f7f8fa; --border:#e3e6ea; --text:#1f2328;
+  --muted:#5b6472; --accent:#0b6bcb; --accent-soft:#eaf2fd;
+  --warn-bg:#fff8e6; --warn-bd:#f0c36d; --code-bg:#f4f6f8;
+  --ok:#1a7f37; --bad:#b3261e;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:"Segoe UI","Microsoft YaHei",system-ui,-apple-system,"PingFang SC",sans-serif;
+  font-size:15px; line-height:1.75;
+}
+header.top{
+  position:sticky; top:0; z-index:20; background:rgba(255,255,255,.94);
+  backdrop-filter:saturate(180%) blur(8px); border-bottom:1px solid var(--border);
+  padding:14px 32px;
+}
+header.top .t{font-size:15px;font-weight:600;color:var(--text)}
+header.top .s{font-size:12.5px;color:var(--muted);margin-top:2px}
+.wrap{display:flex;gap:28px;max-width:1240px;margin:0 auto;padding:24px 24px 64px}
+nav.toc{
+  flex:0 0 250px; position:sticky; top:78px; align-self:flex-start;
+  max-height:calc(100vh - 110px); overflow:auto;
+  border:1px solid var(--border); border-radius:10px; background:var(--panel);
+  padding:14px 12px; font-size:13.5px;
+}
+nav.toc .h{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px 6px}
+nav.toc a{display:block;text-decoration:none;color:var(--text);padding:3px 6px;border-radius:6px}
+nav.toc a:hover{background:var(--accent-soft);color:var(--accent)}
+nav.toc a.l3{padding-left:18px;color:var(--muted);font-size:13px}
+main{flex:1 1 auto;min-width:0;max-width:900px}
+h1{font-size:26px;line-height:1.35;margin:8px 0 18px;font-weight:700}
+h2{font-size:20px;margin:38px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--border);font-weight:650}
+h3{font-size:16.5px;margin:26px 0 8px;font-weight:650}
+h4{font-size:15px;margin:20px 0 6px;font-weight:650;color:var(--muted)}
+p{margin:10px 0}
+a{color:var(--accent)}
+code{
+  background:var(--code-bg); border:1px solid var(--border); border-radius:5px;
+  padding:1.5px 5px; font-family:"Cascadia Mono",Consolas,"Courier New",monospace;
+  font-size:13px; word-break:break-all;
+}
+pre{
+  background:var(--code-bg); border:1px solid var(--border); border-left:3px solid var(--accent);
+  border-radius:8px; padding:13px 15px; overflow:auto; margin:12px 0;
+}
+pre code{background:none;border:none;padding:0;font-size:12.8px;line-height:1.6;word-break:normal;white-space:pre}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.8px;display:block;overflow:auto}
+th,td{border:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--panel);font-weight:650;white-space:nowrap}
+tbody tr:nth-child(even){background:#fbfcfd}
+blockquote{
+  margin:14px 0; padding:10px 16px; background:var(--panel);
+  border-left:3px solid var(--muted); border-radius:0 8px 8px 0; color:var(--muted);
+}
+blockquote strong{color:var(--text)}
+ul,ol{padding-left:24px;margin:10px 0}
+li{margin:5px 0}
+hr{border:none;border-top:1px solid var(--border);margin:32px 0}
+.anchor{color:var(--border);text-decoration:none;margin-left:6px;font-weight:400}
+.anchor:hover{color:var(--accent)}
+@media (max-width:900px){nav.toc{display:none}.wrap{padding:16px}}
+@media print{nav.toc,header.top{display:none}pre,table{page-break-inside:avoid}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="t">topydo 本地安装与配置指南</div>
+  <div class="s">topydo 0.16 · Windows 10 + Python 3.13.14 全流程实测（2026-09-28）</div>
+</header>
+<div class="wrap">
+  <nav class="toc">
+    <p class="h">目录</p>
+    <a class="l2" href="#1">1. 系统与依赖要求</a>
+<a class="l2" href="#2">2. 安装方式对比：选哪条路</a>
+<a class="l2" href="#3-venv-pip-windows">3. 推荐路线：venv + pip 完整步骤（Windows）</a>
+<a class="l3" href="#1-python">步骤 1 · 确认 Python 版本</a>
+<a class="l3" href="#2_1">步骤 2 · 建独立虚拟环境</a>
+<a class="l3" href="#3-pip-topydo">步骤 3 · 升级 pip 并安装 topydo</a>
+<a class="l3" href="#4-topydo">步骤 4 · 让 topydo 命令可用</a>
+<a class="l3" href="#5">步骤 5 · 冒烟验证</a>
+<a class="l2" href="#4">4. 备选路线</a>
+<a class="l3" href="#41-pipx">4.1 pipx（想要一个干净的全局命令）</a>
+<a class="l3" href="#42-master">4.2 源码安装（跟 master / 改代码）</a>
+<a class="l3" href="#43">4.3 国内镜像的坑（本机实测）</a>
+<a class="l2" href="#5_1">5. 配置</a>
+<a class="l3" href="#51">5.1 配置文件查找顺序（后者覆盖前者）</a>
+<a class="l3" href="#52-todotxt">5.2 todo.txt 放在哪</a>
+<a class="l3" href="#53-topydo-windows">5.3 可直接使用的 ~/.topydo 样例（Windows 版）</a>
+<a class="l3" href="#54-016-topydolibconfigpy">5.4 全量默认值（来自 0.16 源码 topydo/lib/Config.py）</a>
+<a class="l3" href="#55-windows">5.5 编辑器设置（Windows 上必改）</a>
+<a class="l3" href="#56">5.6 备份与回滚</a>
+<a class="l2" href="#6-4-checklist">6. 安装后验证（4 步 checklist）</a>
+<a class="l2" href="#7">7. 常见问题与解决</a>
+<a class="l3" href="#71-pip-install-topydo-no-matching-distribution-found-from-versions-none">7.1 pip install topydo 报 No matching distribution found ... (from versions: none)</a>
+<a class="l3" href="#72-zsh-no-matches-found-topydoprompt">7.2 zsh: no matches found: topydo[prompt]</a>
+<a class="l3" href="#73-topydo-prompt-noconsolescreenbuffererror-no-windows-console-found-are-you-running-cmdexe">7.3 topydo prompt 报 NoConsoleScreenBufferError: No Windows console found. Are you running cmd.exe?</a>
+<a class="l3" href="#74-topydo-columns">7.4 topydo columns 相关</a>
+<a class="l3" href="#75-topydo-ls-todotxt">7.5 topydo ls 输出为空，但 todo.txt 里明明有任务</a>
+<a class="l3" href="#76">7.6 中文任务乱码 / 输出夹杂奇怪符号</a>
+<a class="l3" href="#77-topydo-edit">7.7 topydo edit 报找不到编辑器 / 打开了乱码文件</a>
+<a class="l3" href="#78-topydo-command-not-found">7.8 命令找不到：topydo: command not found</a>
+<a class="l3" href="#79-some-additional-dependencies-for-prompt-mode-were-not-installed">7.9 提示 "Some additional dependencies for prompt mode were not installed"</a>
+<a class="l3" href="#710">7.10 改完配置没生效</a>
+<a class="l2" href="#8">8. 升级与卸载</a>
+<a class="l2" href="#9">9. 附：本文实测环境与关键结论速查</a>
+<a class="l2" href="#10-2026-09-30">10. 本机实际安装记录（2026-09-30 已完成）</a>
+<a class="l2" href="#11">11. 桌面一键启动器</a>
+<a class="l2" href="#12">12. 三种界面：到底哪种算"交互界面"</a>
+<a class="l3" href="#121-columns">12.1 columns 分栏配置（本机已配好）</a>
+<a class="l3" href="#122">12.2 过滤表达式（全部实测过的写法）</a>
+<a class="l3" href="#123">12.3 试玩用的示例清单</a>
+<a class="l3" href="#124-gui">12.4 想要真正的窗口（GUI）</a>
+  </nav>
+  <main>
+<h1 id="topydo"><a class="toclink" href="#topydo">topydo 本地安装与配置指南</a></h1>
+<blockquote>
+<p><strong>版本基准</strong>：topydo <strong>0.16</strong>（PyPI 发布 2026-02-12，GPL-3.0，仓库 topydo/topydo）
+<strong>实测环境</strong>：Windows 10 + Python 3.13.14，2026-09-28 全流程实测通过（含 pip 安装、源码构建、三种 UI 启动、配置生效验证）
+本文所有"实测输出"均为本机真实执行结果，非文档摘抄。</p>
+</blockquote>
+<hr />
+<h2 id="1"><a class="toclink" href="#1">1. 系统与依赖要求</a></h2>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>要求</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>操作系统</td>
+<td>Linux / macOS / Windows</td>
+<td>CLI 完整可用；column UI 官方文档称不支持 Windows，但 urwid ≥ 2.4 实测可用（见 §7.4）</td>
+</tr>
+<tr>
+<td>Python</td>
+<td><strong>≥ 3.9</strong></td>
+<td>官方 CI 矩阵 3.9 / 3.10 / 3.11 / 3.12 / 3.13 / 3.14；本机 3.13.14 实测通过。<strong>不支持 Python 2</strong>（0.10 起为 Python 3 only）</td>
+</tr>
+<tr>
+<td>硬依赖（必装）</td>
+<td><code>arrow &gt;= 0.7.0</code></td>
+<td>实测装上 arrow 1.4.0，连带 <code>python-dateutil</code> / <code>six</code> / <code>tzdata</code></td>
+</tr>
+<tr>
+<td>Windows 专有依赖</td>
+<td><code>colorama &gt;= 0.2.5</code></td>
+<td>环境标记 <code>sys_platform == "win32"</code>，<strong>pip 自动安装</strong>，实测装上 colorama 0.4.6</td>
+</tr>
+<tr>
+<td>可选依赖 <code>prompt</code></td>
+<td><code>prompt_toolkit &gt;= 0.53</code>、<code>watchdog &gt;= 0.8.3</code></td>
+<td>prompt 交互模式用；实测 3.0.53 + 6.0.0</td>
+</tr>
+<tr>
+<td>可选依赖 <code>columns</code></td>
+<td><code>urwid &gt;= 1.3.0</code>、<code>watchdog &gt;= 0.8.3</code></td>
+<td>列式 TUI 用；实测 urwid 4.1.7</td>
+</tr>
+<tr>
+<td>可选依赖 <code>ical</code></td>
+<td><code>icalendar</code></td>
+<td>导出 iCalendar 用</td>
+</tr>
+<tr>
+<td>编译需求</td>
+<td><strong>无</strong></td>
+<td>纯 Python，发布物是 <code>topydo-0.16-py3-none-any.whl</code>（约 149 KB），无 C 扩展、无需 MSVC/Build Tools</td>
+</tr>
+<tr>
+<td>磁盘占用</td>
+<td>包体 ~1.5 MB + 依赖 ~10 MB</td>
+<td>单 venv 约 25 MB</td>
+</tr>
+<tr>
+<td>权限</td>
+<td><strong>不需要管理员</strong></td>
+<td>装进 venv 或 <code>pip install --user</code> 均可</td>
+</tr>
+</tbody>
+</table>
+<p><strong>topydo 是什么</strong>：基于 todo.txt 纯文本格式的任务管理器，提供三种界面 —— CLI（<code>topydo ls/add/do...</code>）、prompt 交互模式（<code>topydo prompt</code>）、columns 列式 TUI（<code>topydo columns</code>）。</p>
+<hr />
+<h2 id="2"><a class="toclink" href="#2">2. 安装方式对比：选哪条路</a></h2>
+<table>
+<thead>
+<tr>
+<th>方式</th>
+<th>命令要点</th>
+<th>适用场景</th>
+<th>评价</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>① venv + pip</strong>（推荐）</td>
+<td><code>python -m venv .venv &amp;&amp; .venv/Scripts/pip install "topydo[prompt]"</code></td>
+<td>想固定版本、不污染系统 Python</td>
+<td>最可控，本文主线</td>
+</tr>
+<tr>
+<td>② pipx</td>
+<td><code>pipx install "topydo[prompt]"</code></td>
+<td>想要一个全局可用的 <code>topydo</code> 命令且与项目隔离</td>
+<td>体验最好，但本机<strong>未预装 pipx</strong>，需先装</td>
+</tr>
+<tr>
+<td>③ 源码安装</td>
+<td><code>git clone</code> 后 <code>pip install ".[prompt]"</code></td>
+<td>要改代码 / 跟 master / 用 -e 开发</td>
+<td>需要 git；实测 PEP 517 构建通过</td>
+</tr>
+<tr>
+<td>④ 系统包管理器</td>
+<td>macOS <code>brew</code>、Arch <code>AUR</code> 等第三方配方</td>
+<td>桌面平台图省事</td>
+<td>版本可能落后，<strong>Windows 无官方安装包</strong>（issue #187 "standalone binary" 未实现）</td>
+</tr>
+<tr>
+<td>❌ 直接 <code>pip install topydo</code> 进系统 Python</td>
+<td>—</td>
+<td>—</td>
+<td>会污染系统环境、易触发版本冲突，不建议</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="3-venv-pip-windows"><a class="toclink" href="#3-venv-pip-windows">3. 推荐路线：venv + pip 完整步骤（Windows）</a></h2>
+<h3 id="1-python"><a class="toclink" href="#1-python">步骤 1 · 确认 Python 版本</a></h3>
+<pre><code class="language-bash">python -V                 # 需要 &gt;= 3.9，本机实测 Python 3.13.14
+py -0p                    # Windows：列出本机所有已安装的 Python 版本（可选）
+where python              # 确认当前解析到哪个解释器
+</code></pre>
+<p>若 <code>python</code> 指向 Microsoft Store 的占位程序，请改用 <code>py -3.13 -m venv ...</code> 形式。</p>
+<h3 id="2_1"><a class="toclink" href="#2_1">步骤 2 · 建独立虚拟环境</a></h3>
+<pre><code class="language-bash">cd C:/Users/王佐成/WorkBuddy/todolist
+python -m venv .venv-topydo
+.venv-topydo/Scripts/python.exe -V        # 确认环境可用
+</code></pre>
+<blockquote>
+<p>用绝对路径的 Windows 程序时，Git Bash 下把 <code>\</code> 写 <code>/</code> 即可，例如 <code>.venv-topydo/Scripts/python.exe</code>。</p>
+</blockquote>
+<h3 id="3-pip-topydo"><a class="toclink" href="#3-pip-topydo">步骤 3 · 升级 pip 并安装 topydo</a></h3>
+<pre><code class="language-bash"># 3.1 升级 pip（避免旧 pip 解析 extras 出错）
+.venv-topydo/Scripts/python.exe -m pip install --upgrade pip
+
+# 3.2 只要 CLI（最省依赖）
+.venv-topydo/Scripts/python.exe -m pip install topydo
+
+# 3.3 CLI + prompt 交互模式（推荐）
+.venv-topydo/Scripts/python.exe -m pip install &quot;topydo[prompt]&quot;
+
+# 3.4 全套：CLI + prompt + 列式 TUI + iCal 导出
+.venv-topydo/Scripts/python.exe -m pip install &quot;topydo[prompt,columns,ical]&quot;
+</code></pre>
+<p><strong>⚠️ 中括号必须加引号</strong>：<code>topydo[prompt]</code> 里的 <code>[]</code> 在 zsh 下是通配符，不加引号会报 <code>zsh: no matches found: topydo[prompt]</code>（对应官方 issue #296）。bash/PowerShell 通常没事，但统一加引号最保险。</p>
+<p><strong>实测输出（本机 pypi.org 源）</strong>：</p>
+<pre><code>Successfully installed arrow-1.4.0 colorama-0.4.6 prompt_toolkit-3.0.53
+  python-dateutil-2.9.0.post0 six-1.17.0 topydo-0.16 tzdata-2026.4
+  watchdog-6.0.0 wcwidth-0.9.1
+</code></pre>
+<h3 id="4-topydo"><a class="toclink" href="#4-topydo">步骤 4 · 让 <code>topydo</code> 命令可用</a></h3>
+<p>任选其一：</p>
+<pre><code class="language-bash"># A. 直接用绝对路径（最稳，本文后续示例用这种）
+C:/Users/王佐成/WorkBuddy/todolist/.venv-topydo/Scripts/topydo.exe -v
+
+# B. 临时加入当前会话 PATH
+export PATH=&quot;$PWD/.venv-topydo/Scripts:$PATH&quot;
+
+# C. 永久加入用户 PATH（PowerShell）
+# [Environment]::SetEnvironmentVariable(&quot;Path&quot;,
+#   [Environment]::GetEnvironmentVariable(&quot;Path&quot;,&quot;User&quot;) + &quot;;C:\Users\王佐成\WorkBuddy\todolist\.venv-topydo\Scripts&quot;,
+#   &quot;User&quot;)
+</code></pre>
+<blockquote>
+<p>注意：本机有强沙箱，<code>setx</code> / <code>reg</code> / <code>cmd</code> 类命令可能被拦截，优先用 B 方案或直接在脚本里写绝对路径。</p>
+</blockquote>
+<h3 id="5"><a class="toclink" href="#5">步骤 5 · 冒烟验证</a></h3>
+<pre><code class="language-bash">.venv-topydo/Scripts/topydo.exe -v      # 期望输出 topydo 0.16
+</code></pre>
+<p>也可以走模块方式（<strong>实测同样可用</strong>）：</p>
+<pre><code class="language-bash">.venv-topydo/Scripts/python.exe -m topydo -v
+</code></pre>
+<hr />
+<h2 id="4"><a class="toclink" href="#4">4. 备选路线</a></h2>
+<h3 id="41-pipx"><a class="toclink" href="#41-pipx">4.1 pipx（想要一个干净的全局命令）</a></h3>
+<pre><code class="language-bash">python -m pip install --user pipx
+python -m pipx ensurepath
+pipx install &quot;topydo[prompt]&quot;          # 或 &quot;topydo[prompt,columns]&quot;
+pipx upgrade topydo                    # 升级
+pipx uninstall topydo                  # 卸载（连同隔离环境一起删掉）
+</code></pre>
+<p>本机实测：<code>python -m pipx --version</code> → <code>No module named pipx</code>，即<strong>需要先装 pipx</strong>。</p>
+<h3 id="42-master"><a class="toclink" href="#42-master">4.2 源码安装（跟 master / 改代码）</a></h3>
+<pre><code class="language-bash">git clone https://github.com/topydo/topydo.git
+cd topydo
+python -m pip install &quot;.[prompt]&quot;       # 常规安装
+python -m pip install -e &quot;.[prompt]&quot;    # 可编辑模式，方便调试
+</code></pre>
+<p>实测：用 PyPI 上的 sdist（<code>topydo-0.16.tar.gz</code>，128 KB）走 <code>pyproject.toml</code> → setuptools 的 PEP 517 构建，输出：</p>
+<pre><code>Building wheel for topydo (pyproject.toml): finished with status 'done'
+Created wheel for topydo: filename=topydo-0.16-py3-none-any.whl
+Successfully installed ... topydo-0.16
+</code></pre>
+<p>构建依赖仅 <code>setuptools</code> + <code>wheel</code>，pip 会自动放进构建隔离环境，无需手动装。</p>
+<h3 id="43"><a class="toclink" href="#43">4.3 国内镜像的坑（本机实测）</a></h3>
+<ul>
+<li>清华镜像页面<strong>确实收录了</strong> <code>topydo-0.16-py3-none-any.whl</code>（<code>https://pypi.tuna.tsinghua.edu.cn/simple/topydo/</code> 返回 200 且含 0.16）；</li>
+<li>但在本机（带 HTTP 代理）的环境里执行默认源安装时，pip 报：</li>
+</ul>
+<pre><code>Looking in indexes: https://pypi.tuna.tsinghua.edu.cn/simple
+ERROR: Could not find a version that satisfies the requirement topydo[prompt] (from versions: none)
+ERROR: No matching distribution found for topydo[prompt]
+</code></pre>
+<p><strong>解决</strong>：显式指定官方源（或换阿里云源）：</p>
+<pre><code class="language-bash">python -m pip install -i https://pypi.org/simple \
+  --trusted-host pypi.org --trusted-host files.pythonhosted.org \
+  &quot;topydo[prompt]&quot;
+</code></pre>
+<p>或一次性改配置：</p>
+<pre><code class="language-bash">python -m pip config set global.index-url https://pypi.org/simple
+python -m pip config list          # 查看当前源
+</code></pre>
+<hr />
+<h2 id="5_1"><a class="toclink" href="#5_1">5. 配置</a></h2>
+<h3 id="51"><a class="toclink" href="#51">5.1 配置文件查找顺序（<strong>后者覆盖前者</strong>）</a></h3>
+<pre><code>1. /etc/topydo.conf
+2. ~/.config/topydo/config
+3. ~/.topydo
+4. ./.topydo
+5. ./topydo.conf
+6. ./topydo.ini
+</code></pre>
+<p>Windows 下 <code>~</code> 展开为 <code>C:\Users\王佐成</code>（实测 <code>os.path.expanduser('~/.topydo')</code> → <code>C:\Users\王佐成/.topydo</code>），所以<strong>个人配置文件就是 <code>C:\Users\王佐成\.topydo</code></strong>。</p>
+<blockquote>
+<p>常见"配置不生效"来源：当前目录里存在 <code>topydo.conf</code> / <code>topydo.ini</code>，
+它比你的 <code>~/.topydo</code> 优先级更高，把配置盖掉了。用 <code>-c</code> 显式指定可排除干扰。</p>
+</blockquote>
+<p><strong>优先级（高 → 低）</strong>：命令行参数 <code>-c/-t/-d/-C</code> → 环境变量 <code>TOPYDO_EDITOR</code> → 配置文件 → 内置默认值</p>
+<h3 id="52-todotxt"><a class="toclink" href="#52-todotxt">5.2 todo.txt 放在哪</a></h3>
+<p>默认 <code>filename = todo.txt</code>（相对路径 → <strong>相对当前工作目录</strong>），归档文件 <code>done.txt</code>。</p>
+<p>要固定位置就用绝对路径（反斜杠 / 正斜杠<strong>实测都可用</strong>，<code>%</code> 无需转义）：</p>
+<pre><code class="language-ini">[topydo]
+filename = C:/todo/todo.txt
+archive_filename = C:/todo/done.txt
+</code></pre>
+<p>启动时临时换文件：</p>
+<pre><code class="language-bash">topydo -t other.txt ls          # 用另一个 todo 文件（实测生效）
+topydo -d other-done.txt do 1   # 用另一个归档文件
+topydo -c my.conf ls            # 用指定配置文件（实测生效）
+</code></pre>
+<h3 id="53-topydo-windows"><a class="toclink" href="#53-topydo-windows">5.3 可直接使用的 <code>~/.topydo</code> 样例（Windows 版）</a></h3>
+<pre><code class="language-ini">[topydo]
+default_command        = ls
+filename               = C:/todo/todo.txt
+archive_filename       = C:/todo/done.txt
+colors                 = auto          ; 0 关闭 / 1 / 16 / 256 / auto
+identifiers            = linenumber    ; 或 text（文本型 ID，更稳定）
+identifier_alphabet    = 0123456789abcdefghijklmnopqrstuvwxyz
+backup_count           = 5
+auto_delete_whitespace = 1
+
+[add]
+auto_creation_date     = 1
+
+[ls]
+hide_tags              = id,p,ical
+hidden_item_tags       = h,hide
+indent                 = 0
+list_limit             = -1
+list_format            = |%I| %x %{(}p{)} %c %s %k %{due:}d %{t:}t
+
+[tags]
+tag_start              = t
+tag_due                = due
+tag_star               = star
+
+[sort]
+keep_sorted            = 0
+sort_string            = desc:completed,desc:importance,due,desc:priority
+ignore_weekends        = 1
+
+[edit]
+editor                 = code -w        ; Windows 必改，见 §5.5
+
+[colorscheme]
+project_color          = red
+context_color          = magenta
+metadata_color         = green
+link_color             = cyan
+priority_colors        = A:cyan,B:yellow,C:blue
+focus_background_color = gray
+marked_background_color = blue
+
+[aliases]
+showall                = ls -x
+next                   = ls -n 1
+</code></pre>
+<h3 id="54-016-topydolibconfigpy"><a class="toclink" href="#54-016-topydolibconfigpy">5.4 全量默认值（来自 0.16 源码 <code>topydo/lib/Config.py</code>）</a></h3>
+<table>
+<thead>
+<tr>
+<th>段</th>
+<th>选项</th>
+<th>默认值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>[topydo]</code></td>
+<td><code>default_command</code></td>
+<td><code>ls</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>colors</code></td>
+<td><code>auto</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>force_colors</code></td>
+<td><code>0</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>filename</code></td>
+<td><code>todo.txt</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>archive_filename</code></td>
+<td><code>done.txt</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>identifiers</code></td>
+<td><code>linenumber</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>identifier_alphabet</code></td>
+<td><code>0123456789abcdefghijklmnopqrstuvwxyz</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>backup_count</code></td>
+<td><code>5</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>auto_delete_whitespace</code></td>
+<td><code>1</code></td>
+</tr>
+<tr>
+<td><code>[add]</code></td>
+<td><code>auto_creation_date</code></td>
+<td><code>1</code></td>
+</tr>
+<tr>
+<td><code>[ls]</code></td>
+<td><code>hide_tags</code></td>
+<td><code>id,p,ical</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>hidden_item_tags</code></td>
+<td><code>h,hide</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>indent</code></td>
+<td><code>0</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>list_limit</code></td>
+<td><code>-1</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>list_format</code></td>
+<td><code>\|%I\| %x %{(}p{)} %c %s %k %{due:}d %{t:}t</code></td>
+</tr>
+<tr>
+<td><code>[tags]</code></td>
+<td><code>tag_start</code> / <code>tag_due</code> / <code>tag_star</code></td>
+<td><code>t</code> / <code>due</code> / <code>star</code></td>
+</tr>
+<tr>
+<td><code>[sort]</code></td>
+<td><code>keep_sorted</code></td>
+<td><code>0</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>sort_string</code></td>
+<td><code>desc:completed,desc:importance,due,desc:priority</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>group_string</code></td>
+<td>（空）</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ignore_weekends</code></td>
+<td><code>1</code></td>
+</tr>
+<tr>
+<td><code>[dep]</code></td>
+<td><code>append_parent_projects</code> / <code>append_parent_contexts</code></td>
+<td><code>0</code> / <code>0</code></td>
+</tr>
+<tr>
+<td><code>[colorscheme]</code></td>
+<td><code>project_color</code> / <code>context_color</code> / <code>metadata_color</code> / <code>link_color</code></td>
+<td><code>red</code> / <code>magenta</code> / <code>green</code> / <code>cyan</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>priority_colors</code></td>
+<td><code>A:cyan,B:yellow,C:blue</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>focus_background_color</code> / <code>marked_background_color</code></td>
+<td><code>gray</code> / <code>blue</code></td>
+</tr>
+<tr>
+<td><code>[aliases]</code></td>
+<td><code>lsproj</code>/<code>listprj</code>/<code>listproj</code>/<code>listproject</code>/<code>listprojects</code></td>
+<td>均指向 <code>lsprj</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>listcon</code>/<code>listcontext</code>/<code>listcontexts</code></td>
+<td>均指向 <code>lscon</code></td>
+</tr>
+<tr>
+<td><code>[columns]</code></td>
+<td><code>column_width</code></td>
+<td><code>40</code></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>⚠️ <strong>实测发现</strong>：<code>default_command</code> 只能填<strong>裸命令名</strong>，带参数会失效。
+<code>default_command = ls</code> → 裸执行 <code>topydo</code> 正常列出任务；写成 <code>default_command = ls -x</code> → 裸执行 <code>topydo</code> 变成打印 usage。</p>
+</blockquote>
+<h3 id="55-windows"><a class="toclink" href="#55-windows">5.5 编辑器设置（Windows 上必改）</a></h3>
+<p>默认编辑器是 <code>vi</code>，Windows 上不存在，<code>topydo edit</code> 会直接失败（官方 issue #120 至今 open）。</p>
+<p>解析顺序：<code>TOPYDO_EDITOR</code> 环境变量 → <code>[edit] editor</code> 配置 → <code>EDITOR</code> 环境变量 → <code>vi</code></p>
+<pre><code class="language-ini">[edit]
+editor = code -w            ; VS Code（-w 表示等待文件关闭）
+; editor = notepad++ -multiInst -nosession
+; editor = notepad          ; 能开，但不识别 LF 换行，慎用
+</code></pre>
+<p>临时覆盖：</p>
+<pre><code class="language-bash">topydo edit -E &quot;notepad++&quot; 1
+export TOPYDO_EDITOR=&quot;code -w&quot;    # 环境变量优先级最高
+</code></pre>
+<h3 id="56"><a class="toclink" href="#56">5.6 备份与回滚</a></h3>
+<p>每次写操作前 topydo 会做一份备份，命名规则为<strong><code>.原文件名.bak</code></strong>（实测：<code>todo.txt</code> → <code>.todo.bak</code>；<code>sub-tasks.txt</code> → <code>.sub-tasks.bak</code>），数量由 <code>backup_count</code> 控制（默认 5）。</p>
+<pre><code class="language-bash">topydo revert ls        # 列出备份（实测输出形如：1| 2026-09-28 15:16:40 | do 1）
+topydo revert 2         # 回滚到第 2 号备份
+</code></pre>
+<hr />
+<h2 id="6-4-checklist"><a class="toclink" href="#6-4-checklist">6. 安装后验证（4 步 checklist）</a></h2>
+<pre><code class="language-bash"># 1) 版本与许可证信息
+topydo -v
+# 期望：topydo 0.16 + Copyright (C) 2014-2017 Bram Schoenmakers + GPLv3
+
+# 2) 帮助文本（含全部子命令）
+topydo -h
+# 期望：Synopsis 行 + add/append/del/dep/depri/do/edit/ls/listcon/listprojects/
+#       modify/postpone/pri/revert/sort/tag
+
+# 3) 在专用目录里做增删改查（避免污染你的正式 todo.txt）
+mkdir -p /tmp/topydo-check &amp;&amp; cd /tmp/topydo-check
+topydo add &quot;(B) 写第 10 周回测报告 due:2026-10-05&quot;
+topydo add &quot;(A) 校验主力吸筹信号&quot;
+topydo ls
+# 实测输出：
+# |  1| (B) 2026-09-28 写第 10 周回测报告 due:2026-10-05
+# |  2| (A) 2026-09-28 校验主力吸筹信号
+
+# 4) 完成一项 → 自动归档到 done.txt
+topydo do 1
+topydo ls -x
+cat todo.txt done.txt
+</code></pre>
+<p><strong>期望的文件副作用</strong>（实测）：目录中生成 <code>todo.txt</code>、<code>done.txt</code>（完成项被追加进来）、<code>.todo.bak</code>（备份）。</p>
+<p><strong>额外验证三种 UI 是否可用</strong>：</p>
+<pre><code class="language-bash">topydo prompt      # 交互模式（需真实终端，见 §7.3）
+topydo columns     # 列式 TUI（Windows 见 §7.4）
+topydo ls 2&gt;/dev/null | head    # 非 TTY 时自动剥离 ANSI 颜色
+</code></pre>
+<p><code>-v</code> 输出版本号即视为安装成功；<code>add</code>/<code>ls</code>/<code>do</code> 三步跑通即视为功能正常。</p>
+<hr />
+<h2 id="7"><a class="toclink" href="#7">7. 常见问题与解决</a></h2>
+<h3 id="71-pip-install-topydo-no-matching-distribution-found-from-versions-none"><a class="toclink" href="#71-pip-install-topydo-no-matching-distribution-found-from-versions-none">7.1 <code>pip install topydo</code> 报 <code>No matching distribution found ... (from versions: none)</code></a></h3>
+<ul>
+<li><strong>原因</strong>：当前 pip 源（实测为清华源 + 本机代理组合）没有把该包/该版本喂给 pip；不是包名写错。</li>
+<li><strong>排查</strong>：<code>python -m pip config list</code> 看当前 index-url。</li>
+<li><strong>解决</strong>：<code>-i https://pypi.org/simple --trusted-host pypi.org --trusted-host files.pythonhosted.org</code>，或 <code>pip config set global.index-url https://pypi.org/simple</code>。</li>
+</ul>
+<h3 id="72-zsh-no-matches-found-topydoprompt"><a class="toclink" href="#72-zsh-no-matches-found-topydoprompt">7.2 <code>zsh: no matches found: topydo[prompt]</code></a></h3>
+<ul>
+<li><strong>原因</strong>：zsh / 部分 shell 把 <code>[]</code> 当通配符（issue #296）。</li>
+<li><strong>解决</strong>：加引号 —— <code>pip install "topydo[prompt]"</code>。</li>
+</ul>
+<h3 id="73-topydo-prompt-noconsolescreenbuffererror-no-windows-console-found-are-you-running-cmdexe"><a class="toclink" href="#73-topydo-prompt-noconsolescreenbuffererror-no-windows-console-found-are-you-running-cmdexe">7.3 <code>topydo prompt</code> 报 <code>NoConsoleScreenBufferError: No Windows console found. Are you running cmd.exe?</code></a></h3>
+<p>完整报错（本机实测，管道/重定向场景）：</p>
+<pre><code>File &quot;...\prompt_toolkit\output\win32.py&quot;, line 220, in get_win32_screen_buffer_info
+    raise NoConsoleScreenBufferError
+prompt_toolkit.output.win32.NoConsoleScreenBufferError: No Windows console found. Are you running cmd.exe?
+</code></pre>
+<ul>
+<li><strong>原因</strong>：prompt 模式依赖 prompt_toolkit 的 Win32 控制台输出层，要求进程挂在<strong>真实的 Windows 控制台</strong>上。Git Bash / mintty / MSYS2 终端、管道重定向（<code>| tee</code>、<code>&gt; log</code>）、被 IDE 捕获输出的终端都不满足。</li>
+<li><strong>解决</strong>：
+  1. 在 <strong>Windows Terminal / cmd.exe / PowerShell</strong> 里跑 <code>topydo prompt</code>；
+  2. 不要重定向 stdout；
+  3. 只要在 Git Bash 里用，就改用 CLI 模式（<code>topydo add/ls/...</code> 在 Git Bash 下<strong>实测完全正常</strong>），别用 prompt 模式。</li>
+</ul>
+<h3 id="74-topydo-columns"><a class="toclink" href="#74-topydo-columns">7.4 <code>topydo columns</code> 相关</a></h3>
+<ul>
+<li><strong>老说法</strong>：官方文档写"Windows 原生不支持 column mode，请用 Cygwin"，老 urwid 上报 <code>No module named 'fcntl'</code>，<code>UILoader</code> 里也有 <code>error("Column mode is not supported on Windows.")</code> 分支。</li>
+<li><strong>实测结论（2026-09）</strong>：urwid 从 <strong>2.4.0</strong> 起加入了 Windows RAW/Curses 显示支持（issue #328 报告者在 urwid 2.6.16 上跑通）。本机实测装 <code>urwid</code> 4.1.7 后：</li>
+<li><code>import topydo.ui.columns.Main</code> → OK；</li>
+<li><code>topydo columns</code> 启动后持续运行、未崩溃（15 秒计时上限到达才结束）。</li>
+<li><strong>仍可能踩的坑</strong>：中文/宽字符错位 → 在终端先执行 <code>chcp 65001</code>（Windows Terminal 可设为系统级 UTF-8），并使用等宽 UTF-8 字体（如 DejaVu Sans Mono / Cascadia Mono）；</li>
+<li>若坚持稳定性优先，可 <code>pip install urwid==2.6.16</code> 复现官方 issue 的可用组合。</li>
+<li>实在不行就退回 CLI + prompt，功能完整度不受影响。</li>
+</ul>
+<h3 id="75-topydo-ls-todotxt"><a class="toclink" href="#75-topydo-ls-todotxt">7.5 <code>topydo ls</code> 输出为空，但 todo.txt 里明明有任务</a></h3>
+<ul>
+<li><strong>原因</strong>：topydo 有"相关性"过滤。带 <code>t:</code>（开始日期）且日期未到的任务、带 <code>h:</code>/<code>hide</code> 标记的任务默认不显示。</li>
+<li><strong>实测</strong>：任务 <code>(A) 2026-09-28 校验主力吸筹信号 t:2026-09-29</code>（今天 09-28）→ <code>topydo ls</code> 空，<code>topydo ls -x</code> 显示。</li>
+<li><strong>解决</strong>：<code>topydo ls -x</code> 看全部；或调 <code>[ls] hidden_item_tags</code>。</li>
+</ul>
+<h3 id="76"><a class="toclink" href="#76">7.6 中文任务乱码 / 输出夹杂奇怪符号</a></h3>
+<ul>
+<li><strong>原因</strong>：Windows 控制台默认代码页不是 UTF-8。</li>
+<li><strong>解决</strong>：<code>chcp 65001</code>（或在 Windows Terminal 里把默认编码设为 UTF-8），并设置 <code>export PYTHONIOENCODING=utf-8</code>；使用支持 UTF-8 的等宽字体。</li>
+</ul>
+<h3 id="77-topydo-edit"><a class="toclink" href="#77-topydo-edit">7.7 <code>topydo edit</code> 报找不到编辑器 / 打开了乱码文件</a></h3>
+<ul>
+<li>默认 <code>vi</code> 在 Windows 不存在 → 配 <code>[edit] editor</code>（§5.5）；<code>notepad</code> 不认 LF 换行，优先用 VS Code / Notepad++。</li>
+<li>保证编辑器命令能阻塞等待：VS Code 用 <code>code -w</code>。</li>
+</ul>
+<h3 id="78-topydo-command-not-found"><a class="toclink" href="#78-topydo-command-not-found">7.8 命令找不到：<code>topydo: command not found</code></a></h3>
+<ul>
+<li><strong>原因</strong>：venv 的 <code>Scripts</code> 目录没进 PATH。</li>
+<li><strong>解决</strong>：用绝对路径 <code>...\.venv-topydo\Scripts\topydo.exe</code>，或按 §3 步骤 4 加入 PATH；也可用 <code>python -m topydo</code>（实测可用）。</li>
+</ul>
+<h3 id="79-some-additional-dependencies-for-prompt-mode-were-not-installed"><a class="toclink" href="#79-some-additional-dependencies-for-prompt-mode-were-not-installed">7.9 提示 "Some additional dependencies for prompt mode were not installed"</a></h3>
+<ul>
+<li><strong>原因</strong>：只装了基础包，缺 <code>prompt_toolkit</code> / <code>watchdog</code>。</li>
+<li><strong>解决</strong>：<code>pip install "topydo[prompt]"</code>；columns 同理用 <code>"topydo[columns]"</code>。</li>
+</ul>
+<h3 id="710"><a class="toclink" href="#710">7.10 改完配置没生效</a></h3>
+<ul>
+<li><strong>原因</strong>：同目录的 <code>topydo.conf</code> / <code>topydo.ini</code> / <code>./.topydo</code> 优先级高于 <code>~/.topydo</code>；或同时用了 <code>-c</code>（<code>-c</code> 会<strong>只</strong>读该文件，忽略其它配置源）。</li>
+<li><strong>解决</strong>：<code>topydo -c 你的绝对路径/.topydo ls</code> 自证；用 <code>python -m pip show topydo</code> 无关，重点是清理目录内同名配置。</li>
+</ul>
+<hr />
+<h2 id="8"><a class="toclink" href="#8">8. 升级与卸载</a></h2>
+<pre><code class="language-bash"># 升级
+.venv-topydo/Scripts/python.exe -m pip install --upgrade &quot;topydo[prompt]&quot;
+pipx upgrade topydo                       # pipx 安装的
+
+# 查看装了哪些依赖/版本
+.venv-topydo/Scripts/python.exe -m pip show topydo
+.venv-topydo/Scripts/python.exe -m pip list
+
+# 卸载（venv 方案：直接删目录更干净）
+rm -rf .venv-topydo
+
+# pipx 方案
+pipx uninstall topydo
+</code></pre>
+<blockquote>
+<p>卸载<strong>不会</strong>删除 <code>~/.topydo</code> 和你的 <code>todo.txt</code> / <code>done.txt</code> / <code>.todo.bak</code>，数据是纯文本，随时可迁走或交给其它 todo.txt 工具处理。</p>
+</blockquote>
+<hr />
+<h2 id="9"><a class="toclink" href="#9">9. 附：本文实测环境与关键结论速查</a></h2>
+<table>
+<thead>
+<tr>
+<th>项</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>系统 / Python</td>
+<td>Windows 10 · Python 3.13.14</td>
+</tr>
+<tr>
+<td>topydo</td>
+<td>0.16（wheel 149 KB / sdist 128 KB）</td>
+</tr>
+<tr>
+<td>依赖实测版本</td>
+<td>arrow 1.4.0、colorama 0.4.6、prompt_toolkit 3.0.53、python-dateutil 2.9.0.post0、six 1.17.0、tzdata 2026.4、watchdog 6.0.0、wcwidth 0.9.1、urwid 4.1.7（单独装）</td>
+</tr>
+<tr>
+<td>已验证 OK</td>
+<td>pip 装 wheel、从 sdist 走 PEP 517 构建、<code>-v</code>、<code>-h</code>、<code>add/ls/do</code>、<code>-t</code>、<code>-c</code>、<code>revert ls</code>、<code>python -m topydo</code>、目录内 <code>topydo.conf</code> 生效、<code>~/.topydo</code> 路径展开、反斜杠/正斜杠绝对路径、<code>columns</code> 启动不崩</td>
+</tr>
+<tr>
+<td>已验证受限</td>
+<td><code>prompt</code> 模式需真实 Windows 控制台（Git Bash / 重定向会抛 <code>NoConsoleScreenBufferError</code>）；<code>default_command</code> 不能带参数</td>
+</tr>
+<tr>
+<td>官方资源</td>
+<td>仓库 github.com/topydo/topydo · 文档 topydo.org（TiddlyWiki）· PyPI pypi.org/project/topydo</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="10-2026-09-30"><a class="toclink" href="#10-2026-09-30">10. 本机实际安装记录（2026-09-30 已完成）</a></h2>
+<p>本节记录<strong>本机真实落地</strong>的安装结果，与上面的通用步骤对应。</p>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>实际位置 / 值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>虚拟环境</td>
+<td><code>C:\Users\王佐成\WorkBuddy\todolist\.venv-topydo</code>（Python 3.13.14）</td>
+</tr>
+<tr>
+<td>安装内容</td>
+<td>topydo 0.16 + <code>prompt</code> + <code>columns</code> extras</td>
+</tr>
+<tr>
+<td>依赖版本</td>
+<td>arrow 1.4.0 · colorama 0.4.6 · prompt_toolkit 3.0.53 · urwid 4.2.2 · watchdog 6.0.0 · python-dateutil 2.9.0.post0 · six 1.17.0 · tzdata 2026.4 · wcwidth 0.9.1 · typing_extensions 4.16.0</td>
+</tr>
+<tr>
+<td>全局命令</td>
+<td><code>C:\Users\王佐成\bin\topydo.cmd</code>（cmd / PowerShell）、<code>C:\Users\王佐成\bin\topydo</code>（Git Bash）</td>
+</tr>
+<tr>
+<td>配置文件</td>
+<td><code>C:\Users\王佐成\.topydo</code></td>
+</tr>
+<tr>
+<td>数据文件</td>
+<td><code>C:\Users\王佐成\WorkBuddy\todolist\todo.txt</code>、<code>done.txt</code>（配置里写的是绝对路径，因此在任意目录执行都指向同一份清单）</td>
+</tr>
+<tr>
+<td>编辑器</td>
+<td>VS Code：<code>"C:/Users/王佐成/AppData/Local/Programs/Microsoft VS Code/Code.exe" -w</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>关于全局命令</strong>：在 <code>C:\Users\王佐成\bin</code> 放了两个转发脚本指向 venv 里的 <code>topydo.exe</code>，并把该目录<strong>追加</strong>到了用户级 PATH（<code>HKCU\Environment\Path</code>，原值已备份到 <code>scripts/path_backup.txt</code>）。</p>
+<blockquote>
+<p>⚠️ <strong>踩坑记录</strong>：起初以为 <code>C:\Users\王佐成\bin</code> 已在 PATH 中（当前会话的 PATH 里确实有它），但读注册表发现那只是会话级注入 —— <strong>持久化的用户 PATH 里并没有这一条</strong>，自己新开终端会报"不是内部或外部命令"。已追加补齐，写入时保留了原有的 <code>REG_EXPAND_SZ</code> 类型，确保 <code>%USERPROFILE%</code> 之类的变量仍能正常展开。</p>
+</blockquote>
+<p>两个 shim 内容全部是纯 ASCII（用 <code>%USERPROFILE%</code> / <code>$HOME</code> 展开真实 exe 路径），避免 cmd.exe 按 OEM 代码页读取含中文路径的 <code>.cmd</code> 时乱码。</p>
+<p><strong>PATH 生效时机</strong>：环境变量修改对<strong>已打开</strong>的终端无效，需要新开一个终端窗口（或重启终端程序）。</p>
+<p><strong>验证过的方式</strong>（模拟新终端，用注册表里的机器级 + 用户级 PATH 重新解析）：</p>
+<pre><code>shutil.which('topydo')  →  C:\Users\王佐成\bin\topydo.CMD
+执行 topydo -v          →  topydo 0.16
+</code></pre>
+<p><strong>已验证通过的项目</strong>：<code>topydo -v</code> / <code>-h</code> / <code>add</code> / <code>ls</code> / <code>del</code>（含中文任务文本）、从非工作区目录执行（<code>which topydo</code> → <code>/c/Users/王佐成/bin/topydo</code>）、<code>topydo.cmd</code> 通道、配置文件解析（<code>config().editor()</code> 正确返回 VS Code 命令）、三种 UI 模块（CLI / prompt / columns）全部可导入。</p>
+<p><strong>日常用法</strong>：</p>
+<pre><code class="language-bash">topydo add &quot;(A) 写第 10 周回测报告 due:2026-10-05&quot;   # 加任务，due: 截止日期
+topydo add &quot;校验主力吸筹信号 t:2026-10-01&quot;           # t: 开始日期（未到日期前 ls 不显示，用 ls -x 看全部）
+topydo ls                 # 看清单（默认格式：|ID| 完成标记 (优先级) 创建日期 内容 标签）
+topydo ls -x              # 看全部，含未到开始日期 / 被隐藏标记的条目
+topydo do 1               # 完成第 1 条 → 自动归档进 done.txt
+topydo pri 2 A            # 把第 2 条设为 A 优先级
+topydo dep 2 before 1     # 设置依赖关系
+topydo postpone 1 3       # 顺延 3 天
+topydo edit 1             # 用 VS Code 打开该条编辑
+topydo revert ls / revert 3   # 查看备份 / 回滚到第 3 号备份
+topydo prompt             # 交互模式（必须在 Windows Terminal / cmd / PowerShell 里跑）
+topydo columns            # 列式 TUI（同上，建议先 chcp 65001）
+topydo help &lt;子命令&gt;      # 查看某子命令用法
+</code></pre>
+<p><strong>卸载（完全还原，共 7 处）</strong>：</p>
+<pre><code class="language-bash">rm -rf &quot;C:/Users/王佐成/WorkBuddy/todolist/.venv-topydo&quot;
+rm -f  &quot;C:/Users/王佐成/bin/topydo&quot; &quot;C:/Users/王佐成/bin/topydo.cmd&quot;
+rm -f  &quot;C:/Users/王佐成/.topydo&quot; &quot;C:/Users/王佐成/.topydo_columns&quot;
+rm -f  &quot;C:/Users/王佐成/Desktop/topydo 启动器.bat&quot;
+# 从用户 PATH 中移除 C:\Users\王佐成\bin（原值见 scripts/path_backup.txt）
+#   PowerShell: [Environment]::SetEnvironmentVariable(&quot;Path&quot;, &quot;&lt;path_backup.txt 里的原始值&gt;&quot;, &quot;User&quot;)
+# todo.txt / done.txt 是你的数据，按需保留或删除：
+# rm -f &quot;C:/Users/王佐成/WorkBuddy/todolist/todo.txt&quot; &quot;C:/Users/王佐成/WorkBuddy/todolist/done.txt&quot;
+</code></pre>
+<hr />
+<h2 id="11"><a class="toclink" href="#11">11. 桌面一键启动器</a></h2>
+<p><code>C:\Users\王佐成\Desktop\topydo 启动器.bat</code>（1.3 KB，双击即用）</p>
+<p>双击后显示菜单，输入序号回车：</p>
+<pre><code>  ==============================================
+    topydo 0.16  -  todo.txt 任务清单
+  ==============================================
+
+    [1] 交互模式 prompt   (推荐: 连续敲命令, 输入 exit 退出)
+    [2] 查看清单 ls
+    [3] 列式界面 columns  (vim 式按键, :q 退出)
+    [4] 退出
+
+  请输入序号后回车 [默认 1]:
+</code></pre>
+<p><strong>实现要点</strong>（自己改的话别踩这些坑）：</p>
+<table>
+<thead>
+<tr>
+<th>做法</th>
+<th>原因</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>开头 <code>chcp 65001 &gt;nul 2&gt;&amp;1</code></td>
+<td>保证中文提示 / 中文任务文本不乱码</td>
+</tr>
+<tr>
+<td>路径一律用 <code>%USERPROFILE%</code> 展开</td>
+<td>批处理内容保持纯 ASCII，不担心 cmd 按 OEM 代码页读文件</td>
+</tr>
+<tr>
+<td>先 <code>if not exist</code> 检测再执行</td>
+<td>卸载后双击不会一闪而过，而是给出明确提示</td>
+</tr>
+<tr>
+<td>退出后 <code>pause &gt;nul</code></td>
+<td>双击运行时窗口不会瞬间关闭</td>
+</tr>
+<tr>
+<td>用 <code>goto</code> 分支而非 <code>if(...)</code> 块</td>
+<td>避开括号块内 <code>(</code> <code>)</code> 与中文标点的转义问题</td>
+</tr>
+<tr>
+<td>调外部命令统一用 <code>call</code></td>
+<td>否则执行完 <code>topydo.cmd</code> 后不回到本脚本</td>
+</tr>
+</tbody>
+</table>
+<p><strong>已验证</strong>：<code>[2]</code> 能正确列出任务（含中文与 <code>due:</code> 标签）；<code>[3]</code> 能拉起列式 TUI 并保持运行；<code>[4]</code> 与无效输入均正常退出、无报错。</p>
+<blockquote>
+<p>注：直接双击是唯一可靠的运行方式 —— 若从 Git Bash 里 <code>cat</code>/管道方式调它，输出会被 cmd 的管道处理干扰（可能看到 <code>The syntax of the command is incorrect.</code>），那是调用方式的问题，不是脚本问题。</p>
+</blockquote>
+<p><strong>想改成"双击直接进 prompt 模式、不显示菜单"</strong>：把 <code>set /p</code> 那几行和 <code>if "%choice%"...</code> 判断删掉，只留 <code>:prompt</code> 段即可；重新生成可跑 <code>scripts/make_desktop_launcher.py</code>（改脚本里的 <code>LINES</code> 后重跑）。</p>
+<hr />
+<h2 id="12"><a class="toclink" href="#12">12. 三种界面：到底哪种算"交互界面"</a></h2>
+<p>topydo <strong>没有图形界面（GUI）</strong>，它提供的三种界面都在终端里，但 <code>columns</code> 是货真价实的交互式界面 —— 不是"敲一条看一条"。</p>
+<table>
+<thead>
+<tr>
+<th>界面</th>
+<th>启动</th>
+<th>交互方式</th>
+<th>终端要求</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CLI</td>
+<td><code>topydo ls/add/do…</code></td>
+<td>一行一条命令，执行完就返回</td>
+<td>任何终端（含 Git Bash）</td>
+</tr>
+<tr>
+<td>prompt</td>
+<td><code>topydo prompt</code></td>
+<td><code>topydo&gt;</code> 提示符下连续敲命令 + Tab 补全</td>
+<td>需真实 Windows 控制台</td>
+</tr>
+<tr>
+<td><strong>columns</strong></td>
+<td><code>topydo columns</code></td>
+<td><strong>分栏浏览、方向键/hjkl 移动、单键操作（x 完成 / e 编辑 / m 标记）、鼠标滚轮与点选、<code>:</code> 进入命令行、<code>:q</code> 退出</strong></td>
+<td>需真实 Windows 控制台</td>
+</tr>
+</tbody>
+</table>
+<h3 id="121-columns"><a class="toclink" href="#121-columns">12.1 columns 分栏配置（本机已配好）</a></h3>
+<p>关键点：<code>topydo columns</code> <strong>默认没有任何分栏</strong>（启动后是空界面），必须自己写分栏配置。本机已生成 <code>C:\Users\王佐成\.topydo_columns</code>：</p>
+<pre><code class="language-ini">[all]
+title      = 全部任务
+filterexpr =
+groupexpr  = due          ; 按截止日期分组
+
+[today]
+title      = 今天到期
+filterexpr = due:tod
+
+[overdue]
+title      = 逾期
+filterexpr = due:&lt;tod
+sortexpr   = desc:due
+
+[starred]
+title      = 星标
+filterexpr = star:1
+</code></pre>
+<p>分栏配置文件查找顺序：<code>topydo_columns.ini</code> → <code>topydo_columns.conf</code> → <code>./.topydo_columns</code> → <code>~/.topydo_columns</code> → <code>~/.config/topydo/columns</code> → <code>/etc/topydo_columns.conf</code></p>
+<p>每段字段：<code>title</code>（列标题）、<code>filterexpr</code>（过滤表达式）、<code>sortexpr</code>（排序）、<code>groupexpr</code>（分组）、<code>show_all</code>（等同 <code>ls -x</code>）。</p>
+<h3 id="122"><a class="toclink" href="#122">12.2 过滤表达式（全部实测过的写法）</a></h3>
+<table>
+<thead>
+<tr>
+<th>表达式</th>
+<th>含义</th>
+<th>实测结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>due:tod</code></td>
+<td>今天到期</td>
+<td>✅ 只命中今天到期项</td>
+</tr>
+<tr>
+<td><code>due:&lt;tod</code></td>
+<td>逾期</td>
+<td>✅ 只命中逾期项</td>
+</tr>
+<tr>
+<td><code>due:&gt;tod</code></td>
+<td>未来到期</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>star:1</code></td>
+<td>星标任务</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>+项目名</code></td>
+<td>含某项目标签</td>
+<td>✅ 如 <code>+回测</code></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>⚠️ 相对日期写法 <code>due:&lt;tod+7d</code> 实测<strong>无效</strong>（返回空），别照抄网上例子。</p>
+</blockquote>
+<h3 id="123"><a class="toclink" href="#123">12.3 试玩用的示例清单</a></h3>
+<p><code>scripts/示例任务-试玩用.txt</code>（6 条覆盖逾期/今天/项目/星标/未开始/普通），不动你的正式清单即可试各种过滤：</p>
+<pre><code class="language-bash">topydo -t &quot;scripts/示例任务-试玩用.txt&quot; ls        # 相关性过滤后
+topydo -t &quot;scripts/示例任务-试玩用.txt&quot; ls -x     # 全部
+topydo -t &quot;scripts/示例任务-试玩用.txt&quot; ls &quot;star:1&quot;
+</code></pre>
+<h3 id="124-gui"><a class="toclink" href="#124-gui">12.4 想要真正的窗口（GUI）</a></h3>
+<p>topydo 官方不提供，但有同格式的第三方客户端 —— <strong>todo.txt 是纯文本，同一份文件可以换着用</strong>，数据不吃亏。以下维护状态为 2026-09-30 实测查询 GitHub API 的结果：</p>
+<table>
+<thead>
+<tr>
+<th>客户端</th>
+<th>平台</th>
+<th>Star</th>
+<th>最近提交</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>sleek</strong></td>
+<td>Win/macOS/Linux</td>
+<td>2039</td>
+<td>2026-09-15</td>
+<td>Electron，当前最活跃，功能最全（暗色模式、循环任务、过滤侧栏、归档）</td>
+</tr>
+<tr>
+<td>todotxt.net</td>
+<td>Windows</td>
+<td>529</td>
+<td>2025-10-15</td>
+<td>C#/.NET，单文件极小、全键盘操作，但基本处于维护状态</td>
+</tr>
+<tr>
+<td>QTodoTxt2</td>
+<td>Win/Linux</td>
+<td>186</td>
+<td>2025-10-18</td>
+<td>Qt/QML + Python，仍在更新</td>
+</tr>
+<tr>
+<td>Todour</td>
+<td>Win/macOS</td>
+<td>144</td>
+<td>2025-12-14</td>
+<td>Qt，简洁</td>
+</tr>
+</tbody>
+</table>
+<p>对应仓库：<code>ransome1/sleek</code>、<code>benrhughes/todotxt.net</code>、<code>QTodoTxt/QTodoTxt2</code>、<code>SverrirValgeirsson/Todour</code>。</p>
+<p><strong>使用注意</strong>：GUI 客户端要让它的 todo.txt 指向 <code>C:\Users\王佐成\WorkBuddy\todolist\todo.txt</code>（或把清单搬到你更习惯的目录，然后同步改 <code>~/.topydo</code> 与 GUI 设置）。topydo 特有的 <code>t:</code>（开始日期）、<code>dep</code>（依赖）等标签，部分客户端不识别但会原样保留，不会损坏数据。</p>
+  </main>
+</div>
+</body>
+</html>

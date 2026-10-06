@@ -1,0 +1,5 @@
+{"seq":1,"ts":"2026-10-06T06:16:03.914Z","type":"user","payload":{"text":"把 回测报告 延到下周三"}}
+{"seq":2,"ts":"2026-10-06T06:16:04.128Z","type":"intent","payload":{"intent":"postpone","confidence":"high","target":{"kind":"keyword","value":"回测报告"},"source":"local"}}
+{"seq":3,"ts":"2026-10-06T06:16:04.315Z","type":"tool_call","payload":{"callId":"call-1","tool":{"name":"todo.postpone","params":{"target":"回测报告","due":"2026-10-14"}}}}
+{"seq":4,"ts":"2026-10-06T06:16:04.563Z","type":"tool_result","payload":{"callId":"call-1","status":"ok","durationMs":436,"reply":"已将「今天到期：写第 10 周回测报告」延期至 2026-10-14","params":{"target":"回测报告","title":"今天到期：写第 10 周回测报告","due":"2026-10-14"}}}
+{"seq":5,"ts":"2026-10-06T06:16:04.756Z","type":"agent","payload":{"text":"已将「今天到期：写第 10 周回测报告」延期至 2026-10-14","kind":"text"}}

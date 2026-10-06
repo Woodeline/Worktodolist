@@ -1,0 +1,31 @@
+{"seq":1,"ts":"2026-10-01T03:44:28.901Z","type":"user","payload":{"text":"把 回测报告 延到下周三"}}
+{"seq":2,"ts":"2026-10-01T03:44:29.165Z","type":"intent","payload":{"intent":"postpone","confidence":"high","target":{"kind":"keyword","value":"回测报告"}}}
+{"seq":3,"ts":"2026-10-01T03:44:29.363Z","type":"tool_call","payload":{"callId":"call-1","tool":{"name":"todo.postpone","params":{"target":"回测报告","due":"2026-10-07"}}}}
+{"seq":4,"ts":"2026-10-01T03:44:29.526Z","type":"tool_result","payload":{"callId":"call-1","status":"ok","durationMs":361,"reply":"已将「今天到期：写第 10 周回测报告」延期至 2026-10-07","params":{"target":"回测报告","title":"今天到期：写第 10 周回测报告","due":"2026-10-07"}}}
+{"seq":5,"ts":"2026-10-01T03:44:29.697Z","type":"agent","payload":{"text":"已将「今天到期：写第 10 周回测报告」延期至 2026-10-07","kind":"text"}}
+{"seq":1,"ts":"2026-10-01T03:45:03.921Z","type":"user","payload":{"text":"把 回测报告 延到下周三"}}
+{"seq":2,"ts":"2026-10-01T03:45:04.148Z","type":"intent","payload":{"intent":"postpone","confidence":"high","target":{"kind":"keyword","value":"回测报告"}}}
+{"seq":3,"ts":"2026-10-01T03:45:04.342Z","type":"tool_call","payload":{"callId":"call-1","tool":{"name":"todo.postpone","params":{"target":"回测报告","due":"2026-10-07"}}}}
+{"seq":4,"ts":"2026-10-01T03:45:04.533Z","type":"tool_result","payload":{"callId":"call-1","status":"ok","durationMs":385,"reply":"已将「今天到期：写第 10 周回测报告」延期至 2026-10-07","params":{"target":"回测报告","title":"今天到期：写第 10 周回测报告","due":"2026-10-07"}}}
+{"seq":5,"ts":"2026-10-01T03:45:04.728Z","type":"agent","payload":{"text":"已将「今天到期：写第 10 周回测报告」延期至 2026-10-07","kind":"text"}}
+{"seq":1,"ts":"2026-10-01T03:45:13.917Z","type":"user","payload":{"text":"撤销"}}
+{"seq":2,"ts":"2026-10-01T03:45:14.116Z","type":"intent","payload":{"intent":"undo","confidence":"high","target":null}}
+{"seq":3,"ts":"2026-10-01T03:45:14.314Z","type":"tool_call","payload":{"callId":"call-1","tool":{"name":"todo.undo","params":{}}}}
+{"seq":4,"ts":"2026-10-01T03:45:14.505Z","type":"tool_result","payload":{"callId":"call-1","status":"ok","durationMs":389,"reply":"已撤销最后一步操作。","params":{}}}
+{"seq":5,"ts":"2026-10-01T03:45:14.696Z","type":"agent","payload":{"text":"已撤销最后一步操作。","kind":"text"}}
+{"seq":1,"ts":"2026-10-01T04:30:50.070Z","type":"user","payload":{"text":"后天上午9点有月报会议要开"}}
+{"seq":2,"ts":"2026-10-01T04:30:50.703Z","type":"agent","payload":{"text":"抱歉，没听懂这条指令 🙈 你可以试试：\n· 加一条 明天 交周报\n· 完成 回测报告\n· 把 回测报告 延到下周三\n· 标为高 回测报告\n· 有哪些任务\n输入 / 可查看全部可用指令。","kind":"hint"}}
+{"seq":1,"ts":"2026-10-01T08:43:47.206Z","type":"user","payload":{"text":"下周二有一个委托要交付，记得提醒我"}}
+{"seq":2,"ts":"2026-10-01T08:43:47.468Z","type":"agent","payload":{"text":"这句听着像一条待办，要我新建吗？\n· 标题：委托要交付 记得提醒我\n· 截止：2026-10-06\n回「是」新建，回「不是」跳过（不改动文件）。","kind":"text"}}
+{"seq":3,"ts":"2026-10-01T08:44:05.455Z","type":"user","payload":{"text":"是"}}
+{"seq":4,"ts":"2026-10-01T08:44:05.663Z","type":"intent","payload":{"intent":"add","confidence":"high","target":null,"source":"local"}}
+{"seq":5,"ts":"2026-10-01T08:44:05.873Z","type":"tool_call","payload":{"callId":"call-1","tool":{"name":"todo.add","params":{"title":"委托要交付 记得提醒我","due":"2026-10-06"}}}}
+{"seq":6,"ts":"2026-10-01T08:44:06.090Z","type":"tool_result","payload":{"callId":"call-1","status":"ok","durationMs":427,"reply":"已添加任务：委托要交付 记得提醒我，截止 2026-10-06","params":{"due":"2026-10-06","title":"委托要交付 记得提醒我"}}}
+{"seq":7,"ts":"2026-10-01T08:44:06.256Z","type":"agent","payload":{"text":"已添加任务：委托要交付 记得提醒我，截止 2026-10-06","kind":"text"}}
+{"seq":8,"ts":"2026-10-01T08:44:38.707Z","type":"user","payload":{"text":"今天晚上有个饭局，提醒我不要喝酒，明天早上要开车回老家"}}
+{"seq":9,"ts":"2026-10-01T08:44:39.035Z","type":"agent","payload":{"text":"这句听着像一条待办，要我新建吗？\n· 标题：今天 有个饭局 提醒我不要喝酒 要开车回老家\n· 截止：2026-10-02\n· 提示：已按日期处理（忽略具体时刻）\n回「是」新建，回「不是」跳过（不改动文件）。","kind":"text"}}
+{"seq":10,"ts":"2026-10-01T08:44:48.219Z","type":"user","payload":{"text":"是"}}
+{"seq":11,"ts":"2026-10-01T08:44:48.353Z","type":"intent","payload":{"intent":"add","confidence":"high","target":null,"source":"local"}}
+{"seq":12,"ts":"2026-10-01T08:44:48.542Z","type":"tool_call","payload":{"callId":"call-2","tool":{"name":"todo.add","params":{"title":"今天 有个饭局 提醒我不要喝酒 要开车回老家","due":"2026-10-02"}}}}
+{"seq":13,"ts":"2026-10-01T08:44:48.738Z","type":"tool_result","payload":{"callId":"call-2","status":"ok","durationMs":385,"reply":"已添加任务：今天 有个饭局 提醒我不要喝酒 要开车回老家，截止 2026-10-02（已按日期处理（忽略具体时刻））","params":{"due":"2026-10-02","title":"今天 有个饭局 提醒我不要喝酒 要开车回老家"}}}
+{"seq":14,"ts":"2026-10-01T08:44:48.917Z","type":"agent","payload":{"text":"已添加任务：今天 有个饭局 提醒我不要喝酒 要开车回老家，截止 2026-10-02（已按日期处理（忽略具体时刻））","kind":"text"}}

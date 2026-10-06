@@ -1,0 +1,24 @@
+# ---- 运行状态（机器相关，不入库）----
+.todolist-server.pid
+.todolist-server.port
+.todolist-launch.log
+.workbuddy/
+
+# ---- 依赖 / 虚拟环境 ----
+node_modules/
+.venv-topydo/
+
+# ---- 构建与 QA 临时产物 ----
+# dist 不入库：克隆后首次启动时 launch_todolist.py 会自动执行 vite build。
+todolist-gui/dist/
+todolist-gui/dist-*/
+todolist-gui/.tmp/
+todolist-gui/qa-artifacts/
+todolist-gui/vite.config.js.timestamp-*.mjs
+.qa-backup/
+.qa-tmp/
+.todo.bak
+
+# ---- Python ----
+__pycache__/
+*.pyc
