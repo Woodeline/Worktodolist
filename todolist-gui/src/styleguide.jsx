@@ -10,7 +10,7 @@
 //
 // 运行：npm run dev → http://localhost:<端口>/styleguide.html?view=list
 //       （端口见项目根 .todolist-server.port，默认 15180）
-// 视图：?view=tokens|icons|list|list-all|chat|chatempty|welcome|reauth|unsupported|empty|drawer|toast|modal
+// 视图：?view=tokens|icons|list|list-all|chat|chatempty|settings|welcome|reauth|unsupported|empty|drawer|toast|modal
 import dayjs from 'dayjs';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -31,8 +31,11 @@ import TopBar from './components/TopBar.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import EditDrawer from './components/EditDrawer.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
+import SettingsPage from './components/SettingsPage.jsx';
+import ToolsPage from './components/tools/ToolsPage.jsx';
 import ToolCallCard from './components/ToolCallCard.jsx';
 import Icon, { ICON_NAMES } from './components/Icon.jsx';
+import { ContextMenuProvider } from './hooks/useContextMenu.jsx';
 
 const TODAY = dayjs().format('YYYY-MM-DD');
 
@@ -233,6 +236,8 @@ const VIEWS = [
   'list-all',
   'chat',
   'chatempty',
+  'settings',
+  'tools',
   'welcome',
   'reauth',
   'unsupported',
@@ -325,7 +330,7 @@ function AppShell({ store, tab, listView }) {
   const s = listView ? makeStore({ ...store, view: listView }) : store;
   return (
     <div className="app">
-      <Tabs tab={tab} onChange={() => {}} />
+      <Tabs tab={tab} onChange={() => {}} store={s} onOpenSettings={() => {}} />
       {tab === 'chat' ? (
         <ChatPanel store={s} />
       ) : (
@@ -576,7 +581,7 @@ function ChatFlowStage() {
   const store = makeStore({ dirReady: false });
   return (
     <div className="app">
-      <Tabs tab="chat" onChange={() => {}} />
+      <Tabs tab="chat" onChange={() => {}} store={store} onOpenSettings={() => {}} />
       <div className="chat-panel">
         <div className="chat-main">
           <div className="chat-status">
@@ -586,46 +591,7 @@ function ChatFlowStage() {
             </span>
             <span>本地规则引擎优先 · 仅在听不懂时发往 api.openai.com</span>
             <span className="spacer" />
-            <button type="button" className="chat-status-btn">
-              AI 兜底 · 已开
-            </button>
             <span>事件日志 12 条 · 最后 seq 12</span>
-          </div>
-
-          {/* AI 兜底设置面板：默认折叠，这里展开以便视觉核对 */}
-          <div className="ai-cfg">
-            <div className="ai-cfg-title">AI 兜底（默认关闭）</div>
-            <p className="ai-cfg-note">
-              只在本地规则引擎<b>没听懂</b>时才调用它。打开后，这些没被认出来的句子会被发往你填的服务地址；
-              能被本地认出来的句子<b>永远不联网</b>。API Key 存在本机 localStorage，仅供浏览器直连，
-              请自行评估风险；不填就等于彻底关闭。
-            </p>
-            <label className="ai-cfg-row">
-              <span className="ai-cfg-label">启用</span>
-              <input type="checkbox" defaultChecked />
-              <span className="ai-cfg-hint" />
-            </label>
-            <label className="ai-cfg-row">
-              <span className="ai-cfg-label">服务地址</span>
-              <input type="text" defaultValue="https://api.openai.com/v1" readOnly />
-            </label>
-            <label className="ai-cfg-row">
-              <span className="ai-cfg-label">模型</span>
-              <input type="text" defaultValue="gpt-4o-mini" readOnly />
-            </label>
-            <label className="ai-cfg-row">
-              <span className="ai-cfg-label">API Key</span>
-              <input type="password" defaultValue="sk-xxxxxxxxxxxxxxxx" readOnly />
-            </label>
-            <div className="ai-cfg-actions">
-              <button type="button" className="btn btn-primary">
-                保存
-              </button>
-              <button type="button" className="btn">
-                清除
-              </button>
-              <span className="ai-cfg-where">当前会发往：api.openai.com</span>
-            </div>
           </div>
 
           <div className="chat-stream">
@@ -670,6 +636,38 @@ function ChatFlowStage() {
   );
 }
 
+// 设置页：与产品同构（顶栏齿轮处于打开态 + 独立页面 + 底部状态栏）。
+// 渲染的是真实组件，所以这里也走真实配置读写（本机没配过就显示默认值）。
+function SettingsStage() {
+  const store = makeStore({ dirReady: false });
+  return (
+    <div className="app">
+      <Tabs
+        tab="chat"
+        onChange={() => {}}
+        store={store}
+        onOpenSettings={() => {}}
+        settingsOpen
+      />
+      <SettingsPage onClose={() => {}} />
+      <Footer store={store} />
+    </div>
+  );
+}
+
+// 工具集：与产品同构（顶栏选中「工具」+ 左栏工具清单 + 右栏工具工作区）。
+// 渲染的是真实工具组件，所以截图里就是真实的数据录入表与真实画布。
+function ToolsStage() {
+  const store = makeStore({ dirReady: true });
+  return (
+    <div className="app">
+      <Tabs tab="tools" onChange={() => {}} store={store} onOpenSettings={() => {}} />
+      <ToolsPage />
+      <Footer store={store} />
+    </div>
+  );
+}
+
 // ------------------------------------------------------------------ 根路由
 function Root() {
   const view = new URLSearchParams(location.search).get('view') || 'tokens';
@@ -691,6 +689,10 @@ function Root() {
       return stage(<AppShell store={makeStore({ dirReady: false })} tab="chat" />);
     case 'chatflow':
       return stage(<ChatFlowStage />);
+    case 'settings':
+      return stage(<SettingsStage />);
+    case 'tools':
+      return stage(<ToolsStage />);
     case 'welcome':
       return stage(<WelcomePage store={makeStore({ dirReady: false })} />);
     case 'reauth':
@@ -725,4 +727,9 @@ if (new URLSearchParams(location.search).get('view') === 'chatflow') {
   VIEWS.splice(VIEWS.indexOf('chatempty') + 1, 0, 'chatflow');
 }
 
-createRoot(document.getElementById('sg-root')).render(<Root />);
+// 样式指南里渲染的是真实组件，真实组件依赖右键菜单 Provider，所以这里也要包一层。
+createRoot(document.getElementById('sg-root')).render(
+  <ContextMenuProvider>
+    <Root />
+  </ContextMenuProvider>
+);

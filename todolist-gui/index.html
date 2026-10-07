@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/x-icon" href="/todolist.ico" />
     <title>待办清单 · todo.txt</title>
+    <!-- 首屏底色：先于 CSS 生效，避免启动时闪一下白底（那是"网页加载"的观感） -->
+    <style>
+      html {
+        background: #f0f0f0;
+      }
+      @media (prefers-color-scheme: dark) {
+        html {
+          background: #1f1f1f;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

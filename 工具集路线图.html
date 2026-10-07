@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>工具集扩展路线图 · todolist v0.1.5 →</title>
+<style>
+/* ─────────────────────────────────────────────────────────────
+   令牌层：与 todolist-gui/src/index.css §1 同口径
+   调性＝原生桌面工具（等宽数据 + 层级，不用网页感大圆角/渐变）
+   ───────────────────────────────────────────────────────────── */
+:root{
+  --font-ui:"Segoe UI","Microsoft YaHei UI","Microsoft YaHei",Meiryo,sans-serif;
+  --font-mono:"Cascadia Mono",Consolas,"Courier New",monospace;
+
+  --bg:#f4f5f6;
+  --surface:#ffffff;
+  --surface-2:#fafbfb;
+  --sunk:#eef0f1;
+  --text:#1b1e22;
+  --text-2:#4a5158;
+  --muted:#79808a;
+  --line:#e2e5e8;
+  --control-line:#b9bfc6;
+
+  --accent:#2b62d9;
+  --accent-soft:#e8effc;
+  --ok:#1c7a45;
+  --warn:#9a5a06;
+  --danger:#bf2c2c;
+  --danger-soft:#fdeceb;
+
+  --r-xs:2px; --r-sm:3px; --r-md:4px; --r-lg:6px;
+  --h-control:26px;
+  --shadow-1:0 1px 1px rgba(20,24,28,.06),0 0 0 1px rgba(20,24,28,.05);
+  --shadow-2:0 2px 3px rgba(20,24,28,.08),0 1px 0 rgba(20,24,28,.04);
+
+  --ease-out:cubic-bezier(.16,1,.3,1);
+  --t-fast:160ms; --t-base:320ms; --t-scene:680ms;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#15171a;
+    --surface:#1c1f23;
+    --surface-2:#20242a;
+    --sunk:#131518;
+    --text:#e7eaed;
+    --text-2:#b3bac2;
+    --muted:#868d96;
+    --line:#2c3137;
+    --control-line:#454c55;
+    --accent:#6a9bff;
+    --accent-soft:#1c2740;
+    --ok:#4fbf85;
+    --warn:#d9a251;
+    --danger:#f0776e;
+    --danger-soft:#33201f;
+    --shadow-1:0 1px 1px rgba(0,0,0,.4),0 0 0 1px rgba(255,255,255,.04);
+    --shadow-2:0 2px 3px rgba(0,0,0,.45),0 1px 0 rgba(255,255,255,.03);
+  }
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--font-ui);
+  font-size:14px;
+  line-height:1.62;
+  padding:0 0 72px;
+  -webkit-font-smoothing:antialiased;
+}
+/* 极淡的坐标网格：让页面像"图纸"而不是"落地页" */
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(to right,rgba(120,130,140,.055) 1px,transparent 1px),
+    linear-gradient(to bottom,rgba(120,130,140,.055) 1px,transparent 1px);
+  background-size:28px 28px;
+  mask-image:radial-gradient(120% 90% at 50% 0%,#000 20%,transparent 78%);
+}
+.wrap{position:relative;z-index:1;max-width:1160px;margin:0 auto;padding:0 28px}
+
+/* ── 入场编排：一次序列，不做零散微交互 ── */
+.rise{opacity:0;transform:translateY(10px);animation:rise var(--t-scene) var(--ease-out) forwards;animation-delay:var(--d,0ms)}
+@keyframes rise{to{opacity:1;transform:none}}
+.reveal{opacity:0;transform:translateY(14px);transition:opacity var(--t-base) var(--ease-out),transform var(--t-base) var(--ease-out)}
+.reveal.in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){
+  .rise{animation:none;opacity:1;transform:none}
+  .reveal{transition:none;opacity:1;transform:none}
+}
+
+/* ── 页头 ── */
+header{padding:44px 0 26px;border-bottom:1px solid var(--line)}
+.eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+h1{font-size:34px;line-height:1.14;letter-spacing:-.02em;font-weight:600;margin:12px 0 0;max-width:24em}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.chip{
+  font-family:var(--font-mono);font-size:11px;line-height:1;
+  padding:6px 9px;border-radius:var(--r-sm);background:var(--surface);
+  border:1px solid var(--line);color:var(--text-2);box-shadow:var(--shadow-1);
+}
+.chip b{color:var(--text);font-weight:600}
+
+/* ── 结论条：左侧强调边，不居中、不卡片堆 ── */
+.verdict{
+  margin:26px 0 0;padding:16px 20px 16px 18px;
+  background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);
+  border-radius:var(--r-md);box-shadow:var(--shadow-1);
+  display:grid;grid-template-columns:104px 1fr;gap:18px;align-items:start;
+}
+.verdict .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;color:var(--accent);padding-top:3px}
+.verdict p{color:var(--text-2);max-width:64ch}
+.verdict strong{color:var(--text);font-weight:600}
+
+/* ── 章节 ── */
+section{padding:40px 0 0}
+.sec-head{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:22px}
+.sec-no{font-family:var(--font-mono);font-size:11px;color:var(--muted);letter-spacing:.1em}
+h2{font-size:19px;font-weight:600;letter-spacing:-.01em}
+.sec-note{margin-left:auto;font-size:12px;color:var(--muted)}
+
+/* ── T1–T4 形态矩阵 ── */
+.forms{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden}
+.form{background:var(--surface);padding:16px 15px 15px;display:flex;flex-direction:column;gap:9px;position:relative;transition:background var(--t-fast) ease-out}
+.form:hover{background:var(--surface-2)}
+.form::after{content:"";position:absolute;left:0;top:0;height:2px;width:var(--w,0);background:var(--tone);transition:width var(--t-base) var(--ease-out)}
+.form:hover::after,.form.lit::after{width:100%}
+.form .tier{font-family:var(--font-mono);font-size:11px;color:var(--tone);letter-spacing:.08em}
+.form h3{font-size:14px;font-weight:600;letter-spacing:-.005em}
+.form .hit{font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+.form ul{list-style:none;font-size:12px;color:var(--text-2);display:flex;flex-direction:column;gap:3px}
+.form ul li::before{content:"· ";color:var(--muted)}
+.form .foot{margin-top:auto;padding-top:10px;border-top:1px dashed var(--line);font-size:11px;color:var(--muted);font-family:var(--font-mono)}
+.meter{display:flex;gap:2px}
+.meter i{width:12px;height:4px;border-radius:1px;background:var(--sunk)}
+.meter i.on{background:var(--tone)}
+.form[data-t="1"]{--tone:var(--ok)}
+.form[data-t="2"]{--tone:var(--accent)}
+.form[data-t="3"]{--tone:var(--warn)}
+.form[data-t="4"]{--tone:var(--danger)}
+
+/* ── 架构图 ── */
+.arch{display:grid;grid-template-columns:1.15fr .85fr;gap:24px;align-items:start}
+pre.tree{
+  font-family:var(--font-mono);font-size:12px;line-height:1.85;
+  background:var(--sunk);border:1px solid var(--line);border-radius:var(--r-md);
+  padding:18px 18px;overflow:auto;color:var(--text-2);
+}
+pre.tree b{color:var(--text);font-weight:600}
+pre.tree em{color:var(--accent);font-style:normal}
+pre.tree s{color:var(--muted);text-decoration:none}
+.rules{display:flex;flex-direction:column;gap:14px}
+.rule{display:grid;grid-template-columns:22px 1fr;gap:10px}
+.rule .n{font-family:var(--font-mono);font-size:12px;color:var(--accent);padding-top:2px}
+.rule p{font-size:13px;color:var(--text-2)}
+.rule p b{color:var(--text);font-weight:600}
+
+/* ── registry 字段对比 ── */
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.fbox{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:15px 16px;box-shadow:var(--shadow-1)}
+.fbox h4{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;color:var(--muted);font-weight:400;margin-bottom:12px}
+.tokens{display:flex;flex-wrap:wrap;gap:6px}
+.tok{font-family:var(--font-mono);font-size:11px;padding:4px 7px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--surface-2);color:var(--text-2)}
+.tok.add{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.tok.gone{border-style:dashed;color:var(--muted)}
+.warnline{margin-top:14px;font-size:12px;color:var(--danger);display:flex;gap:7px;align-items:flex-start}
+.warnline span{font-family:var(--font-mono)}
+
+/* ── 路线：阶梯，不做等高三列 ── */
+.road{border-top:1px solid var(--line);margin-top:6px}
+.phase{display:grid;grid-template-columns:132px 1fr;gap:22px;padding:18px 0;border-bottom:1px solid var(--line)}
+.phase .tag{display:flex;flex-direction:column;gap:5px}
+.phase .tag b{font-family:var(--font-mono);font-size:15px;letter-spacing:.02em}
+.phase .tag em{font-style:normal;font-size:12px;color:var(--muted)}
+.phase .tag i{font-family:var(--font-mono);font-size:10px;padding:3px 6px;border-radius:var(--r-xs);align-self:flex-start;letter-spacing:.06em}
+.p0 .tag b,.p0 .tag i{color:var(--accent)} .p0 .tag i{background:var(--accent-soft)}
+.p1 .tag b,.p1 .tag i{color:var(--ok)} .p1 .tag i{background:var(--sunk)}
+.p2 .tag b,.p2 .tag i{color:var(--warn)} .p2 .tag i{background:var(--sunk)}
+.p3 .tag b,.p3 .tag i{color:var(--danger)} .p3 .tag i{background:var(--danger-soft)}
+.phase ol{list-style:none;display:grid;gap:8px}
+.phase ol li{display:grid;grid-template-columns:16px 1fr;gap:9px;font-size:13px;color:var(--text-2)}
+.phase ol li s{text-decoration:none;font-family:var(--font-mono);font-size:12px}
+.phase ol li.hi>span:last-child{color:var(--text)}
+.debt{display:inline-block;font-family:var(--font-mono);font-size:10px;color:var(--danger);border:1px solid currentColor;border-radius:var(--r-xs);padding:1px 5px;margin-left:6px;vertical-align:1px}
+
+/* ── 拍板表 ── */
+table.q{width:100%;border-collapse:collapse;font-size:13px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden}
+table.q th,table.q td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+table.q th{font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;color:var(--muted);font-weight:400;background:var(--surface-2)}
+table.q tr:last-child td{border-bottom:0}
+table.q td:first-child{width:38%;color:var(--text)}
+table.q td:last-child{color:var(--text-2)}
+table.q td:last-child b{color:var(--accent);font-weight:600}
+.tag-no{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-right:6px}
+
+/* ── 不做清单 ── */
+.nope{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden}
+.nope div{background:var(--surface);padding:14px 15px}
+.nope h4{font-size:13px;font-weight:600;margin-bottom:5px;display:flex;gap:8px;align-items:baseline}
+.nope h4::before{content:"✕";font-family:var(--font-mono);color:var(--danger);font-size:11px}
+.nope p{font-size:12px;color:var(--muted)}
+
+footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:14px;font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+
+/* ── 响应式三档 ── */
+@media (max-width:1080px){
+  .forms{grid-template-columns:repeat(2,1fr)}
+  .arch{grid-template-columns:1fr}
+}
+@media (max-width:768px){
+  .wrap{padding:0 18px}
+  h1{font-size:26px}
+  .verdict{grid-template-columns:1fr;gap:8px;border-left-width:3px}
+  .forms{grid-template-columns:1fr}
+  .fields{grid-template-columns:1fr}
+  .nope{grid-template-columns:1fr}
+  .phase{grid-template-columns:1fr;gap:10px}
+  .phase .tag{flex-direction:row;align-items:center;flex-wrap:wrap}
+  table.q{display:block;overflow-x:auto}
+  table.q td{min-width:150px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow rise" style="--d:0ms">Roadmap · Tools &amp; Modules</div>
+  <h1 class="rise" style="--d:70ms">工具集扩展路线图</h1>
+  <div class="meta rise" style="--d:140ms">
+    <span class="chip">基线 <b>todolist-gui v0.1.5</b></span>
+    <span class="chip">现有工具 <b>1</b> 个（RTI）</span>
+    <span class="chip">运行时依赖 <b>3</b></span>
+    <span class="chip">门禁 <b>7</b> 道</span>
+    <span class="chip">2026-10-07</span>
+  </div>
+</header>
+
+<div class="verdict rise" style="--d:210ms">
+  <div class="lbl">结论</div>
+  <p>工具集现在是一个<strong>只有一格、没有内部骨架、与待办和对话都还没接线</strong>的抽屉。下一个迭代<strong>先不要加新工具</strong>，把抽屉做成柜子；之后按「工具碰什么资源」分批导入，新增成本才会从"改造外壳"降到<strong>一个组件 + 一条登记</strong>。</p>
+</div>
+
+<!-- ── 01 ── -->
+<section class="reveal">
+  <div class="sec-head">
+    <span class="sec-no">01</span><h2>集成成本由「碰什么资源」决定，不由功能复杂度决定</h2>
+    <span class="sec-note">→ 这张表就是导入顺序的依据</span>
+  </div>
+  <div class="forms">
+    <div class="form" data-t="1">
+      <div class="tier">T1 · 纯计算</div>
+      <h3>什么都不碰</h3>
+      <div class="hit">成本 <span class="meter"><i class="on"></i><i></i><i></i><i></i></span></div>
+      <ul><li>单位换算 / 颜色空间</li><li>正则测试 / 编解码</li><li>日期差 / 进制 / 校验码</li><li>CSV · JSON 整形</li></ul>
+      <div class="foot">新增设施：零</div>
+    </div>
+    <div class="form" data-t="2">
+      <div class="tier">T2 · 本地文件</div>
+      <h3>读文件，不写待办</h3>
+      <div class="hit">成本 <span class="meter"><i class="on"></i><i class="on"></i><i></i><i></i></span></div>
+      <ul><li>日志过滤 / 文本 diff</li><li>账单 · 台账解析</li><li>Markdown 预览</li><li>批量重命名清单</li></ul>
+      <div class="foot">需先有：选文件原语 + 权限记忆</div>
+    </div>
+    <div class="form" data-t="3">
+      <div class="tier">T3 · 待办域</div>
+      <h3>读且写 todo.txt</h3>
+      <div class="hit">成本 <span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></div>
+      <ul><li>周报导出 / 统计</li><li>批量优先级调整</li><li>番茄跟踪</li><li>重复任务生成</li></ul>
+      <div class="foot">需先有：只读投影 + 确认落盘通道</div>
+    </div>
+    <div class="form" data-t="4">
+      <div class="tier">T4 · 外部服务</div>
+      <h3>出网</h3>
+      <div class="hit">成本 <span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></div>
+      <ul><li>行情 / 天气 / 翻译</li><li>HTTP 调试</li><li>GitHub 查询</li></ul>
+      <div class="foot">需先有：外联通道 + 分组开关</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 02 ── -->
+<section class="reveal">
+  <div class="sec-head">
+    <span class="sec-no">02</span><h2>模块划分：三层 + 一条横切</h2>
+    <span class="sec-note">能力与工具是一对多，所以 lib 按领域命名</span>
+  </div>
+  <div class="arch">
+    <pre class="tree">表现层  <b>components/tools/</b>
+        ├─ &lt;XxxTool&gt;.jsx      只做布局与交互，状态自持
+        └─ <em>ToolShell</em>.jsx     ← 待抽出的统一骨架
+
+横切    <b>components/tools/</b>
+        ├─ registry.js        只描述"是什么"
+        └─ ToolsPage.jsx      只读 registry，不认识任何工具
+────────────────────────────────────────────
+适配层  <b>lib/&lt;domain&gt;/</b>
+        ├─ files.js           导出 / 导入
+        └─ <s>lib/net/</s>           ← 未来所有出网唯一出口
+
+能力层  <b>lib/&lt;domain&gt;/</b>
+        ├─ calc.js  stats.js  纯函数 · 无 DOM · 可单测
+        └─ chart.js           画布绘制 + 令牌读取</pre>
+    <div class="rules">
+      <div class="rule"><span class="n">01</span><p><b>算法必须在 lib/，否则不可测。</b>现在 <span style="font-family:var(--font-mono)">lib/rti/calc.js</span> 能与 Python 基准逐项对拍，靠的就是这层解耦 —— 这是"能不能进门禁"的资格证书。</p></div>
+      <div class="rule"><span class="n">02</span><p><b>目录按领域命名，不叫 tools/。</b>能力与工具是一对多：单位换算既服务工具页，也该被对话页调用（"3 海里等于多少公里"）。一绑到工具上就再也复用不了。</p></div>
+      <div class="rule"><span class="n">03</span><p><b>I/O 必须单一出口。</b>文件走 files.js、网络走 lib/net/。工具自己 fetch 一次，就再也无法统一关停、统一审计。</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 03 ── -->
+<section class="reveal">
+  <div class="sec-head">
+    <span class="sec-no">03</span><h2>registry 的演进：可扩展性的真实瓶颈</h2>
+    <span class="sec-note">撑到第 5 个工具就会开始长特例</span>
+  </div>
+  <div class="fields">
+    <div class="fbox">
+      <h4>现 在（7 字段，够用）</h4>
+      <div class="tokens">
+        <span class="tok">id</span><span class="tok">name</span><span class="tok">desc</span>
+        <span class="tok">detail</span><span class="tok">tags</span><span class="tok">icon</span><span class="tok">load</span>
+      </div>
+      <div class="warnline"><span>!</span><div>tags 只用于展示，不能筛不能分组；外壳读不到"这工具会不会写文件、会不会联网"。</div></div>
+    </div>
+    <div class="fbox">
+      <h4>建 议 补 齐（+6，全部声明式）</h4>
+      <div class="tokens">
+        <span class="tok add">group</span><span class="tok add">layout</span><span class="tok add">capabilities</span>
+        <span class="tok add">keywords</span><span class="tok add">stateVersion</span><span class="tok add">beta</span>
+      </div>
+      <div class="warnline" style="color:var(--warn)"><span>▲</span><div>registry <b style="color:var(--warn)">只描述"是什么"，绝不描述"怎么渲染"</b>。一旦出现 render: () =&gt; … 这种字段，外壳就开始认识具体工具，现在的解耦白做。</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 04 ── -->
+<section class="reveal">
+  <div class="sec-head">
+    <span class="sec-no">04</span><h2>三条接线通道：打通比加量更值钱</h2>
+    <span class="sec-note">三处都已有半成品，补全成本很低</span>
+  </div>
+  <div class="rules" style="gap:16px">
+    <div class="rule"><span class="n">读</span><p><b>数据线</b> —— 抽 <span style="font-family:var(--font-mono)">useTodoSnapshot()</span> 只读投影。现在工具要读任务只能拖进整个 useTodoStore（列表页专用整块 hook），立刻产生耦合。</p></div>
+    <div class="rule"><span class="n">写</span><p><b>动作线</b> —— 复用 <span style="font-family:var(--font-mono)">lib/actions.js</span> 的 ACTIONS 表 + <b>已有的 ProposalModal</b>：工具产出「建议」而不是直接改文件，走 <b>建议 → 用户确认 → 落盘</b>。通道已经存在，只是还没对工具开放 —— <b style="color:var(--accent)">投入产出比最高的一步</b>。</p></div>
+    <div class="rule"><span class="n">记</span><p><b>事件线</b> —— <span style="font-family:var(--font-mono)">eventLog.js</span> 目前只记对话。工具的关键动作也进同一份 NDJSON（同一套按本地日历日归档），"我做过什么"才只有一条时间线。</p></div>
+  </div>
+</section>
+
+<!-- ── 05 ── -->
+<section class="reveal">
+  <div class="sec-head">
+    <span class="sec-no">05</span><h2>设计方向：把工具集做成同一个产品的不同功能</h2>
+    <span class="sec-note">而不是应用商店</span>
+  </div>
+  <div class="fields" style="grid-template-columns:repeat(3,1fr)">
+    <div class="fbox"><h4>三 种 版 式</h4>
+      <div class="tokens" style="display:grid;gap:10px">
+        <div><span class="tok add">instant</span> <span style="font-size:12px;color:var(--muted)">单行输入即出，无页签无保存</span></div>
+        <div><span class="tok add">inspector</span> <span style="font-size:12px;color:var(--muted)">左输入右结果，参数表 + 图表 + 导出</span></div>
+        <div><span class="tok add">workbench</span> <span style="font-size:12px;color:var(--muted)">横向铺开：文件 + 大文本 + 结果表</span></div>
+      </div>
+    </div>
+    <div class="fbox"><h4>补 可 视 化 令 牌</h4>
+      <div class="tokens" style="display:grid;gap:10px">
+        <div><span class="tok">--ramp-1..5</span> <span style="font-size:12px;color:var(--muted)">顺序色阶（热力图、密度）</span></div>
+        <div><span class="tok">--div-1..5</span> <span style="font-size:12px;color:var(--muted)">发散色阶 · 涨红跌绿</span></div>
+      </div>
+      <div class="warnline" style="color:var(--muted)"><span>i</span><div style="font-size:12px">现有 --chart-* 那 13 个是分类色，趋势与涨跌对比不够用。</div></div>
+    </div>
+    <div class="fbox"><h4>危 险 度 可 见</h4>
+      <div class="tokens">
+        <span class="tok">不联网</span><span class="tok">只读</span>
+        <span class="tok" style="border-color:var(--warn);color:var(--warn)">会写入 todo.txt</span>
+        <span class="tok" style="border-color:var(--danger);color:var(--danger)">会联网</span>
+      </div>
+      <div class="warnline" style="color:var(--muted)"><span>i</span><div style="font-size:12px">由 capabilities 驱动，在标题旁标注 —— 让"数据主权优先"从口号变成看得见的事实。</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 06 ── -->
+<section class="reveal">
+  <div class="sec-head">
+    <span class="sec-no">06</span><h2>优先级与大致顺序</h2>
+    <span class="sec-note">顺序的关键是集成成本，不是业务紧急度</span>
+  </div>
+  <div class="road">
+    <div class="phase p0">
+      <div class="tag"><b>P0</b><em>铺地基</em><i>1 个迭代 · 不加工具</i></div>
+      <ol>
+        <li><s>1</s><span><b>ToolShell</b> 骨架 + tool-* 样式规格 + 三种版式</span></li>
+        <li><s>2</s><span>registry 补 6 个字段</span></li>
+        <li class="hi"><s>3</s><span>工具级 <b>ErrorBoundary</b><span class="debt">技术债</span> —— 现在一个工具抛异常会带走整个页面</span></li>
+        <li><s>4</s><span>工具存储统一 <b>toolStorage(id, version)</b> + 迁移约定</span></li>
+        <li><s>5</s><span>RTI 改造为骨架的第一个消费者（反向验证骨架成立）</span></li>
+        <li class="hi"><s>6</s><span>qa-tools 升级为<b>外壳契约</b>：新工具自动被检查（不写 todo.txt / 无裸色值 / 三档不漏 / 有崩溃隔离）</span></li>
+      </ol>
+    </div>
+    <div class="phase p1">
+      <div class="tag"><b>P1</b><em>打通入口</em><i>2–3 个迭代</i></div>
+      <ol>
+        <li><s>7</s><span>useTodoSnapshot() 只读投影</span></li>
+        <li><s>8</s><span>工具产出 → ProposalModal 落盘通道</span></li>
+        <li><s>9</s><span>对话页 → 工具路由（keywords + 动作 tool.open，复用 nlRules）</span></li>
+        <li><s>10</s><span>工具动作写入 eventLog</span></li>
+        <li><s>11</s><span>批量导入 4–6 个 <b>T1 工具</b>（零新设施，纯收益）</span></li>
+      </ol>
+    </div>
+    <div class="phase p2">
+      <div class="tag"><b>P2</b><em>按业务需要</em><i>2–4 个迭代</i></div>
+      <ol>
+        <li><s>12</s><span>T3 待办域工具（周报导出 / 批量优先级 / 统计）</span></li>
+        <li><s>13</s><span>T2 本地文件工具 —— 前置：选文件原语 + 权限记忆 + 目录边界</span></li>
+        <li><s>14</s><span>工具内搜索 / 最近使用 / 收藏</span></li>
+      </ol>
+    </div>
+    <div class="phase p3">
+      <div class="tag"><b>P3</b><em>风险与远期</em><i>条件成熟再说</i></div>
+      <ol>
+        <li><s>15</s><span>T4 联网工具 —— 前置三件套齐备才有资格做</span></li>
+        <li><s>16</s><span>第三方脚本式工具注册 —— 安全边界成本远超收益，<b>暂不建议</b></span></li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- ── 07 ── -->
+<section class="reveal">
+  <div class="sec-head"><span class="sec-no">07</span><h2>明确不建议做</h2></div>
+  <div class="nope">
+    <div><h4>引组件库 / 状态库</h4><p>破坏 ≤5 运行时依赖的现状与既有门禁的判定口径。</p></div>
+    <div><h4>云同步 / 分享 / 工具市场</h4><p>单用户场景收益为零，且与"数据主权"叙事直接冲突。</p></div>
+    <div><h4>每个工具自带导航或独立视觉</h4><p>会退化成一堆迷你应用，失去"统一入口"这个唯一优势。</p></div>
+    <div><h4>三级导航</h4><p>工具多了用搜索 + 分组折叠解决，层级只会让人迷路。</p></div>
+  </div>
+</section>
+
+<!-- ── 08 ── -->
+<section class="reveal">
+  <div class="sec-head"><span class="sec-no">08</span><h2>需要拍板的四件事</h2><span class="sec-note">拍完才动 P0 之外的东西</span></div>
+  <table class="q">
+    <thead><tr><th>议题</th><th>建议</th></tr></thead>
+    <tbody>
+      <tr><td><span class="tag-no">01</span>哪些工具允许写 todo.txt / done.txt？</td><td><b>默认全部只读，白名单逐个开</b></td></tr>
+      <tr><td><span class="tag-no">02</span>T2 的文件访问口径：每次现选，还是授权一个工作目录？</td><td>授权工作目录 + 工具只能在其内活动（体验好，但必须立目录边界）</td></tr>
+      <tr><td><span class="tag-no">03</span>新工具是否<b>强制</b>把算法放进 lib/ 且被 vitest 覆盖？</td><td><b>强制</b> —— 这是"工具集"与"一堆页面"的分水岭</td></tr>
+      <tr><td><span class="tag-no">04</span>联网工具是否与 AI 兜底共用一套开关模型？</td><td>共用：一个总闸 + 每个域名独立明示（沿用现有四约束）</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<footer>
+  <span>todolist-gui v0.1.5 · 288 passed / 13 files</span>
+  <span>配套文档：工具集扩展与模块规划-2026-10-07.md</span>
+</footer>
+
+</div>
+
+<script>
+// 一次编排好的入场序列（只做相位差，不做零散动效）
+(function(){
+  var els = document.querySelectorAll('.reveal');
+  if (!('IntersectionObserver' in window)) {
+    els.forEach(function(el){ el.classList.add('in'); });
+    return;
+  }
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if (e.isIntersecting){
+        var i = e.target.dataset.phase || 0;
+        e.target.style.transitionDelay = (i * 70) + 'ms';
+        e.target.classList.add('in');
+        io.unobserve(e.target);
+      }
+    });
+  }, { rootMargin: '0px 0px -12% 0px', threshold: .12 });
+
+  var sections = document.querySelectorAll('section.reveal');
+  sections.forEach(function(s, i){ s.dataset.phase = i % 3; io.observe(s); });
+
+  // 形态矩阵：进入视口时逐格点亮成本条
+  var forms = document.querySelectorAll('.form');
+  var io2 = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if (e.isIntersecting){
+        var idx = [].indexOf.call(forms, e.target);
+        setTimeout(function(){ e.target.classList.add('lit'); }, idx * 90);
+        io2.unobserve(e.target);
+      }
+    });
+  }, { threshold: .3 });
+  forms.forEach(function(f){ io2.observe(f); });
+})();
+</script>
+</body>
+</html>

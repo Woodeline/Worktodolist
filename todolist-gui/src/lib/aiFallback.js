@@ -16,7 +16,40 @@ export const DEFAULT_AI_CONFIG = {
   baseUrl: 'https://api.openai.com/v1',
   apiKey: '',
   model: 'gpt-4o-mini',
+  // 单次请求超时与失败重试次数：设置页可调，运行时按此执行。
+  // 默认值刻意保守 —— 兜底是"锦上添花"路径，绝不能把界面卡住。
+  timeoutMs: 20000,
+  maxRetries: 1,
 };
+
+// 可在设置页调整的范围。设置页与运行时共用这一份，避免出现
+// "界面能填、运行时当脏值丢掉"或"填了负数把超时算成 0"这类裂缝。
+export const AI_LIMITS = {
+  timeoutMs: { min: 3000, max: 120000 },
+  maxRetries: { min: 0, max: 3 },
+};
+
+function clampInt(value, { min, max }, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+/**
+ * 把任意来源的配置（localStorage、设置页草稿、测试桩）归一化成完整配置。
+ * 所有读取点都必须过这一道，配置才不会在不同调用方手里长得不一样。
+ */
+export function normalizeAiConfig(cfg) {
+  const c = { ...DEFAULT_AI_CONFIG, ...(cfg || {}) };
+  return {
+    enabled: Boolean(c.enabled),
+    baseUrl: String(c.baseUrl || '').trim(),
+    apiKey: String(c.apiKey || ''),
+    model: String(c.model || '').trim() || DEFAULT_AI_CONFIG.model,
+    timeoutMs: clampInt(c.timeoutMs, AI_LIMITS.timeoutMs, DEFAULT_AI_CONFIG.timeoutMs),
+    maxRetries: clampInt(c.maxRetries, AI_LIMITS.maxRetries, DEFAULT_AI_CONFIG.maxRetries),
+  };
+}
 
 // 允许 AI 返回的意图白名单 —— 与 actions.ACTIONS 的键一一对应。
 // 这里显式列一份而不是 import ACTIONS，是为了让 aiFallback 保持可单独测试、
@@ -39,6 +72,31 @@ const AI_INTENTS = new Set([
 const NO_TARGET_INTENTS = new Set(['add', 'query', 'undo']);
 
 // —— 配置读写（localStorage）——
+//
+// 读写的唯一真相仍然是 localStorage（useChatAgent 每次兜底前都会重新读一遍），
+// 这样才能保证「在设置页改完立刻生效」不需要任何额外同步步骤。
+// 订阅只服务于界面：让状态行/设置页在配置变化后重新渲染，不参与生效逻辑。
+
+const listeners = new Set();
+
+/**
+ * 订阅配置变化（保存 / 清除时触发）。返回取消订阅函数。
+ */
+export function subscribeAiConfig(fn) {
+  if (typeof fn !== 'function') return () => {};
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+function emitAiConfigChange() {
+  for (const fn of [...listeners]) {
+    try {
+      fn();
+    } catch {
+      // 单个订阅者出错不影响其它订阅者与写入结果
+    }
+  }
+}
 
 export function loadAiConfig() {
   try {
@@ -46,7 +104,7 @@ export function loadAiConfig() {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return null;
-    return { ...DEFAULT_AI_CONFIG, ...parsed };
+    return normalizeAiConfig(parsed);
   } catch {
     return null;
   }
@@ -54,7 +112,8 @@ export function loadAiConfig() {
 
 export function saveAiConfig(cfg) {
   try {
-    localStorage.setItem(CFG_KEY, JSON.stringify({ ...DEFAULT_AI_CONFIG, ...cfg }));
+    localStorage.setItem(CFG_KEY, JSON.stringify(normalizeAiConfig(cfg)));
+    emitAiConfigChange();
     return true;
   } catch {
     return false;
@@ -64,6 +123,7 @@ export function saveAiConfig(cfg) {
 export function clearAiConfig() {
   try {
     localStorage.removeItem(CFG_KEY);
+    emitAiConfigChange();
     return true;
   } catch {
     return false;
@@ -229,14 +289,26 @@ export function normalizeAiIntent(obj, tasks, today) {
   };
 }
 
+// 哪些失败值得重试：5xx 与网络/超时属于"这次运气不好"，重试有意义；
+// 4xx 是"请求本身不对"（Key 错、模型名错、路径错），重试只会重复挨同一句骂，
+// 还会把用户的等待时间翻倍。
+function isRetriable(err) {
+  const msg = String((err && err.message) || err);
+  const m = msg.match(/HTTP (\d{3})/);
+  if (m) return Number(m[1]) >= 500;
+  return true;
+}
+
 /**
  * 调用 AI 兜底解析。
  * @param {string} text 用户原始输入
- * @param {{tasks?:Array, today?:string, config?:object, fetchImpl?:Function}} opts
+ * @param {{tasks?:Array, today?:string, config?:object, fetchImpl?:Function,
+ *          timeoutMs?:number, maxRetries?:number}} opts
+ *   timeoutMs / maxRetries 仅用于覆盖配置（自检与测试用）
  * @returns {Promise<object|null>} Intent 或 null
  */
 export async function callAiFallback(text, opts = {}) {
-  const cfg = opts.config || loadAiConfig();
+  const cfg = normalizeAiConfig(opts.config || loadAiConfig() || {});
   if (!isAiConfigured(cfg)) return null;
 
   const tasks = Array.isArray(opts.tasks) ? opts.tasks : [];
@@ -250,45 +322,59 @@ export async function callAiFallback(text, opts = {}) {
   if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
   if (endpoint.targetHeader) headers['x-ai-target'] = endpoint.targetHeader;
 
-  // 兜底请求不该让界面卡住：超时就直接放弃，退回"没听懂"。
-  let signal;
-  if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
-    signal = AbortSignal.timeout(opts.timeoutMs || 15000);
-  }
+  const timeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : cfg.timeoutMs;
+  const retries = Number.isInteger(opts.maxRetries) ? Math.max(0, opts.maxRetries) : cfg.maxRetries;
 
-  const res = await doFetch(endpoint.url, {
-    method: 'POST',
-    headers,
-    signal,
-    body: JSON.stringify({
-      model: cfg.model || DEFAULT_AI_CONFIG.model,
-      temperature: 0,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: buildSystemPrompt(today, tasks) },
-        { role: 'user', content: String(text || '') },
-      ],
-    }),
+  const body = JSON.stringify({
+    model: cfg.model || DEFAULT_AI_CONFIG.model,
+    temperature: 0,
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: buildSystemPrompt(today, tasks) },
+      { role: 'user', content: String(text || '') },
+    ],
   });
 
-  if (!res || !res.ok) {
-    throw new Error(`AI 兜底请求失败：HTTP ${res ? res.status : 'unknown'}`);
-  }
+  // 兜底请求不该让界面卡住：超时就直接放弃，退回"没听懂"。
+  // 每次尝试都要重建 signal —— AbortSignal.timeout 是一次性的。
+  const attemptOnce = async () => {
+    let signal;
+    if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
+      signal = AbortSignal.timeout(timeoutMs);
+    }
 
-  const data = await res.json();
-  const content =
-    data && data.choices && data.choices[0] && data.choices[0].message
-      ? data.choices[0].message.content
-      : '';
-  let parsed;
-  try {
-    parsed = JSON.parse(String(content || '').trim());
-  } catch {
-    return null;
+    const res = await doFetch(endpoint.url, { method: 'POST', headers, signal, body });
+
+    if (!res || !res.ok) {
+      throw new Error(`AI 兜底请求失败：HTTP ${res ? res.status : 'unknown'}`);
+    }
+
+    const data = await res.json();
+    const content =
+      data && data.choices && data.choices[0] && data.choices[0].message
+        ? data.choices[0].message.content
+        : '';
+    let parsed;
+    try {
+      parsed = JSON.parse(String(content || '').trim());
+    } catch {
+      return null;
+    }
+    const normalized = normalizeAiIntent(parsed, tasks, today);
+    if (normalized) normalized.raw = String(text || '');
+    return normalized;
+  };
+
+  let lastErr = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await attemptOnce();
+    } catch (err) {
+      lastErr = err;
+      if (attempt === retries || !isRetriable(err)) throw err;
+    }
   }
-  const normalized = normalizeAiIntent(parsed, tasks, today);
-  if (normalized) normalized.raw = String(text || '');
-  return normalized;
+  throw lastErr;
 }
 
 // —— 链路自检（应用内「测试连接」按钮用）——
@@ -329,12 +415,12 @@ function describeIntent(intent) {
  * 复用 callAiFallback 的真实请求路径（代理 → 鉴权 → 模型 → JSON 解析），
  * 不另造第二条链路——测的就是以后真正会走的那条。
  * @param {object} [cfg] 未传时读 localStorage 配置；UI 会传表单当前值（未保存也能测）
- * @param {{fetchImpl?:Function, today?:string, timeoutMs?:number}} [opts]
+ * @param {{fetchImpl?:Function, today?:string, timeoutMs?:number, maxRetries?:number}} [opts]
  * @returns {Promise<{ok:boolean, stage:string, detail:string, latencyMs:number, intent?:object}>}
  *   stage: config|proxy|timeout|auth|model|request|upstream|network|format|success
  */
 export async function testAiConnection(cfg, opts = {}) {
-  const c = cfg || loadAiConfig();
+  const c = normalizeAiConfig(cfg || loadAiConfig() || {});
   const t0 = Date.now();
   if (!isAiConfigured(c)) {
     return {
@@ -370,7 +456,10 @@ export async function testAiConnection(cfg, opts = {}) {
       today: opts.today || new Date().toISOString().slice(0, 10),
       config: c,
       fetchImpl: recordingFetch,
-      timeoutMs: opts.timeoutMs || 20000,
+      // 自检走的就是以后真正会走的那条路：同样的超时、同样的重试策略。
+      // 只放宽总时长，不改变链路形状 —— 否则测过的和用的不是同一件事。
+      timeoutMs: opts.timeoutMs || c.timeoutMs,
+      maxRetries: Number.isInteger(opts.maxRetries) ? opts.maxRetries : c.maxRetries,
     });
   } catch (e) {
     err = e;

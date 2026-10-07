@@ -72,6 +72,13 @@ const PROBES = {
   toolcard: '.tool-card',
   drawer: '.drawer',
   statusbar: '.statusbar',
+  // 工具集（第三个页签）：左栏清单 + 右侧工具工作区
+  toolsNav: '.tools-nav',
+  toolPane: '.tool-pane',
+  toolsList: '.tools-list',
+  toolsItem: '.tools-item',
+  rtiTab: '.rti-tab',
+  rtiRowDel: '.rti-row-del',
 };
 
 // 三档视口 + 断点边界。width 是**视口**宽度（媒体查询看的就是这个）。
@@ -95,6 +102,12 @@ const CASES = [
   { name: 'dark-1440', w: 1440, h: 900, view: 'list', tier: 'wide', dark: true },
   { name: 'dark-390', w: 390, h: 844, view: 'list', tier: 'small', dark: true },
   { name: 'dark-390-chat', w: 390, h: 844, view: 'chat', tier: 'small', dark: true },
+  // 工具集（第三个页签）也必须在断点上过一遍 —— 它是最大的一块新表面
+  { name: 'mid-1080-tools', w: 1080, h: 800, view: 'tools', tier: 'mid' },
+  { name: 'narrow-768-tools', w: 768, h: 900, view: 'tools', tier: 'narrow', note: '断点线上，清单转横向条' },
+  { name: 'mobile-390-tools', w: 390, h: 844, view: 'tools', tier: 'small' },
+  { name: 'coarse-390-tools', w: 390, h: 844, view: 'tools', tier: 'small', coarse: true, note: '触屏：页签与清单项命中区 ≥44px' },
+  { name: 'dark-1280-tools', w: 1280, h: 800, view: 'tools', tier: 'wide', dark: true },
 ];
 
 // ------------------------------------------------------------------ CDP 客户端
@@ -289,6 +302,9 @@ const MEASURE_FN = `(() => {
     navitem: hitBox('.nav-item'),
     iconbtn: hitBox('.icon-btn'),
     tab: hitBox('.tab'),
+    toolsitem: hitBox('.tools-item'),
+    rtitab: hitBox('.rti-tab'),
+    rtidel: hitBox('.rti-row-del'),
   };
   return JSON.stringify(out);
 })()`;
@@ -352,6 +368,8 @@ function assertions(c, m) {
   // 只有列表页有 .layout / .sidebar / .topbar / 主区 rail；对话页是另一套骨架，
   // 拿列表页的断言去套对话页只会产出噪音，所以显式分流。
   const isList = m.layout != null;
+  // 工具集有自己的骨架（左栏清单 + 右侧工作区），跟列表页那套不通用
+  const isTools = m.toolsNav != null;
 
   ok('无横向溢出', !m.overflowX, `docW=${m.docW} vw=${m.vw}`);
 
@@ -383,6 +401,28 @@ function assertions(c, m) {
     ok('任务行未溢出', (g('row')?.w ?? 0) <= m.docW, `w=${g('row')?.w}`);
   }
 
+  // 工具集：宽中档左右并排，窄小档清单转横向段控条
+  if (isTools) {
+    ok('工具集已渲染（清单 + 工作区）', g('toolsNav') != null && g('toolPane') != null);
+    if (c.tier === 'wide' || c.tier === 'mid') {
+      ok('清单为竖向列', g('toolsList')?.dir === 'column', `dir=${g('toolsList')?.dir}`);
+      ok('清单在左、工作区在右（并排）',
+        (g('toolsNav')?.x ?? 1e9) < (g('toolPane')?.x ?? -1)
+          && (g('toolPane')?.x ?? 0) >= (g('toolsNav')?.x ?? 0) + (g('toolsNav')?.w ?? 0) - 2,
+        JSON.stringify({ nav: g('toolsNav'), pane: g('toolPane') }));
+      ok('清单占满侧栏内容宽（整行可点）',
+        (g('toolsItem')?.w ?? 0) >= (g('toolsNav')?.w ?? 0) - 30, `item=${g('toolsItem')?.w} nav=${g('toolsNav')?.w}`);
+      ok('清单是高的（竖列侧栏，非一条）', (g('toolsNav')?.h ?? 0) > 300, `h=${g('toolsNav')?.h}`);
+    } else {
+      ok('清单转横向条', g('toolsList')?.dir === 'row', `dir=${g('toolsList')?.dir}`);
+      ok('清单塌成条（高度 <80）', (g('toolsNav')?.h ?? 999) < 80, `h=${g('toolsNav')?.h}`);
+      ok('清单占满宽度', Math.abs((g('toolsNav')?.w ?? 0) - m.docW) <= 20, `w=${g('toolsNav')?.w} docW=${m.docW}`);
+      ok('清单在工具上方', (g('toolsNav')?.y ?? 1e9) < (g('toolPane')?.y ?? -1), `nav.y=${g('toolsNav')?.y} pane.y=${g('toolPane')?.y}`);
+      ok('工具工作区占满内容宽', (g('toolPane')?.w ?? 0) > m.docW * 0.9, `w=${g('toolPane')?.w} docW=${m.docW}`);
+      ok('工具内页签仍在（窄屏可切换页面）', (g('rtiTab')?.w ?? 0) > 0 && (g('rtiTab')?.disp !== 'none'), JSON.stringify(g('rtiTab')));
+    }
+  }
+
   if (c.tier === 'small') {
     ok('--fs-2xl 降到 21px', m.fs2xl === '21px', m.fs2xl);
   }
@@ -407,10 +447,18 @@ function assertions(c, m) {
   if (c.coarse) {
     const h = m.hit || {};
     ok('命中区生效 pointer:coarse', m.coarse === true, `coarse=${m.coarse}`);
-    ok('nav-item 命中高 ≥44', (h.navitem?.h ?? 0) >= 44, `hit=${h.navitem?.h}`);
-    ok('复选框命中高 ≥44（::before 外扩）', (h.checkbox?.h ?? 0) >= 44, `hit=${h.checkbox?.h}`);
-    ok('复选框命中宽 ≥40', (h.checkbox?.w ?? 0) >= 40, `hit=${h.checkbox?.w}`);
-    ok('复选框不被遮挡', h.checkbox != null, `hit=${JSON.stringify(h.checkbox)}`);
+    // 这两组探测点只存在于列表页；工具页上没有它们，
+    // 硬套过来只会产出"假失败"（hit=undefined），所以按视图分流。
+    if (isList) {
+      ok('nav-item 命中高 ≥44', (h.navitem?.h ?? 0) >= 44, `hit=${h.navitem?.h}`);
+      ok('复选框命中高 ≥44（::before 外扩）', (h.checkbox?.h ?? 0) >= 44, `hit=${h.checkbox?.h}`);
+      ok('复选框命中宽 ≥40', (h.checkbox?.w ?? 0) >= 40, `hit=${h.checkbox?.w}`);
+      ok('复选框不被遮挡', h.checkbox != null, `hit=${JSON.stringify(h.checkbox)}`);
+    }
+    if (isTools) {
+      ok('工具清单项命中高 ≥44', (h.toolsitem?.h ?? 0) >= 44, `hit=${JSON.stringify(h.toolsitem)}`);
+      ok('工具内页签命中高 ≥44', (h.rtitab?.h ?? 0) >= 44, `hit=${JSON.stringify(h.rtitab)}`);
+    }
   } else {
     // 桌面档反证：没有触屏媒体查询时，命中区应当就是视觉盒本身
     ok('桌面档复选框命中高回落到 18', (m.hit?.checkbox?.h ?? 0) <= 26, `hit=${m.hit?.checkbox?.h}`);

@@ -3,17 +3,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import { useChatAgent } from '../hooks/useChatAgent';
 import { COMMAND_HINTS } from '../lib/nlRules';
-import {
-  DEFAULT_AI_CONFIG,
-  aiHost,
-  clearAiConfig,
-  loadAiConfig,
-  saveAiConfig,
-  testAiConnection,
-} from '../lib/aiFallback';
+import useAiSettings from '../hooks/useAiSettings';
 import Icon from './Icon.jsx';
 import ToolCallCard from './ToolCallCard.jsx';
 import ProposalModal from './ProposalModal.jsx';
+import { useContextMenu, inputMenu, copyMenu } from '../hooks/useContextMenu.jsx';
 
 // 新手示例：点一下填进输入框，再按 Enter 就行
 const SAMPLES = [
@@ -49,17 +43,15 @@ export default function ChatPanel({ store, onOpenList }) {
   const [input, setInput] = useState('');
   const [history, setHistory] = useState([]);
   const [histIdx, setHistIdx] = useState(-1);
-  const [showAi, setShowAi] = useState(false);
-  const [aiCfg, setAiCfg] = useState(() => loadAiConfig() || { ...DEFAULT_AI_CONFIG });
-  const [aiTesting, setAiTesting] = useState(false);
-  const [aiTest, setAiTest] = useState(null);
   // 「修改」弹窗当前编辑的提议（来自提议消息上的 proposal 字段；null = 关闭）
   const [editingProposal, setEditingProposal] = useState(null);
   const streamRef = useRef(null);
   const inputRef = useRef(null);
+  const { openMenu } = useContextMenu();
 
-  const aiOn = Boolean(aiCfg.enabled && aiCfg.apiKey && aiCfg.baseUrl);
-  const aiTarget = aiHost(aiCfg);
+  // 引擎状态与配置来自同一份真相（localStorage）：在设置页改完，这里立刻跟着变。
+  // 配置项本身已集中到设置页，这里只做「当前会不会联网」的明示。
+  const { aiOn, aiTarget } = useAiSettings();
 
   // P1-2：对话页顶部的「今日概览」。对话页是默认页，但"打开先看今天要干什么"
   // 的需求不该被迫切页签才能满足——摘要条常驻顶部，点击直达列表页。
@@ -72,30 +64,6 @@ export default function ChatPanel({ store, onOpenList }) {
     }
     return { overdueCount: overdue, dueTodayCount: dueToday };
   }, [agent.snapshotTasks, agent.today]);
-
-  const patchAi = (patch) => setAiCfg((c) => ({ ...c, ...patch }));
-  const doSaveAi = () => {
-    saveAiConfig(aiCfg);
-    setShowAi(false);
-  };
-  const doClearAi = () => {
-    clearAiConfig();
-    setAiCfg({ ...DEFAULT_AI_CONFIG });
-    setShowAi(false);
-  };
-
-  // 端到端自检：测的是表单当前值（未保存也能测），走 callAiFallback 的真实链路。
-  const doTestAi = async () => {
-    setAiTesting(true);
-    setAiTest(null);
-    try {
-      setAiTest(await testAiConnection(aiCfg));
-    } catch (err) {
-      setAiTest({ ok: false, stage: 'error', detail: `自检本身异常：${(err && err.message) || err}`, latencyMs: 0 });
-    } finally {
-      setAiTesting(false);
-    }
-  };
 
   // 自动滚动到底部
   useEffect(() => {
@@ -125,6 +93,42 @@ export default function ChatPanel({ store, onOpenList }) {
   // 按钮随之消失；刷新回放的历史消息没有 proposal 字段，也不会出现按钮。
   const liveProposalMsgId =
     agent.pending && agent.pending.kind === 'create' ? agent.pending.msgId : null;
+
+  // 右键：按落点分派到「输入框编辑菜单 / 消息复制 / 快照复制 / 面板通用动作」。
+  // 用事件委托而不是给每条消息挂 handler —— 消息是会持续追加的列表。
+  const handleContextMenu = (e) => {
+    const el = e.target;
+    const field = el.closest && el.closest('input, textarea');
+    if (field) {
+      openMenu(e, inputMenu(() => field));
+      return;
+    }
+    const snap = el.closest && el.closest('.snapshot-item');
+    if (snap) {
+      openMenu(e, copyMenu(() => snap.textContent.trim()));
+      return;
+    }
+    const msg = el.closest && el.closest('.msg');
+    if (msg) {
+      const raw = msg.querySelector('.event-json');
+      openMenu(
+        e,
+        copyMenu(() => (raw ? raw.textContent : (msg.querySelector('.msg-body') || msg).textContent))
+      );
+      return;
+    }
+    openMenu(e, [
+      {
+        type: 'item',
+        label: '聚焦输入框',
+        onClick: () => inputRef.current && inputRef.current.focus(),
+      },
+      { type: 'item', label: '清空输入', accel: 'Esc', disabled: !input, onClick: () => setInput('') },
+      { type: 'sep' },
+      { type: 'item', label: '打开列表页', onClick: () => onOpenList && onOpenList() },
+      { type: 'item', label: '重新载入文件', onClick: store.manualReload },
+    ]);
+  };
 
   const showHints = input.startsWith('/');
   const hintFilter = input.slice(1).trim().toLowerCase();
@@ -176,7 +180,7 @@ export default function ChatPanel({ store, onOpenList }) {
   };
 
   return (
-    <div className="chat-panel">
+    <div className="chat-panel" onContextMenu={handleContextMenu}>
       <div className="chat-main">
         {onOpenList && (
           <button
@@ -197,7 +201,7 @@ export default function ChatPanel({ store, onOpenList }) {
           </button>
         )}
         <div className="chat-status">
-          <span className={`dot ${aiOn ? 'dot-warn' : 'dot-ok'}`}>
+          <span className={'dot' + (aiOn ? ' dot-warn' : ' dot-ok')}>
             <Icon name="dot" size={13} />
           </span>
           <span>
@@ -206,90 +210,10 @@ export default function ChatPanel({ store, onOpenList }) {
               : '本地规则引擎 · 无网络请求'}
           </span>
           <span className="spacer" />
-          <button
-            type="button"
-            className="chat-status-btn"
-            onClick={() => setShowAi((v) => !v)}
-            title="AI 兜底设置"
-          >
-            AI 兜底{aiOn ? ' · 已开' : ' · 关'}
-          </button>
           <span>
             事件日志 {agent.logCount} 条 · 最后 seq {agent.lastSeq}
           </span>
         </div>
-
-        {showAi && (
-          <div className="ai-cfg">
-            <div className="ai-cfg-title">AI 兜底（默认关闭）</div>
-            <p className="ai-cfg-note">
-              只在本地规则引擎<b>没听懂</b>时才调用它。打开后，这些没被认出来的句子会被发往你填的服务地址；
-              能被本地认出来的句子<b>永远不联网</b>。API Key 存在本机 localStorage，仅供浏览器直连，
-              请自行评估风险；不填就等于彻底关闭。
-            </p>
-            <label className="ai-cfg-row">
-              <span className="ai-cfg-label">启用</span>
-              <input
-                type="checkbox"
-                checked={Boolean(aiCfg.enabled)}
-                onChange={(e) => patchAi({ enabled: e.target.checked })}
-              />
-              <span className="ai-cfg-hint">
-                {aiCfg.enabled && !aiCfg.apiKey ? '还没填 Key，实际仍不会发请求' : ''}
-              </span>
-            </label>
-            <label className="ai-cfg-row">
-              <span className="ai-cfg-label">服务地址</span>
-              <input
-                type="text"
-                value={aiCfg.baseUrl}
-                onChange={(e) => patchAi({ baseUrl: e.target.value })}
-                placeholder="https://api.openai.com/v1"
-                spellCheck={false}
-              />
-            </label>
-            <label className="ai-cfg-row">
-              <span className="ai-cfg-label">模型</span>
-              <input
-                type="text"
-                value={aiCfg.model}
-                onChange={(e) => patchAi({ model: e.target.value })}
-                placeholder="gpt-4o-mini"
-                spellCheck={false}
-              />
-            </label>
-            <label className="ai-cfg-row">
-              <span className="ai-cfg-label">API Key</span>
-              <input
-                type="password"
-                value={aiCfg.apiKey}
-                onChange={(e) => patchAi({ apiKey: e.target.value })}
-                placeholder="sk-..."
-                spellCheck={false}
-              />
-            </label>
-            <div className="ai-cfg-actions">
-              <button type="button" className="btn btn-primary" onClick={doSaveAi}>
-                保存
-              </button>
-              <button type="button" className="btn" onClick={doClearAi}>
-                清除
-              </button>
-              <button type="button" className="btn" onClick={doTestAi} disabled={aiTesting}>
-                {aiTesting ? '测试中…' : '测试连接'}
-              </button>
-              <span className="ai-cfg-where">
-                {aiOn ? `当前会发往：${aiTarget}` : '当前不会发出任何网络请求'}
-              </span>
-            </div>
-            {aiTest && (
-              <div className={`ai-test-result ${aiTest.ok ? 'ok' : 'fail'}`}>
-                {aiTest.ok ? '✓ ' : '✕ '}
-                {aiTest.detail}
-              </div>
-            )}
-          </div>
-        )}
 
         <div className="chat-stream" ref={streamRef}>
           {agent.messages.length === 0 && (

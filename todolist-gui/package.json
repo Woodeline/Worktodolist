@@ -1,7 +1,7 @@
 {
   "name": "todolist-gui",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.5",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,6 +13,10 @@
     "test:nl": "node scripts/qa-nl-coverage.mjs",
     "test:nl:verbose": "node scripts/qa-nl-coverage.mjs --verbose",
     "test:ui": "node scripts/qa-css-check.mjs && node scripts/qa-contrast.mjs",
+    "test:settings": "node scripts/qa-settings.mjs",
+    "test:settings:shots": "node scripts/qa-settings.mjs --shots",
+    "test:tools": "node scripts/qa-tools.mjs",
+    "test:tools:shots": "node scripts/qa-tools.mjs --shots",
     "test:responsive": "node scripts/qa-responsive.mjs",
     "test:responsive:shots": "node scripts/qa-responsive.mjs --shots",
     "test:responsive:report": "node scripts/qa-responsive.mjs --report=qa-artifacts/responsive.json",

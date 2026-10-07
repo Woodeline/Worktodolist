@@ -92,6 +92,21 @@ const PAIRS = [
   ['control-line', 'surface', 3, '控件描边 / 卡片'],
   ['control-line', 'bg', 3, '控件描边 / 页面底'],
   ['accent', 'surface', 3, '焦点环 / 卡片'],
+  // 图表（RTI 工具）：画布底 = --surface，全部在画布里画，不继承 CSS 颜色
+  // 文字类（刻度 / 轴标题 / 标注）按正文阈值；线条与数据点按图形对象阈值 ≥3:1
+  ['chart-axis', 'surface', 4.5, '图表刻度文字 / 画布'],
+  ['chart-thr-ink', 'surface', 4.5, '阈值线标注 / 画布'],
+  ['chart-warn', 'surface', 4.5, '外推点标注 / 画布'],
+  ['chart-frame', 'surface', 3, '坐标轴 / 画布'],
+  ['chart-thr', 'surface', 3, '阈值线 / 画布'],
+  ['chart-1', 'surface', 3, '系列 1 / 画布'],
+  ['chart-2', 'surface', 3, '系列 2 / 画布'],
+  ['chart-3', 'surface', 3, '系列 3 / 画布'],
+  ['chart-4', 'surface', 3, '系列 4 / 画布'],
+  ['chart-5', 'surface', 3, '系列 5 / 画布'],
+  ['chart-6', 'surface', 3, '系列 6 / 画布'],
+  ['chart-7', 'surface', 3, '系列 7 / 画布'],
+  ['chart-8', 'surface', 3, '系列 8 / 画布'],
 ];
 
 // 装饰性发丝线：只划区域、不承担"控件是否存在"的信息，WCAG 无硬性要求。
@@ -101,6 +116,7 @@ const REFERENCE = [
   ['border', 'bg', '发丝线 / 页面底'],
   ['border-strong', 'surface', '次级发丝线 / 卡片'],
   ['border-strong', 'bg', '次级发丝线 / 页面底'],
+  ['chart-grid', 'surface', '图表网格线 / 画布（纯装饰，须远弱于数据）'],
 ];
 
 let failures = 0;

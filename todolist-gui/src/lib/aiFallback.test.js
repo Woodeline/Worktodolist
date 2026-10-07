@@ -5,14 +5,17 @@
 //  ② AI 只能从我们给的任务清单里挑序号，不能自己造 id
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  AI_LIMITS,
   DEFAULT_AI_CONFIG,
   aiHost,
   callAiFallback,
   clearAiConfig,
   isAiConfigured,
   loadAiConfig,
+  normalizeAiConfig,
   normalizeAiIntent,
   saveAiConfig,
+  subscribeAiConfig,
   testAiConnection,
 } from './aiFallback.js';
 
@@ -459,5 +462,155 @@ describe('testAiConnection 链路自检（分档诊断）', () => {
       today: '2026-10-01',
     });
     expect(r.stage).toBe('timeout');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('配置归一化与边界（设置页可调的取值范围）', () => {
+  const GOOD = { enabled: true, apiKey: 'k', baseUrl: 'https://x/v1', model: 'm' };
+
+  it('老配置升级后自动补齐超时与重试（不需要迁移脚本）', () => {
+    const c = normalizeAiConfig(GOOD);
+    expect(c.timeoutMs).toBe(DEFAULT_AI_CONFIG.timeoutMs);
+    expect(c.maxRetries).toBe(DEFAULT_AI_CONFIG.maxRetries);
+  });
+
+  it('超时与重试被夹到合法区间（脏值不会流到运行时）', () => {
+    expect(normalizeAiConfig({ ...GOOD, timeoutMs: 10 }).timeoutMs).toBe(AI_LIMITS.timeoutMs.min);
+    expect(normalizeAiConfig({ ...GOOD, timeoutMs: 999999 }).timeoutMs).toBe(AI_LIMITS.timeoutMs.max);
+    expect(normalizeAiConfig({ ...GOOD, maxRetries: -3 }).maxRetries).toBe(0);
+    expect(normalizeAiConfig({ ...GOOD, maxRetries: 99 }).maxRetries).toBe(AI_LIMITS.maxRetries.max);
+    expect(normalizeAiConfig({ ...GOOD, timeoutMs: 'abc' }).timeoutMs).toBe(DEFAULT_AI_CONFIG.timeoutMs);
+    expect(normalizeAiConfig({ ...GOOD, maxRetries: 1.6 }).maxRetries).toBe(2);
+  });
+
+  it('落盘的就是归一化后的值：读到什么，将来就用什么', () => {
+    saveAiConfig({ ...GOOD, timeoutMs: 1, maxRetries: 7 });
+    const back = loadAiConfig();
+    expect(back.timeoutMs).toBe(AI_LIMITS.timeoutMs.min);
+    expect(back.maxRetries).toBe(AI_LIMITS.maxRetries.max);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('callAiFallback —— 超时与重试真的被执行', () => {
+  const CFG = { enabled: true, apiKey: 'k', baseUrl: 'https://api.example.com/v1', model: 'm' };
+  const okWith = (content) => async () => ({
+    ok: true,
+    status: 200,
+    async json() {
+      return { choices: [{ message: { content } }] };
+    },
+  });
+  const httpErr = (status) => async () => ({ ok: false, status, async json() { return {}; } });
+
+  it('超时值取自配置，而不是写死的常量', async () => {
+    const spy = vi.spyOn(AbortSignal, 'timeout');
+    await callAiFallback('x', {
+      tasks: TASKS,
+      today: '2026-10-01',
+      config: { ...CFG, timeoutMs: 7000 },
+      fetchImpl: okWith('{"intent":"add","title":"a"}'),
+      maxRetries: 0,
+    });
+    expect(spy).toHaveBeenCalledWith(7000);
+  });
+
+  it('5xx 按配置重试，最终仍失败则抛错', async () => {
+    const fetchImpl = vi.fn(httpErr(503));
+    await expect(
+      callAiFallback('x', {
+        tasks: TASKS,
+        today: '2026-10-01',
+        config: { ...CFG, maxRetries: 2 },
+        fetchImpl,
+      })
+    ).rejects.toThrow('503');
+    expect(fetchImpl).toHaveBeenCalledTimes(3); // 首次 + 2 次重试
+  });
+
+  it('4xx 不重试：Key 错 / 模型名错重试只会让用户白等', async () => {
+    const fetchImpl = vi.fn(httpErr(401));
+    await expect(
+      callAiFallback('x', {
+        tasks: TASKS,
+        today: '2026-10-01',
+        config: { ...CFG, maxRetries: 3 },
+        fetchImpl,
+      })
+    ).rejects.toThrow('401');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('重试成功即返回（重试是有意义的，不是走过场）', async () => {
+    const fetchImpl = vi.fn();
+    fetchImpl.mockImplementationOnce(httpErr(502));
+    fetchImpl.mockImplementationOnce(okWith('{"intent":"add","title":"重试成功"}'));
+    const r = await callAiFallback('x', {
+      tasks: TASKS,
+      today: '2026-10-01',
+      config: { ...CFG, maxRetries: 1 },
+      fetchImpl,
+    });
+    expect(r.slots.title).toBe('重试成功');
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('网络异常同样重试', async () => {
+    const fetchImpl = vi.fn();
+    fetchImpl.mockImplementationOnce(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    fetchImpl.mockImplementationOnce(okWith('{"intent":"add","title":"网络恢复"}'));
+    const r = await callAiFallback('x', {
+      tasks: TASKS,
+      today: '2026-10-01',
+      config: { ...CFG, maxRetries: 1 },
+      fetchImpl,
+    });
+    expect(r.slots.title).toBe('网络恢复');
+  });
+
+  it('maxRetries=0 时只发一次请求', async () => {
+    const fetchImpl = vi.fn(httpErr(500));
+    await expect(
+      callAiFallback('x', {
+        tasks: TASKS,
+        today: '2026-10-01',
+        config: { ...CFG, maxRetries: 0 },
+        fetchImpl,
+      })
+    ).rejects.toThrow('500');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('subscribeAiConfig —— 保存/清除会让界面同步刷新', () => {
+  const GOOD = { enabled: true, apiKey: 'k', baseUrl: 'https://x/v1' };
+
+  it('保存与清除都会通知订阅者，退订后不再通知', () => {
+    const fn = vi.fn();
+    const off = subscribeAiConfig(fn);
+    saveAiConfig(GOOD);
+    expect(fn).toHaveBeenCalledTimes(1);
+    clearAiConfig();
+    expect(fn).toHaveBeenCalledTimes(2);
+    off();
+    saveAiConfig(GOOD);
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it('单个订阅者抛异常不影响写入结果与其它订阅者', () => {
+    const bad = vi.fn(() => {
+      throw new Error('boom');
+    });
+    const good = vi.fn();
+    const offBad = subscribeAiConfig(bad);
+    const offGood = subscribeAiConfig(good);
+    expect(saveAiConfig(GOOD)).toBe(true);
+    expect(good).toHaveBeenCalledTimes(1);
+    offBad();
+    offGood();
   });
 });

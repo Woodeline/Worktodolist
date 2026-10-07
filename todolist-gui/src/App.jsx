@@ -1,15 +1,27 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import { useTodoStore } from './hooks/useTodoStore';
 import useDebounce from './hooks/useDebounce';
 import useHotkeys from './hooks/useHotkeys';
+import { useContextMenu } from './hooks/useContextMenu.jsx';
 import { searchMatch, sortTasks, tasksForView, todayGroups } from './lib/sortFilter';
 import TopBar from './components/TopBar.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import TaskRow from './components/TaskRow.jsx';
 import EditDrawer from './components/EditDrawer.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
+import SettingsPage from './components/SettingsPage.jsx';
+import ToolsPage from './components/tools/ToolsPage.jsx';
 import Icon from './components/Icon.jsx';
+
+// 三个页签是同一层级的"工作区"：对话（说）、列表（看）、工具（算）。
+// 顺序即 Ctrl+1 / 2 / 3 的绑定顺序。
+export const TABS = [
+  ['chat', '对话'],
+  ['list', '列表'],
+  ['tools', '工具'],
+];
+
 
 export function UnsupportedPage() {
   return (
@@ -235,17 +247,132 @@ export function MainList({ store, query }) {
   );
 }
 
-export function Tabs({ tab, onChange }) {
+// 页签条 = 应用工具条：左边是应用菜单（原生菜单栏的位置），中间是页签，
+// 右边是设置入口（齿轮）—— 与「☰ 菜单 / Ctrl+,」三个入口指向同一张设置页。
+export function Tabs({ tab, onChange, store, onOpenSettings, settingsOpen }) {
+  const { openAt } = useContextMenu();
+  const menuBtnRef = useRef(null);
+
+  // 列表页的动作需要先切页签再聚焦，React 提交后再 focus。
+  // 设置页关掉后组件才挂载，所以这里重试几帧而不是只等一次 setTimeout。
+  const focusAfterSwitch = (ref) => {
+    onChange('list');
+    const tryFocus = (left) => {
+      if (ref && ref.current) {
+        ref.current.focus();
+        return;
+      }
+      if (left > 0) requestAnimationFrame(() => tryFocus(left - 1));
+    };
+    requestAnimationFrame(() => tryFocus(4));
+  };
+
+  const openAppMenu = () => {
+    const btn = menuBtnRef.current;
+    if (!btn || !store) return;
+    const r = btn.getBoundingClientRect();
+    openAt(r.left, r.bottom + 3, [
+      { type: 'item', label: '新建任务', accel: 'N', onClick: () => focusAfterSwitch(store.quickAddRef) },
+      { type: 'item', label: '搜索', accel: '/', onClick: () => focusAfterSwitch(store.searchRef) },
+      { type: 'item', label: '撤销上一步', accel: 'Ctrl+Z', onClick: store.undo },
+      { type: 'sep' },
+      { type: 'header', label: '页面' },
+      ...TABS.map(([id, label], i) => ({
+        type: 'item',
+        label,
+        accel: `Ctrl+${i + 1}`,
+        checked: tab === id,
+        onClick: () => onChange(id),
+      })),
+      { type: 'sep' },
+      { type: 'header', label: '列表视图' },
+      ...[
+        ['today', '今天'],
+        ['all', '全部'],
+        ['done', '已完成'],
+        ['inbox', '收集箱'],
+      ].map(([v, label]) => ({
+        type: 'item',
+        label,
+        checked: tab === 'list' && store.view === v,
+        onClick: () => {
+          onChange('list');
+          store.selectView(v);
+        },
+      })),
+      { type: 'sep' },
+      { type: 'header', label: '排序' },
+      {
+        type: 'item',
+        label: '手动（文件行序）',
+        checked: tab === 'list' && store.sortMode === 'manual',
+        onClick: () => {
+          onChange('list');
+          store.setSortMode('manual');
+        },
+      },
+      {
+        type: 'item',
+        label: '自动（优先级 / 日期）',
+        checked: tab === 'list' && store.sortMode === 'auto',
+        onClick: () => {
+          onChange('list');
+          store.setSortMode('auto');
+        },
+      },
+      { type: 'sep' },
+      { type: 'item', label: '重新载入文件', onClick: store.manualReload },
+      { type: 'item', label: '切换数据目录…', onClick: store.pickDirectory },
+      { type: 'sep' },
+      {
+        type: 'item',
+        label: '设置…',
+        accel: 'Ctrl+,',
+        onClick: () => onOpenSettings && onOpenSettings(),
+      },
+    ]);
+  };
+
   return (
     <div className="tabs">
-      <button className={`tab${tab === 'chat' ? ' active' : ''}`} onClick={() => onChange('chat')}>
-        对话
-      </button>
-      <button className={`tab${tab === 'list' ? ' active' : ''}`} onClick={() => onChange('list')}>
-        列表
-      </button>
+      {store && (
+        <button
+          type="button"
+          className="appmenu-btn"
+          ref={menuBtnRef}
+          onClick={openAppMenu}
+          title="应用菜单"
+          aria-haspopup="menu"
+        >
+          <Icon name="menu" size={15} />
+        </button>
+      )}
+      <div className="tabs-group" role="tablist">
+        {TABS.map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            className={`tab${tab === id ? ' active' : ''}`}
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => onChange(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       <span className="spacer" />
-      <span className="tabs-brand">todo · chat harness</span>
+      {onOpenSettings && (
+        <button
+          type="button"
+          className={'appmenu-btn' + (settingsOpen ? ' is-on' : '')}
+          onClick={onOpenSettings}
+          title="设置（Ctrl+,）"
+        >
+          <Icon name="settings" size={15} />
+        </button>
+      )}
+      <span className="tabs-brand">todo.txt</span>
     </div>
   );
 }
@@ -254,13 +381,56 @@ export default function App() {
   const store = useTodoStore();
   const query = useDebounce(store.search, 150);
   const [tab, setTab] = useState('chat');
+  // 设置是独立页面，不占页签：打开时主内容整体让位，Esc / 「返回」退出。
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // 设置页覆盖着主内容，所以点页签必须连带把设置页关掉 ——
+  // 否则会出现"点了「列表」什么都没发生"的假死观感。
+  const goTab = (next) => {
+    setSettingsOpen(false);
+    setTab(next);
+  };
+  const { openMenu } = useContextMenu();
 
   const findFocusedTask = () =>
     store.todoEntries.find((e) => e.id === store.focusedId && e.kind === 'task') || null;
 
+  // 列表空白处的右键：当前视图下的通用动作（任务行自己会先拦掉右键，不会走到这里）
+  const handleMainContextMenu = (e) => {
+    openMenu(e, [
+      {
+        type: 'item',
+        label: '新建任务',
+        accel: 'N',
+        onClick: () => store.quickAddRef.current && store.quickAddRef.current.focus(),
+      },
+      {
+        type: 'item',
+        label: '搜索',
+        accel: '/',
+        onClick: () => store.searchRef.current && store.searchRef.current.focus(),
+      },
+      { type: 'sep' },
+      {
+        type: 'item',
+        label: '自动排序',
+        checked: store.sortMode === 'auto',
+        onClick: () => store.setSortMode('auto'),
+      },
+      {
+        type: 'item',
+        label: '手动排序（文件行序）',
+        checked: store.sortMode === 'manual',
+        onClick: () => store.setSortMode('manual'),
+      },
+      { type: 'sep' },
+      { type: 'item', label: '重新载入文件', onClick: store.manualReload },
+    ]);
+  };
+
   useHotkeys({
     // 对话页签激活时禁用全局快捷键，改由 ChatPanel 内部处理（避免 / 与 Ctrl+Z 冲突）。
-    enabled: tab === 'list',
+    // 设置页打开时同样禁用 —— 否则在设置里按 Esc 会顺手清掉列表页的搜索词。
+    enabled: tab === 'list' && !settingsOpen,
     onNew: () => store.quickAddRef.current && store.quickAddRef.current.focus(),
     onSearch: () => store.searchRef.current && store.searchRef.current.focus(),
     onToggle: () => {
@@ -281,21 +451,56 @@ export default function App() {
     onUndo: store.undo,
   });
 
+  // 设置页的全局快捷键：Ctrl+, 打开、Esc 退出；Ctrl+1/2/3 在三个页签之间切换。
+  // 这三条与页签无关（对话页里也能直接开设置、直接跳页）。
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === ',') {
+          e.preventDefault();
+          setSettingsOpen(true);
+          return;
+        }
+        const idx = '123'.indexOf(e.key);
+        if (idx >= 0 && idx < TABS.length) {
+          e.preventDefault();
+          goTab(TABS[idx][0]);
+          return;
+        }
+      }
+      if (e.key === 'Escape' && settingsOpen) setSettingsOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // goTab 只用到 setState（引用稳定），所以不必进依赖表；dep 留 settingsOpen 是为了
+    // 让 Esc 能读到最新的开关状态。
+  }, [settingsOpen]);
+
   if (!store.supported) return <UnsupportedPage />;
   if (!store.dirReady && store.authNeeded) return <ReauthPage store={store} />;
   if (!store.dirReady) return <WelcomePage store={store} />;
 
   return (
     <div className="app">
-      <Tabs tab={tab} onChange={setTab} />
-      {tab === 'chat' ? (
+      <Tabs
+        tab={tab}
+        onChange={goTab}
+        store={store}
+        onOpenSettings={() => setSettingsOpen(true)}
+        settingsOpen={settingsOpen}
+      />
+      {settingsOpen ? (
+        <SettingsPage onClose={() => setSettingsOpen(false)} />
+      ) : tab === 'chat' ? (
         <ChatPanel store={store} onOpenList={() => setTab('list')} />
+      ) : tab === 'tools' ? (
+        <ToolsPage />
       ) : (
         <>
           <TopBar store={store} />
           <div className="layout">
             <Sidebar store={store} />
-            <main className="main">
+            <main className="main" onContextMenu={handleMainContextMenu}>
               <MainList store={store} query={query} />
             </main>
           </div>
