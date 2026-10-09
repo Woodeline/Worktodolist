@@ -19,6 +19,14 @@ todolist-gui/vite.config.js.timestamp-*.mjs
 .qa-tmp/
 .todo.bak
 
+# ---- 打包（exe / 分发 zip 是构建产物，不进仓库；随 Release 附件分发）----
+.venv-build/
+build_exe/
+release/
+
+# ---- 会话转录（WorkBuddy 落盘的历史，不属于项目源码）----
+session-*.ndjson
+
 # ---- Python ----
 __pycache__/
 *.pyc

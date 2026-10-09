@@ -10,8 +10,9 @@
 无论哪条路径，杀之前都会核对进程映像名必须是 node.exe，避免误杀。
 
 孤儿清扫：pid 文件只记最后一次启动的进程，快速连续启动（或竞态）留下的
-更早的 vite 实例没人管。收尾时按命令行特征（node.exe + vite.js + 本应用目录）
-再扫一遍，把残留进程一并结束。只匹配本应用路径，其他项目的 node 程序不受影响。
+更早的 vite 实例没人管。收尾时按命令行特征（node.exe + vite.js + **本脚本
+所在目录**）再扫一遍，把残留进程一并结束。只匹配本应用这一份，同机上其它
+Worktodolist 副本（比如开发目录与解压出来的发行包并存）不受影响。
 """
 import ctypes
 import os
@@ -26,10 +27,23 @@ PORT_FILE = os.path.join(HERE, '.todolist-server.port')
 PORT_CANDIDATES = [15180, 5180, 18180, 51800, 15800, 16180]
 EXPECTED_IMAGE = 'node.exe'
 
-# 按命令行特征找本应用的 vite 进程。匹配三要素：node.exe + vite.js + todolist-gui 路径。
+def _ps_like_literal(text):
+    """把一段路径转成 PowerShell -like 的字面量模式（转义通配符与单引号）。"""
+    for ch in ('`', '[', ']', '*', '?'):
+        text = text.replace(ch, '`' + ch)
+    return text.replace("'", "''")
+
+
+# 按命令行特征找本应用的 vite 进程。匹配三要素：node.exe + vite.js + **本应用目录**。
+#
+# 用本脚本所在目录（HERE）而不是固定的 'todolist-gui' 字样。原因：同一台机器上可能
+# 同时存在开发目录与解压出来的发行包，两者的命令行里都含 'todolist-gui'，按字样匹配
+# 会把别人的那一份也一起结束——验证发行包时实测把正在跑的开发实例一并清掉了。
+# 按 HERE 匹配则只命中「自己这一份」：开发目录匹配开发目录，发行包匹配发行包。
+APP_MATCH = _ps_like_literal(HERE)
 PS_LIST_CMD = (
     "Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'node.exe' "
-    "-and $_.CommandLine -like '*vite.js*' -and $_.CommandLine -like '*todolist-gui*' } | "
+    "-and $_.CommandLine -like '*vite.js*' -and $_.CommandLine -like '*" + APP_MATCH + "*' } | "
     'ForEach-Object { "{0}|{1}" -f $_.ProcessId, $_.CommandLine }'
 )
 

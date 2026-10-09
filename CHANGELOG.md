@@ -1,5 +1,99 @@
 # 更新日志
 
+## v0.1.6 · 2026-10-08
+
+工具集从"一个容器"长成"一套骨架"，随后按需求收紧到 4 个工具；收尾时把整站视觉调性换成了「信号仪表」。这一版还第一次产出**免安装的 Windows 分发包**——内置 Node 与前端依赖，解压双击即用。
+
+> 工具集 P1–P3 的完整交付说明见 `工具集P1-P3交付说明-2026-10-07.md`；
+> UI 重定调的设计全文与令牌对账见 `UI重定调设计方案-2026-10-07.html`、`令牌差异表-2026-10-07.html`。
+
+### 工具集 P1–P3（2026-10-07）
+
+#### 骨架（P0）
+
+- **ToolShell 三版式**（`components/tools/ToolShell.jsx`）：`instant / inspector / workbench` 三种主体排布。外壳**不认识任何具体工具**——只读 `registry.js`、渲染清单、把选中项挂上去；新增工具 = 放一个组件 + registry 加一条，`App.jsx` / `ToolsPage.jsx` 一行不用改。
+- **registry 六字段**（`group` / `layout` / `capabilities` / `keywords` / `stateVersion` / `beta·hidden`）：`capabilities` 既是界面上看得见的风险徽标，也是白名单；`canWrite()` 是唯一的写授权入口。硬原则"只描述*是什么*，绝不描述*怎么渲染*"（禁 `render:` 字段，`registry.test.js` 强制）。
+- **工具级 ErrorBoundary**（`ToolBoundary.jsx`）：单个工具崩了不再带走整页，崩溃页打印 `componentStack` 前 3 层。
+- **`toolStorage(id, version)`**：存档键名 `todolist.tool.<id>.v<version>`。
+
+#### 新增（P1 条目 7–11）
+
+- **`useTodoSnapshot()`**：给工具的只读投影，**投影对象内不含任何变更方法**。
+- **提议通道泛化**：`{kind:'create'|'edit'|'batch'}`，确认统一走 `dispatch(intent, ctx)`；未授权工具**拿不到落盘入口**。
+- **自然语言开工具**：`nlRules` 新增 `tool.open`——句首窗口 8 字才算命令、禁单字动词；无触发词阈值 0.5、有触发词放宽到 0.22（开工具没有副作用，故可放宽——与"写文件宁可少认"的代价不对称口径一致）。
+- **工具动作进事件日志**：写入 `eventLog`（`session-*.ndjson`，ts 存 UTC ISO），replay 无副作用。
+
+#### 新增（P2 条目 12 / 14）
+
+- **三个待办域工具**：周报导出 `WeeklyTool`（workbench）、统计 `StatsTool`（workbench，纯 CSS 条形图走 `--ramp-*`）、批量优先级 `BulkPrioTool`（inspector，**当前唯一 `writes:true`**）。
+- **算法一律落 `lib/` 纯函数**：`lib/todoTools/{weekly,stats,bulkSelect}.js` + 各自测试——这是进 registry 的准入门槛。
+- **左栏搜索 + 分组折叠（单层）+ MRU**：刻意不做三级导航。
+
+#### 范围收紧（2026-10-07 同批）
+
+- **删 10 个工具**：`units / base / datespan / checksum / codec / regex`（T1 纯计算）、`filestat / textdiff / logview`（T2 本地文件）、`netcheck`（T4 联网自检）。
+- **删 3 个分组**：`text`（文本与编码）、`file`（本地文件）、`external`（外部服务）；`GROUPS` 从 5 组收到 **2 组**（`engineering` / `todo`）。
+- **删功能 = 删到底**：组件 + `lib/<domain>/` 纯函数与测试 + registry 条目 + 接线（`ToolsPage` 的 `files` 注入、vite 的 `/net-proxy`、设置页联网分组、styleguide 目录迭代器）+ `index.css` 孤立样式 + 门禁断言，一起撤掉，只留注释说明为什么删。
+- **刻意保留的"无消费者设施"**（不是遗漏）：`configStore.parseList`、`resolveProxyTarget` 及其 SSRF 测试（AI 兜底仍在用）、`--ramp-1..5`（StatsTool 在用）、ToolShell 的 `instant` 版式（外壳契约三选一）。
+- **条目 16「第三方脚本式工具注册」明确不做**：会击穿"数据主权优先"红线，且外部脚本无法纳入本仓 vitest 门禁。
+
+### UI 重定调「信号仪表」（2026-10-08）
+
+视觉调性整体换血：推翻 2026-10-06「贴近原生桌面工具」的拍板，改走 **候选 C「信号仪表」**（2026-10-07 三选一裁决，设计全文见根目录 `UI重定调设计方案-2026-10-07.html`）。**改动面只有 `index.css` §1 的令牌层**——组件禁裸值的红利兑现，所有组件零改动自动继承。
+
+#### 变了什么
+
+- **面板分域反转**：`--bg` (#ececee/#131417) 与 `--surface` (#f9f9fa/#1c1e22) 改为「仪器底座」关系——面板始终亮于底座、浮出底座；中间表面按 Oklch L 等感知排布，`--control-line` 对 surface 保持 ≥3:1（WCAG 1.4.11）。
+- **强调色**：系统蓝 `#0f5fbf` → 示波器青 `#0e7490`（暗 `#46c9ec`），由候选自动裁决产生（对比度全项 + CVD vs danger/warn 闸门全过）。浅色主题 accent vs ok 的 tritanopia 冲突（ΔE 9.8）色相内不可解，用户裁决 A 接受（产品全程图标+文字双编码，无纯色辨析场景）。
+- **mono 扩权**：`--font-display` 由占位（=font-ui）改为 `var(--font-mono)`——标题、页签、计数改由等宽字符承担个性，本次最强单点重定义。
+- **姿态收紧**：`--sh-2` 加入 `0 0 0 1px` 描边分量（「分区仪表」的双线语言）；圆角整体 -1px（r-sm 3→2、r-md 4→3、r-lg 6→4、r-xl 8→6）；动效更快（dur-2 140→100ms、dur-3 180→140ms）；遮罩微冷微重。
+- **顺序色阶转青相**：`--ramp-1..5` 蓝相 → 青相（与强调色同血统），相邻步差 ΔE ≥ 10。其中 ramp-4 在实施回归中由 `#5297b3` 压深至 `#5094b0`——qa-contrast 要求次深档对轨道 ≥3:1，首版 2.998 差一丝。
+- **语义色全冻结**：danger/warn/ok 及全部软底线色一字未动（颜色只编码状态，语义不动；CVD 旧账 danger vs warn ΔE 4.7 为现网既有，列入实施后优化清单）。
+
+#### 质量
+
+- 全门禁绿：`test` **365/365** · `test:ui` 裸色值 0 + 对比度 90 组 0 失败 · `test:responsive` 24 档 285 断言 0 失败 · `test:tools` **63/63** · `test:settings` **27/27** · build 90 模块（index 271.77 kB 与基线持平）。
+- **回归中修掉的两处门禁自身问题**：① `qa-tools.mjs` 暗色画布断言写死旧 surface 值 `rgb(42,42,42)` → 改为与 `--surface` 变量现算值比对（门禁不再随令牌换代失效）；② `qa-settings.mjs` 的 CDP 端口 9557 落在本机 Windows 排除端口段 9461-9560（bind 0x271D）→ 挪到 9563 并支持 `QA_CDP_PORT` 覆盖。
+- 验证脚本沉淀：`scripts/ui-rebase-token-validate.py`（锚点反解 + WCAG 现算 + CVD 三型色觉模拟 + 色阶步差，附录级对账）、`scripts/ui-rebase-apply-tokens.py`（§1 应用器，值从验证器字典取不手抄）、`scripts/ui-rebase-doc-generate.py`（方案文档生成器，与验证器同源）。
+- 换调前备份：`backup/index.css.pre-rebase-20261008.css`。
+
+### Windows 免安装分发包（首次）
+
+第一次把整个应用打成一个"解压双击即用"的包，目标机**不需要装 Node、也不需要 npm install**（Python 由冻结内置）。
+
+#### 产物构成（`Worktodolist-v0.1.6-win-x64/`，约 154 MB）
+
+| 组成 | 说明 |
+|---|---|
+| `Worktodolist.exe` | 启动器（PyInstaller onedir + windowed 冻结，约 2 MB） |
+| `_internal/` | 冻结运行时（含 `python313.dll`，免装 Python） |
+| `node/node.exe` | 内置 Node 22 运行时（免装 Node） |
+| `todolist-gui/` | 前端源码 + 依赖 `node_modules/` + 预构建 `dist/` |
+| `scripts/` · `stop_todolist.py` | 数据自动提交 / 每日提醒 / 提醒任务注册 / 停止 |
+| `启动` · `停止` · `注册每日提醒.cmd` | 三个双击入口 |
+| `todo.txt` / `done.txt` | 空模板（作者本人的数据绝不进发行包） |
+
+打好的 `Worktodolist-v0.1.6-win-x64.zip` 约 56.6 MB，`SHA256SUMS.txt` 记 zip 与 exe 两个校验值。
+
+#### 为打包改的启动器
+
+- **冻结感知的根目录**：冻结后 `__file__` 指向解包临时目录、`sys.executable` 才是本 exe，所以 `HERE` 按 `sys.frozen` 分支取 exe 所在目录（源码方式启动行为不变）。
+- **内置 Node 优先**：`find_node()` 先看同目录 `node/node.exe`，找不到才回落托管/系统的 Node。
+- **三个新入口**：`--port <n>`（只认指定端口、不回落候选表，QA 与多实例用）、`--stop`（打包版没有 Python 时的唯一停止入口）、`--run-script <脚本>`（用内置解释器跑辅助脚本）。
+- `--run-script` 同时修掉一个**冻结后才暴露的缺陷**：冻结后 `sys.executable` 是 exe，`[exe, script]` 会被当成"再启一次启动器"，自动提交与提醒脚本永远不会执行。`scripts/register_reminder_task.py` 同步改用该入口注册计划任务。
+
+#### 可重复构建
+
+`python scripts/build_exe.py`（依赖装进项目内 `.venv-build/`，版本锁在 `scripts/build-requirements.txt`，绝不污染系统 Python）。设 `SOURCE_DATE_EPOCH` 后两次构建**逐字节一致**：本次实测两轮 zip 与 exe 的 sha256 完全相同。
+
+#### 验包脚本
+
+`python scripts/verify_release.py`，十项：zip 校验值 → 逐条目 CRC → 与发行目录内容对账 → 解压到独立目录冷启动 → HTTP 200 且标题命中 → 断言**实际用的是包内 Node** → 包内含 Python 运行时 → `--stop` 能收尾。
+
+#### 顺带修掉的一个真实缺陷
+
+`stop_todolist.py` 的孤儿清扫原本按 `*todolist-gui*` 字样匹配命令行，同机上开发目录与解压出来的发行包**会互相清掉**（验证发行包时实测把正在跑的开发实例一并结束了）。改为按**脚本自身所在目录**匹配：开发目录只清开发目录，发行包只清发行包。已在中文路径下实测：命中 1 条、反例 0 条。
+
 ## v0.1.5 · 2026-10-06
 
 第三个页签「工具集」：把工作中零零散散的小工具收进一个能持续长东西的容器，第一个入驻的是 RTI 耐热指数计算器。

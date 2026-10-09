@@ -25,9 +25,21 @@ def main():
         print('找不到提醒脚本：%s' % REMINDER_SCRIPT)
         return 1
 
-    # 用当前 Python 的绝对路径注册，避免计划任务运行时 PATH 里没有 python
+    # 用当前 Python 的绝对路径注册，避免计划任务运行时 PATH 里没有 python。
+    # 优先 pythonw.exe：提醒脚本纯后台弹窗，用控制台版 python.exe 注册的话，
+    # 每天 09:00 任务计划会顶着一块黑色控制台窗口跑完整个弹窗周期。
     python = sys.executable or 'python'
-    action = '"%s" "%s"' % (python, REMINDER_SCRIPT)
+    if getattr(sys, 'frozen', False):
+        # 打包版没有独立解释器：sys.executable 是启动器 exe，直接拼脚本路径会把
+        # 它当成"再启一次启动器"。改走 --run-script 子命令（每天照样静默弹窗，
+        # 因为 exe 本身就是无控制台的 windowed 程序）。
+        action = '"%s" --run-script "%s"' % (python, REMINDER_SCRIPT)
+    else:
+        if python.lower().endswith('\\python.exe'):
+            pythonw = python[:-len('python.exe')] + 'pythonw.exe'
+            if os.path.isfile(pythonw):
+                python = pythonw
+        action = '"%s" "%s"' % (python, REMINDER_SCRIPT)
     cmd = [
         'schtasks', '/Create',
         '/TN', TASK_NAME,

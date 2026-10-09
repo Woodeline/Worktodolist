@@ -29,6 +29,13 @@ Windows 上 Hyper-V / WSL2 / Docker 会向系统申请「保留端口块」（�
   python.exe  launch_todolist.py --show-window  # 显示控制台窗口（排查用）
   python.exe  launch_todolist.py --quiet        # 出错也不弹窗，只写日志/标准输出
   python.exe  launch_todolist.py --dev          # 强制 dev 模式（前端开发用）
+  python.exe  launch_todolist.py --port 15181   # 只认指定端口（多实例 / QA 用）
+  python.exe  launch_todolist.py --stop         # 结束后台服务（打包版没有 Python 时的唯一入口）
+  python.exe  launch_todolist.py --run-script scripts/daily_reminder.py
+                                                # 用内置解释器跑辅助脚本（打包版用）
+
+打包（PyInstaller 冻结）注意：冻结后 sys.executable 就是本 exe、__file__ 指向解包
+临时目录，所以下面两处都做了分支处理；同目录存在 node/node.exe 时优先用它。
 """
 import ctypes
 import os
@@ -41,7 +48,13 @@ import urllib.error
 import urllib.request
 import webbrowser
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+# 冻结（PyInstaller）后 __file__ 指向解包临时目录，拿它当基准会找不到同目录的
+# todolist-gui / node / scripts —— 打包版必须以 exe 自身所在目录为根。源码方式
+# 启动时两者等价，行为不变。
+if getattr(sys, 'frozen', False):
+    HERE = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    HERE = os.path.dirname(os.path.abspath(__file__))
 APP_DIR = os.path.join(HERE, 'todolist-gui')
 VITE_JS = os.path.join(APP_DIR, 'node_modules', 'vite', 'bin', 'vite.js')
 DIST_INDEX = os.path.join(APP_DIR, 'dist', 'index.html')
@@ -55,6 +68,10 @@ PORT_CANDIDATES = [15180, 5180, 18180, 51800, 15800, 16180]
 
 # 当前选定的端口，由 choose_port() 填好后全程复用；选定前为 None。
 PORT = None
+
+# --port <n> 指定的端口。给了就只认它（绑不上直接报错，不回落候选表）——
+# 这是给 QA / 多实例用的确定性开关，正常双击启动不会传。
+FORCED_PORT = None
 
 # HTTP 身份探针的标记：本应用 index.html 的 <title> 一定包含它。
 # dev 与 preview 服务的都是这份 index.html，两种模式通用。
@@ -229,6 +246,15 @@ def choose_port():
       3) 候选表里第一个现在能真绑上的端口。
       4) 一个都绑不上 → (None, False)。
     """
+    if FORCED_PORT is not None:
+        # 指定端口就只认它：已在跑则复用，能绑则新建，绑不上直接失败。
+        # 刻意不回落候选表 —— 否则"指定端口"在 QA 里就不是确定的了。
+        if is_our_server(FORCED_PORT):
+            return FORCED_PORT, True
+        if can_bind(FORCED_PORT):
+            return FORCED_PORT, False
+        return None, False
+
     saved = _read_port_file()
     if saved is not None and is_our_server(saved):
         return saved, True
@@ -252,6 +278,11 @@ def find_node():
     没有托管版本时再回落系统安装路径，最后交给 PATH 解析。这样不再写死版本号，
     托管 node 升级后无需改代码。
     """
+    # 打包版优先用随包分发的 node，目标是「解压即用、零外部依赖」。
+    bundled = os.path.join(HERE, 'node', 'node.exe')
+    if os.path.isfile(bundled):
+        return bundled
+
     managed_root = os.path.expandvars(r'%USERPROFILE%\.workbuddy\binaries\node\versions')
 
     def version_key(name):
@@ -344,6 +375,7 @@ def ensure_dist():
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             timeout=300,
+            creationflags=CREATE_NO_WINDOW,  # 同 autocommit：pythonw 下起 node 不闪控制台
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         log('vite build failed: %s' % exc)
@@ -416,6 +448,39 @@ def start_server(port, show_window=False, dev_mode=False):
     return False
 
 
+def helper_argv(script):
+    """构造「用当前解释器执行某个辅助脚本」的命令行。
+
+    冻结后 sys.executable 是本 exe —— 直接 [exe, script] 会被当成"把脚本路径
+    当参数再启一次启动器"，辅助脚本永远不会执行。所以冻结环境改走 --run-script
+    子命令，由 exe 自己 import 后执行。
+    """
+    if getattr(sys, 'frozen', False):
+        return [sys.executable, '--run-script', script]
+    return [sys.executable, script]
+
+
+def run_script(path):
+    """在当前进程内按 __main__ 执行一个辅助脚本（等价于 `python <path>`）。
+
+    用 runpy 而不是另起进程：冻结环境没有独立解释器可复用，而辅助脚本本来就是
+    "启动器的一部分"，同进程执行语义一致。脚本里的 SystemExit(n) 翻译成返回码。
+    """
+    import runpy
+    if not path or not os.path.isfile(path):
+        log('run-script: file not found: %s' % path)
+        return 1
+    try:
+        runpy.run_path(path, run_name='__main__')
+        return 0
+    except SystemExit as exc:
+        code = exc.code
+        return code if isinstance(code, int) else (0 if code is None else 1)
+    except Exception as exc:  # noqa: BLE001
+        log('run-script %s failed: %r' % (path, exc))
+        return 1
+
+
 def spawn_autocommit():
     """后台跑一次数据自动提交（git 版本化）。git 不存在 / 没有仓库 / 无变更时
     静默结束，任何失败都不影响启动。"""
@@ -423,7 +488,7 @@ def spawn_autocommit():
     if not os.path.isfile(script):
         return
     try:
-        popen_detached([sys.executable, script], cwd=HERE)
+        popen_detached(helper_argv(script), cwd=HERE)
         log('autocommit spawned')
     except Exception as exc:  # noqa: BLE001
         log('autocommit spawn failed: %s' % exc)
@@ -449,11 +514,33 @@ def open_ui():
 
 
 def main():
-    global PORT
+    global PORT, FORCED_PORT
     args = sys.argv[1:]
+
+    # 子命令先于一切环境检查：--stop 不需要 todolist-gui / node 在场。
+    if '--stop' in args:
+        return run_script(os.path.join(HERE, 'stop_todolist.py'))
+    if '--run-script' in args:
+        idx = args.index('--run-script')
+        target = args[idx + 1] if idx + 1 < len(args) else ''
+        if target and not os.path.isabs(target):
+            target = os.path.join(HERE, target)
+        return run_script(target)
+
     no_browser = '--no-browser' in args
     show_window = '--show-window' in args
     dev_mode = '--dev' in args
+
+    if '--port' in args:
+        idx = args.index('--port')
+        try:
+            value = int(args[idx + 1])
+        except (IndexError, ValueError):
+            value = 0
+        if not 1 <= value <= 65535:
+            alert('--port 需要一个 1–65535 之间的端口号。')
+            return 1
+        FORCED_PORT = value
 
     if not os.path.isfile(VITE_JS):
         alert('找不到应用文件：\n%s\n\n请确认 todolist-gui 文件夹还在，且已执行过 npm install。' % VITE_JS)
@@ -465,6 +552,10 @@ def main():
 
     port, already_running = choose_port()
     if port is None:
+        if FORCED_PORT is not None:
+            alert('指定端口 %d 不可用（被占用，或被 Hyper-V / WSL2 / Docker 保留）。\n'
+                  '换一个端口再试，或去掉 --port 让启动器自己挑。' % FORCED_PORT)
+            return 1
         alert('没有可用端口：候选端口都被系统保留或被占用了。\n'
               '这通常是 Hyper-V / WSL2 / Docker 预留了端口段导致的。\n'
               '想看被保留的端口段，在 cmd 里执行：\n'
@@ -482,7 +573,8 @@ def main():
         ok = start_server(PORT, show_window, dev_mode)
     tried = {PORT}
     retries = 0
-    while not ok and retries < 2:
+    # 指定端口时不换端口重试：用户点名的端口没起来就该如实报错。
+    while not ok and retries < 2 and FORCED_PORT is None:
         retries += 1
         nxt = next((c for c in PORT_CANDIDATES if c not in tried and can_bind(c)), None)
         if nxt is None:
