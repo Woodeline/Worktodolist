@@ -6,6 +6,10 @@
 //  2. 草稿与已保存配置分离：改动中的值只活在本组件里，点保存才落盘，
 //     所以不存在"边打字边生效"的不确定状态；未保存时页头会明示。
 //  3. 「测试连接」故意测草稿而非已保存值 —— 填完先验证，再决定要不要保存。
+//
+// 范围收紧（2026-10-07）：原先这里还有第二组「联网工具」（总闸 / 主机白名单 /
+// 超时 / 响应上限）供 T4 联网工具使用。该工具已移除，整组连同 lib/net/ 一并撤掉 ——
+// 现在设置页只剩 AI 兜底一组，"本机会不会把数据发出去"的答案收敛成一个开关。
 import { useEffect, useMemo, useState } from 'react';
 import {
   AI_LIMITS,
@@ -22,7 +26,7 @@ import Icon from './Icon.jsx';
 
 const readDraft = () => normalizeAiConfig(loadAiConfig() || DEFAULT_AI_CONFIG);
 
-function sameConfig(a, b) {
+function sameAi(a, b) {
   return (
     a.enabled === b.enabled &&
     a.baseUrl === b.baseUrl &&
@@ -34,7 +38,7 @@ function sameConfig(a, b) {
 }
 
 export default function SettingsPage({ onClose }) {
-  const { aiCfg, aiOn, aiTarget, hasStoredConfig } = useAiSettings();
+  const { aiCfg, aiOn, aiTarget } = useAiSettings();
   const [draft, setDraft] = useState(readDraft);
   const [testing, setTesting] = useState(false);
   const [test, setTest] = useState(null);
@@ -45,18 +49,21 @@ export default function SettingsPage({ onClose }) {
     setDraft(normalizeAiConfig(aiCfg));
   }, [aiCfg]);
 
-  const draftNorm = useMemo(() => normalizeAiConfig(draft), [draft]);
-  const dirty = !sameConfig(normalizeAiConfig(aiCfg), draftNorm);
-  const previewHost = aiHost(draftNorm);
+  const aiDraft = useMemo(() => normalizeAiConfig(draft), [draft]);
+  const dirty = !sameAi(normalizeAiConfig(aiCfg), aiDraft);
+  const previewHost = aiHost(aiDraft);
+  // 「本机有没有落盘配置」必须与「是否启用」分开算：用户可能填了地址与 Key
+  // 却没打开开关，那仍是含明文 Key 的落盘数据 —— 必须允许清除。
+  const hasStoredAnything = Boolean(loadAiConfig());
 
-  const patch = (p) => {
+  const patchAi = (p) => {
     setTest(null);
     setDraft((d) => ({ ...d, ...p }));
   };
 
   const doSave = () => {
     saveAiConfig(draft);
-    setDraft(normalizeAiConfig(draft));
+    setDraft(readDraft());
   };
 
   const doReset = () => {
@@ -73,7 +80,7 @@ export default function SettingsPage({ onClose }) {
     setTesting(true);
     setTest(null);
     try {
-      setTest(await testAiConnection(draftNorm));
+      setTest(await testAiConnection(aiDraft));
     } catch (err) {
       setTest({
         ok: false,
@@ -121,11 +128,11 @@ export default function SettingsPage({ onClose }) {
                   <input
                     type="checkbox"
                     checked={Boolean(draft.enabled)}
-                    onChange={(e) => patch({ enabled: e.target.checked })}
+                    onChange={(e) => patchAi({ enabled: e.target.checked })}
                   />
                   <span className="settings-check-text">本地没听懂时，允许把这句发往远端模型</span>
                 </label>
-                {draftNorm.enabled && !draftNorm.apiKey && (
+                {aiDraft.enabled && !aiDraft.apiKey && (
                   <span className="settings-warn">还没填 Key，实际仍不会发出任何请求</span>
                 )}
               </div>
@@ -140,7 +147,7 @@ export default function SettingsPage({ onClose }) {
                   id="set-baseurl"
                   type="text"
                   value={draft.baseUrl}
-                  onChange={(e) => patch({ baseUrl: e.target.value })}
+                  onChange={(e) => patchAi({ baseUrl: e.target.value })}
                   placeholder="https://api.openai.com/v1"
                   spellCheck={false}
                   autoComplete="off"
@@ -158,7 +165,7 @@ export default function SettingsPage({ onClose }) {
                   id="set-model"
                   type="text"
                   value={draft.model}
-                  onChange={(e) => patch({ model: e.target.value })}
+                  onChange={(e) => patchAi({ model: e.target.value })}
                   placeholder="gpt-4o-mini"
                   spellCheck={false}
                   autoComplete="off"
@@ -176,7 +183,7 @@ export default function SettingsPage({ onClose }) {
                   id="set-key"
                   type="password"
                   value={draft.apiKey}
-                  onChange={(e) => patch({ apiKey: e.target.value })}
+                  onChange={(e) => patchAi({ apiKey: e.target.value })}
                   placeholder="sk-..."
                   spellCheck={false}
                   autoComplete="off"
@@ -197,7 +204,7 @@ export default function SettingsPage({ onClose }) {
                   max={AI_LIMITS.timeoutMs.max}
                   step="1000"
                   value={draft.timeoutMs}
-                  onChange={(e) => patch({ timeoutMs: e.target.value })}
+                  onChange={(e) => patchAi({ timeoutMs: e.target.value })}
                   onBlur={() => setDraft((d) => normalizeAiConfig(d))}
                 />
                 <span className="settings-range">
@@ -218,7 +225,7 @@ export default function SettingsPage({ onClose }) {
                   max={AI_LIMITS.maxRetries.max}
                   step="1"
                   value={draft.maxRetries}
-                  onChange={(e) => patch({ maxRetries: e.target.value })}
+                  onChange={(e) => patchAi({ maxRetries: e.target.value })}
                   onBlur={() => setDraft((d) => normalizeAiConfig(d))}
                 />
                 <span className="settings-range">
@@ -258,14 +265,14 @@ export default function SettingsPage({ onClose }) {
           放弃改动
         </button>
         <button type="button" className="btn" onClick={doTest} disabled={testing}>
-          {testing ? '测试中…' : '测试连接'}
+          {testing ? '测试中…' : '测试 AI 连接'}
         </button>
-        <button type="button" className="btn btn-danger" onClick={doClear} disabled={!hasStoredConfig}>
+        <button type="button" className="btn btn-danger" onClick={doClear} disabled={!hasStoredAnything}>
           清除配置
         </button>
         <span className="spacer" />
         <span className="settings-where">
-          {aiOn ? `当前会发往：${aiTarget}` : '当前不会发出任何网络请求'}
+          {aiOn ? `AI 兜底会发往：${aiTarget}` : '当前不会发出任何网络请求'}
           {dirty && previewHost && previewHost !== aiTarget ? ` · 保存后发往：${previewHost}` : ''}
         </span>
       </div>

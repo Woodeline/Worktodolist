@@ -18,6 +18,7 @@
 import dayjs from 'dayjs';
 // 带 .js 后缀：Vite 能解析无后缀写法，但 node 直接跑（qa-nl-coverage.mjs）不能
 import { hanLength, rankBySimilarity } from './textScore.js';
+import { HEAD_WINDOW, matchTool } from './toolMatch.js';
 
 const WEEKDAY_ISO = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 7, 天: 7 };
 
@@ -190,7 +191,7 @@ function looksImplicitAdd(text, todayStr) {
 
 // 句首窗口：开头这几个字里出现的触发词，才算"用户真正在下达的命令"。
 // 「加一条 12月31日 前完成年报」——句首的"加一条"是命令，句中的"完成"是任务内容。
-const HEAD_WINDOW = 8;
+// 口径与 toolMatch.HEAD_WINDOW 共用同一个常量，改一处即可。
 
 function matchRuleInWindow(text, limit) {
   const head = text.slice(0, limit);
@@ -213,9 +214,14 @@ function timeBefore(text, idx, todayStr) {
 // 从文本中识别一次“动作”，返回 intent 名；未命中返回 'unknown'。
 // 顺序即规则：
 //   撤销 → 「已完成…」歧义特判 → 查询强前缀
-//   → 句首窗口内的命令触发词 → 句中触发词（时间前置的跳过）
+//   → 句首窗口内的命令触发词 → 工具路由（tool.open）→ 句中触发词（时间前置的跳过）
 //   → 句中查询词 → 隐式新增 → unknown
-export function detectAction(text, todayStr) {
+//
+// tool.open 的位置是有讲究的：**排在句首命令之后、句中规则之前**。
+//   · 排在句首命令之后 —— 「加一条 打开阀门」里的"打开"是任务内容，命令优先；
+//   · 排在句中规则之前 —— 「算一下耐热指数」在句中规则里什么都不命中，
+//     但它是明确的"打开工具"请求；而打开工具没有副作用，按代价不对称可以放宽。
+export function detectAction(text, todayStr, tools) {
   const t = String(text || '').trim();
   if (!t) return 'unknown';
 
@@ -233,6 +239,9 @@ export function detectAction(text, todayStr) {
   // 句首窗口：最高优先级，句首说了什么就是什么。
   const headRule = matchRuleInWindow(t, HEAD_WINDOW);
   if (headRule) return headRule.intent;
+
+  // 工具路由：只在这一句确实指向某个已登记工具时才成立（匹配层自带阈值）。
+  if (Array.isArray(tools) && tools.length && matchTool(t, tools)) return 'tool.open';
 
   // 句中触发词优先于句中查询词（修复"加一条 列出购物清单"被抢为 query）。
   for (const rule of COMMAND_RULES) {
@@ -520,21 +529,43 @@ function resolveTarget(target, tasks) {
 /**
  * 解析用户输入为结构化意图。
  * @param {string} text 用户原始输入
- * @param {{tasks?: Array, today?: string}} ctx 上下文（活跃任务列表 + 今天）
+ * @param {{tasks?: Array, today?: string, tools?: Array}} ctx 上下文（活跃任务 / 今天 / 工具清单）
  * @returns {object} Intent
  */
 export function parseIntent(text, ctx = {}) {
   const raw = String(text == null ? '' : text).trim();
   const todayStr = ctx.today || dayjs().format('YYYY-MM-DD');
   const tasks = Array.isArray(ctx.tasks) ? ctx.tasks : [];
+  const tools = Array.isArray(ctx.tools) ? ctx.tools : [];
 
   if (!raw) {
     return { intent: 'unknown', target: null, slots: {}, matches: [], nearMatches: [], confidence: 'low', note: null, raw };
   }
 
-  const intent = detectAction(raw, todayStr);
+  const intent = detectAction(raw, todayStr, tools);
   if (intent === 'unknown') {
     return { intent: 'unknown', target: null, slots: {}, matches: [], nearMatches: [], confidence: 'low', note: null, raw, needsConfirm: false };
+  }
+
+  // —— 工具路由 ——
+  // 无副作用意图（只切页 + 预填参数），所以门槛可以放宽；也正因为它不写文件，
+  // 这里不需要走澄清框架：认到哪个就开哪个，认不到就回一句"没找到"。
+  if (intent === 'tool.open') {
+    const hit = matchTool(raw, tools);
+    if (!hit) {
+      return { intent: 'unknown', target: null, slots: {}, matches: [], nearMatches: [], confidence: 'low', note: null, raw, needsConfirm: false };
+    }
+    return {
+      intent: 'tool.open',
+      target: null,
+      slots: { toolId: hit.tool.id, toolName: hit.tool.name, plan: hit.query, trigger: hit.triggered },
+      matches: [],
+      nearMatches: [],
+      confidence: hit.score >= 0.5 ? 'high' : 'low',
+      note: null,
+      raw,
+      needsConfirm: false,
+    };
   }
 
   // add / query / undo 不需要目标，但也顺带解析时间/优先级作为 slot。
@@ -695,4 +726,10 @@ export const COMMAND_HINTS = [
   { intent: 'addProject', label: '打标签', sample: '给 回测报告 打标签 +复盘', triggers: '打标签 +y' },
   { intent: 'star', label: '星标', sample: '星标 回测报告', triggers: '星标 / 加星 / 打星' },
   { intent: 'undo', label: '撤销上一步', sample: '撤销', triggers: '撤销 / 回退' },
+  {
+    intent: 'tool.open',
+    label: '打开工具',
+    sample: '打开 单位换算',
+    triggers: '打开 / 调用 / 用一下 / 算一下（工具名，见「工具」页）',
+  },
 ];

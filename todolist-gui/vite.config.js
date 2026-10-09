@@ -69,11 +69,10 @@ export function resolveProxyTarget(raw) {
   return REJECT_TARGET;
 }
 
-// AI 兜底专用的 CORS 绕行通道。
-// 第三方 API（OpenAI 等）不返回 CORS 头，浏览器直连必被拦；本地服务端转发就没有
-// 这个问题。目标源通过 x-ai-target 请求头传入（经 resolveProxyTarget 校验）。
-// dev 与 preview 共用同一份规则：日常双击跑的是 preview（服务 dist/），
-// 没有这条，切到 preview 后 AI 兜底会静默失效。
+// 数据出机的 CORS 绕行通道（AI 兜底用）。
+// 第三方站点一般不返回 CORS 头，浏览器直连必被拦；本地服务端转发就没有这个问题。
+// 目标走 x-ai-target 请求头（OpenAI 兼容接口，路径要保留），并经 resolveProxyTarget
+// 校验 —— 所以它是"有边界的转发器"，不是开放代理。
 //
 // 实现注意（2026-10-06 实测）：vite/http-proxy **没有 router 选项**——vite 的
 // proxy middleware 只认 bypass/rewrite/configure 等（router 会被静默忽略）。
@@ -81,31 +80,34 @@ export function resolveProxyTarget(raw) {
 // 静态 target(localhost:80) 然后 ECONNREFUSED→500。正确做法是利用 http-proxy
 // 的「每请求覆盖 target」能力（web() 会把传入的 options 合并覆盖全局配置），
 // 在 configure 里包装 proxy.web，按请求头注入经校验的目标。
-const aiProxyRules = {
-  '/ai-proxy': {
-    // 占位 target：正常请求都会被下面的包装注入真实目标后转发；
-    // 万一包装路径没走到（未来 vite 改行为），这里也是必拒绝端口，不会变成开放转发。
-    target: 'http://127.0.0.1:9',
-    changeOrigin: true,
-    rewrite: (p) => p.replace(/^\/ai-proxy/, ''),
-    configure: (proxy) => {
-      const originalWeb = proxy.web.bind(proxy);
-      proxy.web = (req, res, opts) => {
-        const target = resolveProxyTarget(req.headers['x-ai-target']);
-        if (target === REJECT_TARGET) {
-          res.statusCode = 403;
-          res.end('ai-proxy: target rejected (not in allowlist / not public http[s])');
-          return;
-        }
-        originalWeb(req, res, { ...opts, target });
-      };
-      proxy.on('proxyReq', (proxyReq) => {
-        // 这个头是给代理自己看的，转发出去会污染上游请求
-        proxyReq.removeHeader('x-ai-target');
-      });
-    },
+//
+// 原先还有一条 /net-proxy（目标走 ?url= 查询参数）供 T4 联网工具使用；
+// 该工具已移除，这条通道一并撤掉 —— 少一条出机路径就少一份要守的边界。
+export const aiProxy = {
+  // 占位 target：正常请求都会被下面的包装注入真实目标后转发；
+  // 万一包装路径没走到（未来 vite 改行为），这里也是必拒绝端口，不会变成开放转发。
+  target: 'http://127.0.0.1:9',
+  changeOrigin: true,
+  rewrite: (p) => p.replace(/^\/ai-proxy/, ''),
+  configure: (proxy) => {
+    const originalWeb = proxy.web.bind(proxy);
+    proxy.web = (req, res, opts) => {
+      const target = resolveProxyTarget(req.headers['x-ai-target']);
+      if (target === REJECT_TARGET) {
+        res.statusCode = 403;
+        res.end('ai-proxy: target rejected (not in allowlist / not public http[s])');
+        return;
+      }
+      originalWeb(req, res, { ...opts, target });
+    };
+    proxy.on('proxyReq', (proxyReq) => {
+      // 这个头只是给代理自己看的，转发出去会污染上游请求
+      proxyReq.removeHeader('x-ai-target');
+    });
   },
 };
+
+const aiProxyRules = { '/ai-proxy': aiProxy };
 
 export default defineConfig({
   plugins: [react()],

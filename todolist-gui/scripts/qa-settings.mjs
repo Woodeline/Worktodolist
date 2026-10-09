@@ -21,7 +21,9 @@ const EDGE = process.env.EDGE || [
   'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
 ].find((p) => existsSync(p));
 const BASE = process.env.SG_BASE || 'http://localhost:15181';
-const PORT = 9557;
+// 9557 落在本机 Windows 排除端口段 9461-9560 内（netsh excludedportrange），
+// Edge CDP bind 会 0x271D 拒绝 —— 挪到段外，并允许环境变量覆盖。
+const PORT = Number(process.env.QA_CDP_PORT) || 9563;
 const PROFILE = path.join(tmpdir(), 'todolist-qa-settings-profile');
 const OUT = path.resolve(import.meta.dirname, '..', 'qa-artifacts');
 const WANT_SHOTS = process.argv.includes('--shots');
@@ -214,6 +216,10 @@ async function main() {
       title: q('.settings-title') ? q('.settings-title').textContent : '',
       groups: document.querySelectorAll('.settings-group').length,
       rows: document.querySelectorAll('.settings-row').length,
+      groupTitles: Array.from(document.querySelectorAll('.settings-group-title')).map((e) => e.textContent.trim()),
+      netHosts: !!q('#set-net-hosts'),
+      netTimeout: !!q('#set-net-timeout'),
+      netMaxBytes: !!q('#set-net-maxbytes'),
       badge: !!q('.settings-badge'),
       where: q('.settings-where') ? q('.settings-where').textContent : '',
       oldPanel: !!q('.ai-cfg'),
@@ -222,8 +228,24 @@ async function main() {
     };
   })()`);
   check('设置页结构完整（页头 / 返回 / 分组 / 动作栏）', shape.head && shape.back && shape.foot, JSON.stringify(shape));
-  check('标题为「设置」，且是一组配置', shape.title === '设置' && shape.groups === 1, `title=${shape.title} groups=${shape.groups}`);
-  check('字段齐全：启用 / 地址 / 模型 / Key / 超时 / 重试 = 6 行', shape.rows === 6, `rows=${shape.rows}`);
+  check('标题为「设置」，且只有一组配置（AI 兜底）', shape.title === '设置' && shape.groups === 1, `title=${shape.title} groups=${shape.groups}`);
+  check(
+    '分组标题只剩「AI 兜底解析」',
+    JSON.stringify(shape.groupTitles) === JSON.stringify(['AI 兜底解析']),
+    JSON.stringify(shape.groupTitles)
+  );
+  check(
+    '字段齐全：6 行（启用 / 地址 / 模型 / Key / 超时 / 重试）',
+    shape.rows === 6,
+    `rows=${shape.rows}`
+  );
+  // 「联网工具」分组已随 T4 工具一并移除。这条断言的作用是**防止它被顺手加回来**
+  // —— 一个没有消费者的联网开关，比没有这个开关更糟（会让人以为数据可能出机）。
+  check(
+    '联网工具分组已整体移除（白名单 / 超时 / 响应上限控件都不在）',
+    !shape.netHosts && !shape.netTimeout && !shape.netMaxBytes,
+    JSON.stringify({ hosts: shape.netHosts, timeout: shape.netTimeout, maxBytes: shape.netMaxBytes })
+  );
   check('未改动时不显示「未保存」标记', shape.badge === false);
   check('初始明示「当前不会发出任何网络请求」', shape.where.includes('不会发出任何网络请求'), shape.where);
   check('旧 AI 兜底面板已移除（.ai-cfg 不存在）', shape.oldPanel === false);
@@ -328,6 +350,11 @@ async function main() {
   })()`);
   check('未启用但已落盘时，「清除配置」仍可点', partial.disabledWhileOff === false);
   check('未启用也能真的清干净（明文 Key 不留残留）', partial.raw === null, String(partial.raw));
+
+  // ── 4c 段落已随 T4 联网工具移除 ─────────────────────────────────────────
+  // 原先这里校验「总闸 + 主机白名单」双门槛、白名单落盘归一化、以及 todogui.net
+  // 键能被「清除全部配置」清掉。工具与 lib/net/ 一并删除后，这些断言失去了被测对象。
+  // 「不能被悄悄加回来」这件事改由 §1 的「联网工具分组已整体移除」那条断言承担。
 
 
   // ── 5. 窄屏几何：设置页在 390 宽下不横向溢出 ────────────────────────────

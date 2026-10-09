@@ -11,6 +11,10 @@
 // 运行：npm run dev → http://localhost:<端口>/styleguide.html?view=list
 //       （端口见项目根 .todolist-server.port，默认 15180）
 // 视图：?view=tokens|icons|list|list-all|chat|chatempty|settings|welcome|reauth|unsupported|empty|drawer|toast|modal
+//       ?view=tools                工具集（默认选中清单里第一个工具）
+//       ?view=tools-<工具id>       工具集并直达某个工具，例如 tools-rti / tools-stats
+//                                  <工具id> 直接来自 registry —— 新增工具自动多出一个视图，
+//                                  这里不需要跟着改（见 Root() 里的前缀分支）。
 import dayjs from 'dayjs';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -33,9 +37,11 @@ import EditDrawer from './components/EditDrawer.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
 import SettingsPage from './components/SettingsPage.jsx';
 import ToolsPage from './components/tools/ToolsPage.jsx';
+import { visibleTools } from './components/tools/registry.js';
 import ToolCallCard from './components/ToolCallCard.jsx';
 import Icon, { ICON_NAMES } from './components/Icon.jsx';
 import { ContextMenuProvider } from './hooks/useContextMenu.jsx';
+import { buildTodoSnapshot } from './lib/todoSnapshot.js';
 
 const TODAY = dayjs().format('YYYY-MM-DD');
 
@@ -171,6 +177,9 @@ function makeFileHandle(name, text) {
   };
 }
 
+// 目录句柄桩：给对话页回放会话事件线用（useChatAgent 要真实地读 session-*.ndjson）。
+// 原先还为「事件日志」工具实现了 entries()/keys()/values() 异步迭代器（listDir 走它）；
+// 该工具已移除，迭代器一并撤掉，只留读文件所需的最小面。
 const FAKE_DIR = {
   name: 'todolist',
   async getFileHandle(name, options) {
@@ -238,6 +247,8 @@ const VIEWS = [
   'chatempty',
   'settings',
   'tools',
+  // 每个可见工具各配一个视图（tools-<id>）—— 由 registry 生成，加工具不用改这里
+  ...visibleTools().map((t) => `tools-${t.id}`),
   'welcome',
   'reauth',
   'unsupported',
@@ -657,12 +668,22 @@ function SettingsStage() {
 
 // 工具集：与产品同构（顶栏选中「工具」+ 左栏工具清单 + 右栏工具工作区）。
 // 渲染的是真实工具组件，所以截图里就是真实的数据录入表与真实画布。
-function ToolsStage() {
+// toolId 非空时直达该工具（?view=tools-<id>）—— ToolsPage 的首屏就认这个 request，
+// 所以不需要模拟"从对话页路由进来"，工具拿到的 params 仍是 null。
+function ToolsStage({ toolId = null }) {
   const store = makeStore({ dirReady: true });
+  // 工具页拿的是**只读投影**（与产品同一条链路），不是 store 本身
+  const snapshot = buildTodoSnapshot({
+    todoEntries: TODO_ENTRIES,
+    doneEntries: DONE_ENTRIES,
+    today: TODAY,
+    sortMode: 'auto',
+  });
+  const request = toolId ? { id: toolId, params: null, seq: 1 } : null;
   return (
     <div className="app">
       <Tabs tab="tools" onChange={() => {}} store={store} onOpenSettings={() => {}} />
-      <ToolsPage />
+      <ToolsPage snapshot={snapshot} store={store} request={request} />
       <Footer store={store} />
     </div>
   );
@@ -676,6 +697,13 @@ function Root() {
   if (view === 'icons') return <Shell view={view}><IconsDoc /></Shell>;
 
   const stage = (node) => <Shell view={view}>{node}</Shell>;
+
+  // tools-<工具id>：直达某个工具。用前缀而不是为每个工具写一个 case ——
+  // 工具清单由 registry 驱动，视图清单也该如此。
+  if (view.startsWith('tools-')) {
+    const id = view.slice('tools-'.length);
+    return stage(<ToolsStage toolId={id} />);
+  }
 
   switch (view) {
     case 'list':

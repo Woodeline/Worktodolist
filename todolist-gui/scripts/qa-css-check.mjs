@@ -84,8 +84,81 @@ console.log('\n运行时拼接值缺失:', runtimeMissing.join(', ') || '无');
 const unused = [...cssClasses].filter((c) => !candidates.has(c) && !RUNTIME_VALUES.includes(c));
 console.log('\nCSS 定义但 JSX 未用（提示）:', unused.sort().join(', ') || '无');
 
-const failed = missing.length > 0 || runtimeMissing.length > 0;
-if (failed) {
+let failed = missing.length > 0 || runtimeMissing.length > 0;
+if (missing.length > 0 || runtimeMissing.length > 0) {
   console.error('\n[css-check] 不通过：存在未定义的类名，样式会静默失效。');
 }
+
+/* ---------------------------------------------------------------------------
+   裸值门禁 —— 「类名有定义」只证明样式**存在**，不证明它**守规矩**。
+   令牌层的存在意义是"改主题只改这一层"，所以令牌层之外一旦出现
+
+     ① 裸色值： #rgb / #rrggbb / rgb() / rgba() / hsl()
+     ② 裸字号： font-size 写成绝对单位（px / pt / rem）
+
+   组件就被钉死在当前主题上了 —— 换主题时这些值不会跟着换。
+   相对单位（em / % / inherit）与 var()/calc() 是允许的：它们天然跟随上下文。
+
+   令牌层用节标题自动定位，不写死行号（加了令牌不会让门禁失效）。
+
+   只扫 `src/index.css`：styleguide.html 的内联 .sg-* 是**开发用外壳**，
+   刻意自带一套最小样式、不参与产品令牌契约（它连 .sg-nav 都不进产品样式表）。
+--------------------------------------------------------------------------- */
+const productCss = readFileSync(`${root}/index.css`, 'utf8');
+const cssLines = productCss.split(/\r?\n/);
+const tokenStart = cssLines.findIndex((l) => l.includes('1 · 令牌层'));
+const tokenEnd = cssLines.findIndex((l) => l.includes('2 · 基础层'));
+const inTokenLayer = (i) => tokenStart >= 0 && tokenEnd > tokenStart && i > tokenStart && i < tokenEnd;
+
+// 逐行剥离块注释（保留行号），再剥 url(...) —— 否则 data-URI 与注释里的色值会误报
+let inComment = false;
+const stripped = cssLines.map((line) => {
+  let out = '';
+  for (let i = 0; i < line.length; i += 1) {
+    if (!inComment && line[i] === '/' && line[i + 1] === '*') {
+      inComment = true;
+      i += 1;
+      continue;
+    }
+    if (inComment && line[i] === '*' && line[i + 1] === '/') {
+      inComment = false;
+      i += 1;
+      continue;
+    }
+    if (!inComment) out += line[i];
+  }
+  return out.replace(/url\((['"]?)[\s\S]*?\1\)/g, 'url()');
+});
+
+const bareColors = [];
+const bareFontSizes = [];
+const rawSpacing = [];
+stripped.forEach((line, i) => {
+  if (inTokenLayer(i)) return; // 令牌层的值就是"裸"的，这里正是它们该待的地方
+  const at = i + 1;
+  const hex = [...line.matchAll(/#[0-9a-fA-F]{3,8}\b/g)].map((m) => m[0]);
+  const fn = [...line.matchAll(/\b(?:rgba?|hsla?)\([^)]*\)/g)].map((m) => m[0]);
+  if (hex.length || fn.length) bareColors.push(`${at}: ${[...hex, ...fn].join(' ')}`);
+  const fs = [...line.matchAll(/font-size\s*:\s*([^;{}]+)/g)].map((m) => m[1].trim());
+  for (const v of fs) {
+    if (/^-?\d*\.?\d+(px|pt|rem)\b/i.test(v)) bareFontSizes.push(`${at}: font-size: ${v}`);
+  }
+  // 间距只做提示不判定失败：宽度/高度上的裸 px 有些是刻意的取舍（见源码里的注释备案）
+  if (/\b(?:padding|margin|gap)\b[^:]*:\s*[^;{}]*\b\d+(?:\.\d+)?px\b/.test(line)) {
+    rawSpacing.push(at);
+  }
+});
+
+console.log('\n裸色值（令牌层之外）:', bareColors.length ? bareColors.join(' | ') : '无');
+console.log('裸字号（font-size 用 px/pt/rem）:', bareFontSizes.length ? bareFontSizes.join(' | ') : '无');
+console.log(`裸间距（提示，不判定失败）: ${rawSpacing.length} 处 @ 行 ${rawSpacing.join(', ') || '无'}`);
+
+if (bareColors.length || bareFontSizes.length) {
+  console.error(
+    '\n[css-check] 不通过：令牌层之外出现裸色值 / 裸字号 —— 换主题时这些值不会跟着换。\n' +
+      '  修法：在 §1 令牌层加一个语义令牌，组件里写 var(--…)。'
+  );
+  failed = true;
+}
+
 process.exitCode = failed ? 1 : 0;

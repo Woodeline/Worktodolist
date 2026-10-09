@@ -18,6 +18,10 @@ import sys
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TODO_FILE = os.path.join(HERE, 'todo.txt')
+
+# 计划任务用 pythonw（无控制台）跑：不给 powershell 子进程带 CREATE_NO_WINDOW
+# 的话，每天 09:00 提醒时会闪一个控制台窗口。
+CREATE_NO_WINDOW = 0x08000000 if os.name == 'nt' else 0
 TITLE = '待办清单提醒'
 MAX_LINES = 10
 
@@ -73,6 +77,7 @@ def popup(message):
         subprocess.run(
             ['powershell', '-NoProfile', '-Command', script],
             env=env, capture_output=True, timeout=120, check=False,
+            creationflags=CREATE_NO_WINDOW,
         )
     except (OSError, subprocess.TimeoutExpired):
         pass

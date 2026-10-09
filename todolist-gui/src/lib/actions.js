@@ -7,6 +7,7 @@
 //   ctx   : { store, tasks, today }
 //   tool  : { name, params, status }  —— 用于渲染工具调用卡片
 import dayjs from 'dayjs';
+import { applyOp, opLabel } from './todoTools/ops.js';
 
 const PRIORITY_CN = { A: '高', B: '中', C: '低' };
 
@@ -240,6 +241,56 @@ function runUndo(ctx) {
   return ok('todo.undo', {}, '已撤销最后一步操作。');
 }
 
+// —— 工具提议的执行入口 ——
+//
+// 这两条不是"给工具开的后门"，而是把工具产出的建议映射到与对话页**同一张**
+// ACTIONS 表上：提议确认后照样走 dispatch(intent, ctx)，副作用照样只经 store。
+// 于是"工具改数据"和"对话改数据"在审计日志里长得一样，回放也一样。
+
+// edit：逐条给已存在的任务打补丁（每条可以不同）。
+function runEdit(ctx, intent) {
+  const items = (intent.slots && intent.slots.items) || [];
+  const params = { count: items.length };
+  let applied = 0;
+  items.forEach((it) => {
+    const task = findTaskById(ctx, it && it.id);
+    if (!task || !it.patch) return;
+    ctx.store.updateTask(task.id, it.patch);
+    applied += 1;
+  });
+  if (!applied) return fail('todo.edit', params, '建议里的任务已经不在列表里了，未做任何修改。');
+  return ok('todo.edit', params, `已按建议修改 ${applied} 条任务（确认前文件没有被动过）。`);
+}
+
+// batch：同一个操作作用在多条任务上（优先级调整 / 批量延期 / 批量打标…）。
+function runBatch(ctx, intent) {
+  const op = intent.slots && intent.slots.op;
+  const ids = intent.matches || [];
+  const params = { op: opLabel(op), count: ids.length };
+  let applied = 0;
+  let skipped = 0;
+  ids.forEach((id) => {
+    const task = findTaskById(ctx, id);
+    if (!task) {
+      skipped += 1;
+      return;
+    }
+    const result = applyOp(task, op, ctx.today);
+    if (!result) {
+      // 该条已处于目标状态（例如本来就没星标却要取消星标）→ 跳过，不制造空改动
+      skipped += 1;
+      return;
+    }
+    if (result.delete) ctx.store.deleteTask(task);
+    else if (result.complete) ctx.store.toggleComplete(task);
+    else ctx.store.updateTask(task.id, result.patch);
+    applied += 1;
+  });
+  if (!applied) return fail('todo.batch', params, '这些任务都已经处于目标状态，没有可改的。');
+  const tail = skipped ? `，跳过 ${skipped} 条不适用` : '';
+  return ok('todo.batch', params, `已对 ${applied} 条任务执行「${opLabel(op)}」${tail}。`);
+}
+
 // 动作表：键为 intent 名。
 export const ACTIONS = {
   add: { id: 'todo.add', label: '新增任务', run: runAdd },
@@ -254,6 +305,8 @@ export const ACTIONS = {
   addProject: { id: 'todo.tag', label: '打标签', run: runAddProject },
   query: { id: 'todo.query', label: '查询任务', run: runQuery },
   undo: { id: 'todo.undo', label: '撤销', run: runUndo },
+  edit: { id: 'todo.edit', label: '按建议修改', run: runEdit },
+  batch: { id: 'todo.batch', label: '批量操作', run: runBatch },
 };
 
 /**

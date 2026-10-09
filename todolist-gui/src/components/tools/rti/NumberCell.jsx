@@ -9,7 +9,7 @@
 export default function NumberCell({ value, onChange, placeholder, title }) {
   return (
     <input
-      className="rti-input"
+      className="tool-input"
       type="text"
       inputMode="decimal"
       autoComplete="off"

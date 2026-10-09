@@ -7,6 +7,7 @@ import { parseIntent } from '../lib/nlRules';
 import { ACTIONS, dispatch, pickByReply } from '../lib/actions';
 import { activeTasks, sortTasks } from '../lib/sortFilter';
 import { appendEvent, loadEvents, makeEvent, replay } from '../lib/eventLog';
+import { drainLastToolSeq } from '../lib/toolEvents.js';
 import { aiHost, callAiFallback, isAiConfigured, loadAiConfig } from '../lib/aiFallback';
 
 // 需要明确目标才能执行的意图（与 nlRules.NEEDS_TARGET 对应）。
@@ -69,9 +70,14 @@ function previewParams(intent) {
 /**
  * 聊天式本地规则 Agent。
  * @param {object} store useTodoStore() 返回值
+ * @param {{tools?:Array<object>, onOpenTool?:Function}} [opts]
+ *   tools     registry 工具清单（供 tool.open 意图匹配；不传则该意图不会命中）
+ *   onOpenTool(id, plan)  对话页 → 工具页的路由回调（切页 + 预填参数）
  */
-export function useChatAgent(store) {
+export function useChatAgent(store, opts = {}) {
   const today = dayjs().format('YYYY-MM-DD');
+  const tools = Array.isArray(opts.tools) ? opts.tools : [];
+  const onOpenTool = typeof opts.onOpenTool === 'function' ? opts.onOpenTool : null;
 
   const [messages, setMessages] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -100,8 +106,14 @@ export function useChatAgent(store) {
   );
 
   // 追加事件到磁盘日志（append-only），同时维护 seq / 计数。
+  //
+  // seq 是**全日志唯一**的：工具事件（tool.open / tool.run / tool.export / tool.apply）
+  // 也写进同一份 NDJSON，因此这里在自增前先看工具侧有没有写过 ——
+  // 有就把计数器抬到它之上，避免同一份日志出现重号（回放顺序会因此不稳）。
   const persist = useCallback(
     async (type, payload) => {
+      const toolSeq = drainLastToolSeq();
+      if (toolSeq) seqRef.current = Math.max(seqRef.current, toolSeq);
       seqRef.current += 1;
       const event = makeEvent(seqRef.current, type, payload);
       setLastSeq(event.seq);
@@ -336,7 +348,22 @@ export function useChatAgent(store) {
   const route = useCallback(
     async (text, opts = {}) => {
       const { fallbackHint = true } = opts;
-      const intent = parseIntent(text, { tasks: tasksRef.current, today });
+      const intent = parseIntent(text, { tasks: tasksRef.current, today, tools });
+
+      // —— 打开工具：只切页，不动数据 ——
+      // 无副作用意图，所以不走澄清框架：认到哪个就开哪个。工具页收到 id + 预填参数后，
+      // 自己会往事件日志里写一条 tool.open（来源标 chat），这里不再重复记一笔。
+      if (intent.intent === 'tool.open') {
+        const slots = intent.slots || {};
+        if (onOpenTool) {
+          onOpenTool(slots.toolId, slots.plan || '');
+          const tail = slots.plan ? `，并把你说的「${slots.plan}」填了进去` : '';
+          await respond(`好，已经在「工具」页打开「${slots.toolName}」${tail}。`, 'hint');
+        } else {
+          await respond(`识别到你想用「${slots.toolName}」，但工具页现在不可用。`, 'hint');
+        }
+        return 'done';
+      }
 
       // —— 隐式新增：只建议，不执行 ——
       if (intent.intent === 'suggestAdd') {
@@ -387,7 +414,7 @@ export function useChatAgent(store) {
       }
       return 'done';
     },
-    [today, askCreate, askClarify, tryFallback, respond, executeIntent]
+    [today, tools, onOpenTool, askCreate, askClarify, tryFallback, respond, executeIntent]
   );
 
   // 发送一条用户消息。

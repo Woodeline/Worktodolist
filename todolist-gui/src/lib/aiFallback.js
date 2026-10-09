@@ -29,11 +29,7 @@ export const AI_LIMITS = {
   maxRetries: { min: 0, max: 3 },
 };
 
-function clampInt(value, { min, max }, fallback) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.min(max, Math.max(min, Math.round(n)));
-}
+const clampInt = clampIntShared;
 
 /**
  * 把任意来源的配置（localStorage、设置页草稿、测试桩）归一化成完整配置。
@@ -76,58 +72,40 @@ const NO_TARGET_INTENTS = new Set(['add', 'query', 'undo']);
 // 读写的唯一真相仍然是 localStorage（useChatAgent 每次兜底前都会重新读一遍），
 // 这样才能保证「在设置页改完立刻生效」不需要任何额外同步步骤。
 // 订阅只服务于界面：让状态行/设置页在配置变化后重新渲染，不参与生效逻辑。
+//
+// v0.1.6：读写/订阅这套动作与「联网工具」的配置完全同形，已抽到 lib/configStore.js。
+// 这里保留同名导出（loadAiConfig / saveAiConfig / clearAiConfig / subscribeAiConfig），
+// 调用方一行不用改 —— 抽的是实现，不是接口。
+import { clampInt as clampIntShared, createConfigStore } from './configStore.js';
 
-const listeners = new Set();
+const aiConfig = createConfigStore({
+  key: CFG_KEY,
+  defaults: DEFAULT_AI_CONFIG,
+  normalize: normalizeAiConfig,
+});
 
 /**
  * 订阅配置变化（保存 / 清除时触发）。返回取消订阅函数。
  */
 export function subscribeAiConfig(fn) {
-  if (typeof fn !== 'function') return () => {};
-  listeners.add(fn);
-  return () => listeners.delete(fn);
-}
-
-function emitAiConfigChange() {
-  for (const fn of [...listeners]) {
-    try {
-      fn();
-    } catch {
-      // 单个订阅者出错不影响其它订阅者与写入结果
-    }
-  }
+  return aiConfig.subscribe(fn);
 }
 
 export function loadAiConfig() {
-  try {
-    const raw = localStorage.getItem(CFG_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return null;
-    return normalizeAiConfig(parsed);
-  } catch {
-    return null;
-  }
+  return aiConfig.load();
 }
 
 export function saveAiConfig(cfg) {
-  try {
-    localStorage.setItem(CFG_KEY, JSON.stringify(normalizeAiConfig(cfg)));
-    emitAiConfigChange();
-    return true;
-  } catch {
-    return false;
-  }
+  return aiConfig.save(cfg);
 }
 
 export function clearAiConfig() {
-  try {
-    localStorage.removeItem(CFG_KEY);
-    emitAiConfigChange();
-    return true;
-  } catch {
-    return false;
-  }
+  return aiConfig.clear();
+}
+
+/** 本机是否落盘过 AI 配置（与"是否启用"无关，决定"能不能清除"）。 */
+export function hasStoredAiConfig() {
+  return aiConfig.hasStored();
 }
 
 /**

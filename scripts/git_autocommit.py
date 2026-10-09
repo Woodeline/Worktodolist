@@ -21,6 +21,10 @@ import sys
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_PATHS = ['todo.txt', 'done.txt', 'backup']
 
+# 本脚本由 pythonw（无控制台）拉起：不带此标志时，每次 subprocess.run(['git',...])
+# 都会让 Windows 给 git.exe 新分配一个控制台 → 用户每次启动都看到 cmd 闪黑窗。
+CREATE_NO_WINDOW = 0x08000000 if os.name == 'nt' else 0
+
 
 def _git(*args):
     """跑一条 git 命令，返回 CompletedProcess；git 不存在时返回 None。"""
@@ -28,6 +32,7 @@ def _git(*args):
         return subprocess.run(
             ['git', *args], cwd=HERE, capture_output=True, text=True,
             encoding='utf-8', errors='replace', check=False, timeout=30,
+            creationflags=CREATE_NO_WINDOW,
         )
     except (OSError, subprocess.TimeoutExpired):
         return None

@@ -156,6 +156,93 @@ for (const [themeName, tokens] of Object.entries(themes)) {
   }
 }
 
+/* ---------------------------------------------------------------------------
+   顺序色阶（--ramp-1..5）—— 统计工具的条形图靠它编码"第几档"。
+
+   这一节校验的不是"某一档够不够黑"，而是"这套色阶还能不能当色阶用"。
+   顺序色阶的失效方式有两种，都很隐蔽：
+     ① 阶与阶糊在一起（相邻两档看不出差别）→ 编码退化成单色
+     ② 最浅那档等于画布/轨道（整条消失）→ 已经在 StatsTool 里踩过一次
+
+   注意这一节的 bg 是**轨道色 --ramp-1**，不是 --surface：
+   填充永远画在轨道上，所以"填充 vs 轨道"才是它真正的背景。
+--------------------------------------------------------------------------- */
+const RAMP_STEPS = [1, 2, 3, 4, 5];
+const RAMP_CHECKS = [
+  // [填充档, 轨道档, 最低比, 说明]
+  [2, 1, 1.15, '最浅档填充 / 轨道（必须还能看出"有条"）'],
+  [3, 1, 1.5, '次浅档填充 / 轨道'],
+  [4, 1, 3, '次深档填充 / 轨道（图形对象阈值）'],
+  [5, 1, 4.5, '最深档填充 / 轨道'],
+];
+console.log('\n--- 顺序色阶 --ramp-1..5 ---');
+for (const [themeName, tokens] of Object.entries(themes)) {
+  if (!tokens) continue;
+  const lum = RAMP_STEPS.map((i) => {
+    const c = toRgb(tokens['ramp-' + i] || '');
+    return c ? luminance(c) : null;
+  });
+  if (lum.some((x) => x === null)) {
+    console.log(`  ?  ${themeName} 色阶令牌缺失`);
+    failures++;
+    continue;
+  }
+  // ① 单调：阶必须严格单向递进。**方向随主题而定** —— 明色下"更强调 = 更深"，
+  //    暗色下"更强调 = 更亮"，所以只要求单调，不要求朝哪个方向。
+  //    轨道固定取 --ramp-1：它永远是离画布最近的那一档（明色下最浅、暗色下最暗）。
+  let up = true;
+  let down = true;
+  for (let i = 1; i < lum.length; i += 1) {
+    if (lum[i] <= lum[i - 1]) up = false;
+    if (lum[i] >= lum[i - 1]) down = false;
+  }
+  const mono = up || down;
+  checks++;
+  if (!mono) failures++;
+  console.log(
+    `  ${mono ? '✓' : '✗'}  明度严格单调（${up ? '越强调越亮' : down ? '越强调越深' : '非单调'}）   [${themeName.trim()}]`
+  );
+
+  // ② 相邻可分辨：相邻两档 ≥1.15:1
+  for (let i = 1; i < RAMP_STEPS.length; i += 1) {
+    const a = toRgb(tokens['ramp-' + RAMP_STEPS[i]] || '');
+    const b = toRgb(tokens['ramp-' + RAMP_STEPS[i - 1]] || '');
+    const r = ratio(a, b);
+    const ok = r >= 1.15;
+    checks++;
+    if (!ok) failures++;
+    console.log(
+      `  ${ok ? '✓' : '✗'}  ${r.toFixed(2).padStart(5)}:1  (需 ≥1.15)  相邻档 ramp-${RAMP_STEPS[i]} / ramp-${RAMP_STEPS[i - 1]}   [${themeName.trim()}]`
+    );
+  }
+
+  // ③ 填充 vs 轨道
+  for (const [fi, bi, min, label] of RAMP_CHECKS) {
+    const fg = toRgb(tokens['ramp-' + fi] || '');
+    const bg = toRgb(tokens['ramp-' + bi] || '');
+    const r = ratio(fg, bg);
+    const ok = r >= min;
+    checks++;
+    if (!ok) failures++;
+    console.log(
+      `  ${ok ? '✓' : '✗'}  ${r.toFixed(2).padStart(5)}:1  (需 ≥${min})  ${label}   [${themeName.trim()}]`
+    );
+  }
+
+  // ④ 「无 / 未分类」那档用中性灰而不是色阶最浅档 —— 它必须从轨道上浮出来
+  const muted = toRgb(tokens.muted || '');
+  const groove = toRgb(tokens['ramp-1'] || '');
+  if (muted && groove) {
+    const r = ratio(muted, groove);
+    const ok = r >= 3;
+    checks++;
+    if (!ok) failures++;
+    console.log(
+      `  ${ok ? '✓' : '✗'}  ${r.toFixed(2).padStart(5)}:1  (需 ≥3)  「未分类」灰 / 轨道   [${themeName.trim()}]`
+    );
+  }
+}
+
 console.log(`\n共校验 ${checks} 组，失败 ${failures} 组。`);
 if (failures) {
   console.error('[contrast] 不通过：存在低于阈值的搭配。');

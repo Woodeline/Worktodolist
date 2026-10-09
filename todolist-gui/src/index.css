@@ -1,13 +1,14 @@
 /* ============================================================================
    TodoList · 样式层
    ----------------------------------------------------------------------------
-   设计方向：原生桌面工具（Native desktop utility）
-     · 目标不是"更好看的网页"，而是"看不出是网页"—— 关掉地址栏后，它就该
-       像一个装在本机的程序。
-     · 因此：单一家族字体、四项以内的圆角梯度、无位移的 hover、
-       更快的响应（90ms 而非 140ms）、不存在装饰性底纹与入场动画。
-     · 记忆点仍是「让纯文本随处可见」—— 但改由等宽数据与清晰的层级承载，
-       不再依赖暖调纸感与方格底纹（那是"设计稿"的语言，不是"程序"的语言）。
+   设计方向：信号仪表（Signal instrument）
+     · 2026-10-07 UI 重定调，推翻 2026-10-06 的「原生桌面工具」拍板；
+       裁决与推导链全文见 UI重定调设计方案-2026-10-07.html（工作区根目录）。
+     · 冷灰面板分域：surface 亮于 bg 的「仪器底座」反转关系，面板浮出底座；
+     · 示波器青强调（light #0e7490 / dark #46c9ec，候选自动裁决产生）；
+     · mono 扩权：标题 / 页签 / 计数由 --font-display = var(--font-mono) 承担个性；
+     · 双线描边（--sh-2 含 0 0 0 1px 分量）、圆角收紧一档、动效更快（100/140ms）。
+     · 记忆点仍是「让纯文本随处可见」，视觉签名改由「仪器面板」承担。
 
    两条必须保留的语义区分（改样式时不要合并）：
      · --control-line ≠ --border：前者是交互控件的边界（WCAG 1.4.11 要求 ≥3:1），
@@ -16,6 +17,7 @@
 
    约束：完全离线，不加载任何 webfont。字体取自系统栈里的显式选择
         （仍不使用 system-ui：它会随平台漂移到不可预期的字形）。
+   验证：python scripts/ui-rebase-token-validate.py（对比度 / CVD / 色阶全过）。
    ============================================================================ */
 
 /* ============================================================================
@@ -24,28 +26,31 @@
 :root {
   color-scheme: light;
 
-  /* --- 中性表面：贴近系统窗口灰，保留极轻的暖偏移（1~2 点）避免发死 --- */
-  --bg: #f0f0f0;
-  --surface: #ffffff;
-  --surface-2: #f4f4f4;
-  --surface-3: #e9e9e9;
-  --border: #e3e3e3;
-  --border-strong: #c9c9c9;
-  --control-line: #7d7d7d;
+  /* --- 中性表面：仪器底座 —— surface 亮于 bg，面板像嵌进底座的高台；
+         两端锚点按正文 4.5:1 反解，中间按 Oklch L 等感知明度排布 --- */
+  --bg: #ececee;
+  --surface: #f9f9fa;
+  --surface-2: #f1f1f3;
+  --surface-3: #e6e6e9;
+  --border: #dcdce0;
+  --border-strong: #b4b4bc;
+  --control-line: #767b83; /* 对 surface 3:1 反解（#767b83 = 4.05:1），WCAG 1.4.11 */
 
-  /* --- 文字 --- */
-  --text: #1b1b1b;
-  --text-2: #444444;
-  --muted: #5f5f5f;
+  /* --- 文字：锚点 #16181c 微冷墨，对 surface 16.9:1 --- */
+  --text: #16181c;
+  --text-2: #3d434c;
+  --muted: #5d636d;
 
-  /* --- 唯一强调色：系统蓝（Windows 强调色的色相，比钴蓝沉稳） --- */
-  --accent: #0f5fbf;
-  --accent-hover: #0d4fa0;
+  /* --- 强调色：示波器青。候选自动裁决（对比度全项 + CVD vs danger/warn 闸门
+         全过）；浅色主题 accent vs ok 的 tritan 冲突已由用户裁决 A 接受
+         （双编码缓解），详见方案文档 §3.3 --- */
+  --accent: #0e7490;
+  --accent-hover: #0b5c73;
   --accent-fg: #ffffff;
-  --accent-soft: #e8f0fb;
-  --accent-line: #b9d0ee;
+  --accent-soft: #e3f1f5;
+  --accent-line: #a8cdd8;
 
-  /* --- 语义色：只给状态，不做装饰 --- */
+  /* --- 语义色：只给状态，不做装饰（本轮全冻结，CVD 旧账见方案文档附录 B） --- */
   --danger: #b3261e;
   --danger-soft: #fdecea;
   --danger-line: #f0c8c4;
@@ -58,13 +63,16 @@
   --mark-bg: #fde68a;
   --mark-fg: #4a2c00;
 
-  /* --- 阴影：原生窗口不用大范围漫射，而是"窄、硬、贴边" --- */
-  --sh-1: 0 1px 1px rgba(0, 0, 0, 0.06);
-  --sh-2: 0 2px 6px rgba(0, 0, 0, 0.1);
-  --sh-3: 0 8px 24px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.08);
+  /* --- 阴影：窄、硬、贴边保留；sh-2 加入 0 0 0 1px 描边分量 ——
+         「分区仪表」的双线语言 --- */
+  --sh-1: 0 1px 1px rgba(10,14,20,.08);
+  --sh-2: 0 1px 2px rgba(10,14,20,.1), 0 0 0 1px rgba(10,14,20,.05);
+  --sh-3: 0 12px 28px rgba(10,14,20,.18), 0 2px 6px rgba(10,14,20,.1);
 
-  /* --- 字阶：收敛到 8 档，禁止再手写裸数值。
-         正文 13px —— 桌面程序的密度基准（Web 常见 14~16px 偏松）。 --- */
+  /* --- 遮罩：抽屉与模态背后压暗的那层。暗色下要更重，否则浮层与背景分不开 --- */
+  --overlay: rgba(10,14,20,.32);
+
+  /* --- 字阶：收敛到 8 档，禁止再手写裸数值（冻结：排版系统非调性）。 --- */
   --fs-2xs: 11px;
   --fs-xs: 12px;
   --fs-sm: 13px;
@@ -80,7 +88,7 @@
   --lh-base: 1.55;
   --lh-loose: 1.8;
 
-  /* --- 间距：4 的倍数 --- */
+  /* --- 间距：4 的倍数（间距只有一套 —— 红线） --- */
   --sp-1: 4px;
   --sp-2: 8px;
   --sp-3: 12px;
@@ -90,27 +98,28 @@
   --sp-7: 48px;
   --sp-8: 64px;
 
-  /* --- 圆角：桌面控件是"小方角"。药丸只留给真正的分类标签 --- */
+  /* --- 圆角：整体收紧一档（-1px），仪器面板的小方角。药丸只留给分类标签 --- */
   --r-xs: 2px;
-  --r-sm: 3px;
-  --r-md: 4px;
-  --r-lg: 6px;
-  --r-xl: 8px;
+  --r-sm: 2px;
+  --r-md: 3px;
+  --r-lg: 4px;
+  --r-xl: 6px;
   --r-pill: 999px;
 
-  /* --- 动效：桌面程序响应要"立刻"，超过 150ms 就开始像网页 --- */
+  /* --- 动效：仪表响应「立刻」—— dur-2 100ms（原 140）、dur-3 140ms（原 180），
+         抽屉/模态保留过程感 --- */
   --dur-1: 90ms;
-  --dur-2: 140ms;
-  --dur-3: 180ms;
+  --dur-2: 100ms;
+  --dur-3: 140ms;
   --ease: cubic-bezier(0.2, 0.9, 0.3, 1);
   --ease-out: cubic-bezier(0.33, 1, 0.68, 1);
 
-  /* --- 字体：两族分工，不是三族。
-         ui 负责所有界面文字（含标题），mono 只负责数据/度量/键位。
-         display 与 body 指向同一族，保留变量名是为了组件不必改动。 --- */
+  /* --- 字体：两族分工 + mono 扩权。
+         ui 负责正文与表格界面文字；mono 除数据/度量/键位外，还承担标题、
+         页签与计数（--font-display 指向 mono）—— 本候选最强单点重定义。 --- */
   --font-ui: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
     "Hiragino Sans GB", "Source Han Sans SC", sans-serif;
-  --font-display: var(--font-ui);
+  --font-display: var(--font-mono);
   --font-body: var(--font-ui);
   --font-mono: "Cascadia Mono", Consolas, "SF Mono", "DejaVu Sans Mono", monospace;
 
@@ -124,16 +133,16 @@
   --rail-max: 900px; /* 阅读栏宽上限：避免超宽屏上行长失控 */
   --tool-rail: 1120px; /* 工具区宽上限：数据密集的表格与图表比正文更宽 */
 
-  --ring: 0 0 0 2px rgba(15, 95, 191, 0.35);
+  --ring: 0 0 0 2px rgba(14,116,144,.4); /* 焦点环跟随强调色换青 */
 
   /* --- 图表：数据可视化有自己的配色需求（多系列要互相可辨、要能在深浅两种底上
          读出来），借 UI 语义色会立刻捉襟见肘，所以单开一组。
          全部写成具体色值而不是 var() 引用 —— 画布绘图通过 getComputedStyle 读它们，
          保持"一个令牌一个值"最不容易出错。 --- */
-  --chart-axis: #5f5f5f; /* 刻度文字、轴标题 */
-  --chart-grid: #e8e8e8; /* 网格线（装饰，不设对比度阈值） */
-  --chart-frame: #8f8f8f; /* 坐标轴（图形边界，≥3:1） */
-  --chart-thr: #b3261e; /* 阈值线：判断门限 */
+  --chart-axis: #5d636d; /* 刻度文字、轴标题（对齐 muted，5.75:1） */
+  --chart-grid: #e4e4e7; /* 网格线（装饰，不设对比度阈值） */
+  --chart-frame: #6f747d; /* 坐标轴（图形边界，4.46:1 ≥3:1） */
+  --chart-thr: #b3261e; /* 阈值线：判断门限（=语义 danger，冻结） */
   --chart-thr-ink: #7f1811; /* 阈值线上的标记与标注 */
   --chart-warn: #8a5a00; /* 置信度较低的点（外推得来） */
   --chart-1: #15509b;
@@ -144,32 +153,43 @@
   --chart-6: #a52a63;
   --chart-7: #1f6f7d;
   --chart-8: #5a5346;
+
+  /* --- 顺序色阶（密度语义）：--chart-* 那 14 个是**分类色**（彼此可辨），
+         表达不了"密度高低"的连续语义。热力图 / 完成度这类需要顺序色阶。
+         单色相 5 阶（青相，与强调色同血统），从近底到近墨；相邻步差 ΔE ≥ 10
+         已由验证脚本重验。正式启用它的工具必须同时进 qa-contrast。
+         注：发散色阶（涨跌对比）暂不引入 —— 目前没有任何工具需要。 --- */
+  --ramp-1: #eef7f9;
+  --ramp-2: #c8e3ec;
+  --ramp-3: #93c6d9;
+  --ramp-4: #5094b0; /* qa-contrast：对轨道 ramp-1 需 ≥3（3.11），较首版 #5297b3 压深一档 */
+  --ramp-5: #0c6480;
 }
 
 /* 暗色：同一套语义令牌换值，组件代码一行不动。
-   跟随系统偏好（本应用没有主题开关，因此不做单方面覆盖）。 */
+   明暗同语义换明度（暗色饱和度微升补偿）；跟随系统偏好（本应用没有主题开关，
+   因此不做单方面覆盖）。 */
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
 
-    --bg: #1f1f1f;
-    --surface: #2a2a2a;
-    --surface-2: #333333;
-    --surface-3: #3d3d3d;
-    --border: #3a3a3a;
-    --border-strong: #555555;
-    --control-line: #8f8f8f;
+    /* 暗色锚点 #131417 / #ecedef；中间表面 Oklch L 等感知镜像 */
+    --bg: #131417;
+    --surface: #1c1e22;
+    --surface-2: #24262b;
+    --surface-3: #2e3137;
+    --border: #2c2f35;
+    --border-strong: #4b5058;
+    --control-line: #8b919b;
 
-    --text: #f0f0f0;
-    --text-2: #cfcfcf;
-    --muted: #a3a3a3;
-
-    --accent: #77a9f0;
-    --accent-hover: #94bcf7;
-    --accent-fg: #10151d;
-    --accent-soft: #1e2733;
-    --accent-line: #37506e;
-
+    --text: #ecedef;
+    --text-2: #c3c7ce;
+    --muted: #949aa4;
+    --accent: #46c9ec;
+    --accent-hover: #5bd3ea;
+    --accent-fg: #06161b;
+    --accent-soft: #12333e;
+    --accent-line: #2b5e6f;
     --danger: #ff9c92;
     --danger-soft: #3a201d;
     --danger-line: #5f3430;
@@ -177,21 +197,22 @@
     --warn-soft: #362c17;
     --ok: #7dd3a2;
     --ok-soft: #163024;
-
     --mark-bg: #6b4c0d;
     --mark-fg: #ffe9b0;
 
-    --sh-1: 0 1px 1px rgba(0, 0, 0, 0.4);
-    --sh-2: 0 2px 6px rgba(0, 0, 0, 0.45);
-    --sh-3: 0 8px 24px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.35);
+    --sh-1: 0 1px 1px rgba(0,0,0,.5);
+    --sh-2: 0 1px 2px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.03);
+    --sh-3: 0 12px 28px rgba(0,0,0,.6), 0 2px 6px rgba(0,0,0,.4);
 
-    --ring: 0 0 0 2px rgba(119, 169, 240, 0.4);
+    --overlay: rgba(0,0,0,.58);
+
+    --ring: 0 0 0 2px rgba(53,195,224,.4);
 
     /* 图表令牌同步换值：同一组语义、另一组明度。系列色一律提亮到
-       能在 #2a2a2a 上满足 3:1，否则深色主题下细线会糊掉。 */
-    --chart-axis: #a3a3a3;
-    --chart-grid: #3a3a3a;
-    --chart-frame: #7a7a7a;
+       能在暗底上满足 3:1，否则深色主题下细线会糊掉。 */
+    --chart-axis: #949aa4;
+    --chart-grid: #2c2f35;
+    --chart-frame: #7d828c;
     --chart-thr: #ff9c92;
     --chart-thr-ink: #ffc9c2;
     --chart-warn: #e8bd63;
@@ -203,6 +224,13 @@
     --chart-6: #f592b8;
     --chart-7: #7fd0e0;
     --chart-8: #c3bdb0;
+
+    /* 顺序色阶（暗色）：同一语义、另一组明度 —— 阶与阶之间仍要能看出差 */
+    --ramp-1: #141f26;
+    --ramp-2: #1d3b4b;
+    --ramp-3: #2b5b72;
+    --ramp-4: #4a8cae;
+    --ramp-5: #86cde8;
   }
 }
 
@@ -1691,7 +1719,7 @@ mark {
 .drawer-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.28);
+  background: var(--overlay);
   z-index: 30;
   animation: fade-in var(--dur-2) var(--ease-out) backwards;
 }
@@ -1886,6 +1914,65 @@ mark {
   box-shadow: var(--sh-3);
   z-index: 40;
   padding: var(--sp-4) var(--sp-4) var(--sp-5);
+}
+
+/* --- 提议弹窗的 edit / batch 形态：不是编辑器，是**差异视图**。
+       "确认前就能看到会往 todo.txt 写什么"是这条通道的全部意义，
+       所以这里把「旧行 → 新行」摆出来，而不是给一堆输入框让人再改一遍。 --- */
+.proposal-modal.is-wide {
+  width: 560px;
+}
+
+.proposal-summary {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-snug);
+  color: var(--text-2);
+}
+
+.proposal-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.proposal-item {
+  padding: var(--sp-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
+.proposal-item-title {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.proposal-item-line {
+  margin-top: var(--sp-1);
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+  line-height: var(--lh-base);
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.proposal-item-line.is-before {
+  text-decoration: line-through;
+}
+
+.proposal-item-line.is-after {
+  color: var(--accent);
+}
+
+.proposal-more {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-2xs);
+  color: var(--muted);
 }
 
 /* --- 按钮：桌面按钮 hover 只"变灰"，不"变色"。
@@ -2121,7 +2208,23 @@ mark {
   width: 116px;
 }
 
-.settings-control input:focus-visible {
+/* 多行字段（主机白名单）：与单行字段同一套观感，只是允许换行 */
+.settings-control textarea {
+  width: 100%;
+  max-width: 420px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--control-line);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2);
+  resize: vertical;
+}
+
+.settings-control input:focus-visible,
+.settings-control textarea:focus-visible {
   outline: none;
   box-shadow: var(--ring);
   border-color: var(--accent);
@@ -2358,12 +2461,13 @@ mark {
   border-radius: var(--r-xs);
 }
 
-/* 工具工作区的统一滚动容器：工具自己决定要不要在其上方钉一条工具条 */
+/* 工具工作区的统一滚动容器：工具自己决定要不要在其上方钉一条工具条。
+   上下同缝 —— 顶紧底松会让"滚到底"和"刚进来"看着像两套栅格。 */
 .tool-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--sp-4) 0 var(--sp-6);
+  padding: var(--sp-4) 0;
   padding-inline: max(var(--sp-4), calc((100% - var(--tool-rail)) / 2));
 }
 
@@ -2380,7 +2484,7 @@ mark {
    系统蓝代替赤陶橙、发丝线代替漫射阴影、2~6px 方角代替 14px 大圆角、
    没有入场动画与 hover 位移。算法与交互（含画布上的悬停/固定）原样保留。
    ============================================================================ */
-.rti {
+.tool {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -2388,7 +2492,7 @@ mark {
 }
 
 /* 工具条：段落切换在左，全局动作（保存状态 / 导出 / 导入）在右 */
-.rti-bar {
+.tool-bar {
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -2399,7 +2503,7 @@ mark {
   flex-wrap: wrap;
 }
 
-.rti-tabs {
+.tool-tabs {
   display: flex;
   gap: 2px;
   padding: 2px;
@@ -2407,7 +2511,7 @@ mark {
   border-radius: var(--r-sm);
 }
 
-.rti-tab {
+.tool-tab {
   height: 22px;
   padding: 0 var(--sp-3);
   border: 1px solid transparent;
@@ -2418,85 +2522,94 @@ mark {
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 
-.rti-tab:hover {
+.tool-tab:hover {
   color: var(--text);
 }
 
-.rti-tab.is-on {
+.tool-tab.is-on {
   background: var(--surface);
   border-color: var(--control-line);
   color: var(--text);
   font-weight: 600;
 }
 
-.rti-save {
+.tool-save {
   font-family: var(--font-mono);
   font-size: var(--fs-2xs);
   color: var(--muted);
 }
 
-.rti-stack {
+/* 卡片之间与卡片内部用同一档间距（--sp-3）：
+   缝一样宽，堆叠起来才像一张栅格，而不是"每块各留各的白"。 */
+.tool-stack {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-4);
+  gap: var(--sp-3);
   min-width: 0;
 }
 
-.rti-sec {
+/* 四边同值。原来的"上 12 / 左右 16 / 下 16"是不对称的，
+   左右两列并排时卡片内容的起点就对不齐。 */
+.tool-sec {
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
-  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  padding: var(--sp-3);
 }
 
-.rti-sec-title {
+.tool-sec-title {
   margin: 0;
   font-size: var(--fs-md);
   font-weight: 600;
   color: var(--text);
 }
 
-.rti-toolbar {
+.tool-toolbar {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
   flex-wrap: wrap;
 }
 
-.rti-toolbar-spring {
+.tool-toolbar-spring {
   margin-left: auto;
 }
 
 /* 数据表在窄屏上横滚，而不是把输入框压到点不中 */
-.rti-table-wrap {
+.tool-table-wrap {
   min-width: 0;
   overflow-x: auto;
 }
 
 /* 表单：标签右对齐成一列，输入框左对齐成一列 —— 桌面程序的参数面板就是这样 */
-.rti-fields {
+.tool-fields {
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
   min-width: 0;
 }
 
-.rti-field {
+.tool-field {
   display: grid;
   grid-template-columns: 132px minmax(0, 1fr);
   gap: var(--sp-3);
-  align-items: center;
+  /* 靠上对齐，不是居中：字段右列常是"输入框 + 换行的说明"两行，
+     整块垂直居中会把标签推到第一行和第二行之间 —— 看着就像标签掉下去了。
+     锚到顶行之后，标签永远与它管的那一行输入框同高。 */
+  align-items: start;
 }
 
-.rti-field-label {
+.tool-field-label {
   font-size: var(--fs-xs);
   color: var(--text-2);
+  /* 行高取控件高度，标签文字便在顶行（输入框那一行）里垂直居中 */
+  line-height: var(--h-control);
 }
 
-.rti-field-body {
+.tool-field-body {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
@@ -2504,8 +2617,15 @@ mark {
   flex-wrap: wrap;
 }
 
-.rti-input,
-.rti-select {
+/* 字段说明一律另起一行、与输入框左边缘对齐。
+   交给 flex 自动换行的话，同一列里"放得下就同一行、放不下就掉下来"，
+   几个字段的行高就各不相同 —— 看起来就是"没对齐"。 */
+.tool-field-body .tool-hint {
+  flex-basis: 100%;
+}
+
+.tool-input,
+.tool-select {
   height: var(--h-control);
   width: 180px;
   padding: 0 var(--sp-2);
@@ -2517,27 +2637,27 @@ mark {
   border-radius: var(--r-sm);
 }
 
-.rti-input:focus-visible {
+.tool-input:focus-visible {
   outline: none;
   border-color: var(--accent);
   box-shadow: var(--ring);
 }
 
-.rti-input-wide {
+.tool-input-wide {
   width: 260px;
 }
 
 /* 温度组头里的温度格：比常规输入框窄，因为它旁边还有按钮 */
-.rti-input-temp {
+.tool-input-temp {
   width: 110px;
 }
 
-.rti-hint {
+.tool-hint {
   font-size: var(--fs-2xs);
   color: var(--muted);
 }
 
-.rti-check {
+.tool-check {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
@@ -2545,27 +2665,38 @@ mark {
   color: var(--text-2);
 }
 
-.rti-check input[type='checkbox'] {
+.tool-check input[type='checkbox'] {
   inline-size: 15px;
   block-size: 15px;
   accent-color: var(--accent);
 }
 
 /* --- 温度组 / 材料组 --- */
-.rti-groups {
+.tool-groups {
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
 }
 
-.rti-group {
+.tool-group {
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--surface-2);
   overflow: hidden;
 }
 
-.rti-group-head {
+/* 折叠：只留组头。组头本来就带着"这一组是谁、有几行有效"，
+   收起后信息不丢，左列却从"四组表格"缩成"四行标题"。 */
+.tool-group.is-collapsed .tool-group-body {
+  display: none;
+}
+
+/* 收起时组头下沿那条线没有分隔对象了，留着就是一道多余的缝 */
+.tool-group.is-collapsed .tool-group-head {
+  border-bottom-color: transparent;
+}
+
+.tool-group-head {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
@@ -2574,29 +2705,77 @@ mark {
   flex-wrap: wrap;
 }
 
-.rti-group-label {
+/* 折叠开关：22×22 的方块，里面的三角用 border 画（字符三角在不同字体下基线会飘） */
+.tool-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 22px;
+  block-size: 22px;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--muted);
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+
+.tool-group-toggle:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.tool-group-toggle:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+
+.tool-group-caret {
+  inline-size: 0;
+  block-size: 0;
+  border-inline-start: 5px solid currentColor;
+  border-block-start: 4px solid transparent;
+  border-block-end: 4px solid transparent;
+  transition: transform var(--dur-1) var(--ease-out);
+}
+
+.tool-group-toggle[aria-expanded='true'] .tool-group-caret {
+  transform: rotate(90deg);
+}
+
+.tool-group-label {
   font-size: var(--fs-xs);
   color: var(--text-2);
 }
 
-.rti-group-meta {
+.tool-group-meta {
   font-family: var(--font-mono);
   font-size: var(--fs-2xs);
   color: var(--muted);
 }
 
-.rti-group-body {
-  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+/* 组头里的动作组（加一行 / 删除温度）。它是组头的一部分，
+   但窄栏里必须能整体换到第二行、并靠右收齐。 */
+.tool-group-acts {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.tool-group-body {
+  padding: var(--sp-3);
   background: var(--surface);
 }
 
-.rti-table {
+.tool-table {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--fs-xs);
 }
 
-.rti-table th {
+.tool-table th {
   text-align: left;
   font-weight: 400;
   color: var(--muted);
@@ -2604,36 +2783,36 @@ mark {
   border-bottom: 1px solid var(--border);
 }
 
-.rti-table td {
+.tool-table td {
   padding: var(--sp-1) var(--sp-2) var(--sp-1) 0;
   color: var(--text);
   vertical-align: middle;
 }
 
 /* 行号列不参与拉伸：等宽 + 弱化，它只是定位用的 */
-.rti-td-idx {
+.tool-td-idx {
   width: 34px;
   font-family: var(--font-mono);
   color: var(--muted);
 }
 
-.rti-td-act {
+.tool-td-act {
   width: 34px;
 }
 
-/* 表格单元格里的输入框要占满列宽（用 .rti-input 的通用皮肤） */
-.rti-table .rti-input {
+/* 表格单元格里的输入框要占满列宽（用 .tool-input 的通用皮肤） */
+.tool-table .tool-input {
   width: 100%;
   max-width: 220px;
 }
 
-.rti-table input:focus-visible {
+.tool-table input:focus-visible {
   outline: none;
   border-color: var(--accent);
   box-shadow: var(--ring);
 }
 
-.rti-row-del {
+.tool-row-del {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2647,13 +2826,13 @@ mark {
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 
-.rti-row-del:hover {
+.tool-row-del:hover {
   background: var(--danger-soft);
   border-color: var(--danger-line);
   color: var(--danger);
 }
 
-.rti-empty {
+.tool-empty {
   padding: var(--sp-4);
   border: 1px dashed var(--border-strong);
   border-radius: var(--r-sm);
@@ -2662,7 +2841,7 @@ mark {
   text-align: center;
 }
 
-.rti-empty b {
+.tool-empty b {
   display: block;
   margin-bottom: var(--sp-1);
   color: var(--text-2);
@@ -2670,7 +2849,7 @@ mark {
 }
 
 /* --- 结果 --- */
-.rti-hero {
+.tool-hero {
   display: flex;
   align-items: baseline;
   gap: var(--sp-3);
@@ -2682,7 +2861,7 @@ mark {
   border-radius: var(--r-md);
 }
 
-.rti-hero-label {
+.tool-hero-label {
   flex: 1;
   min-width: 220px;
   font-size: var(--fs-xs);
@@ -2690,7 +2869,7 @@ mark {
   line-height: var(--lh-snug);
 }
 
-.rti-hero-val {
+.tool-hero-val {
   font-family: var(--font-mono);
   font-size: var(--fs-3xl);
   font-weight: 600;
@@ -2698,38 +2877,38 @@ mark {
   line-height: 1;
 }
 
-.rti-hero-val small {
+.tool-hero-val small {
   font-size: var(--fs-sm);
   font-weight: 400;
   color: var(--muted);
 }
 
-.rti-hero-sub {
+.tool-hero-sub {
   width: 100%;
   font-family: var(--font-mono);
   font-size: var(--fs-2xs);
   color: var(--muted);
 }
 
-.rti-metrics {
+.tool-metrics {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: var(--sp-3);
 }
 
-.rti-metric {
+.tool-metric {
   padding: var(--sp-3) var(--sp-4);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
 }
 
-.rti-metric-label {
+.tool-metric-label {
   font-size: var(--fs-xs);
   color: var(--text-2);
 }
 
-.rti-metric-val {
+.tool-metric-val {
   display: block;
   margin: var(--sp-2) 0 var(--sp-1);
   font-family: var(--font-mono);
@@ -2739,20 +2918,20 @@ mark {
   line-height: 1;
 }
 
-.rti-metric-val small {
+.tool-metric-val small {
   font-size: var(--fs-sm);
   font-weight: 400;
   color: var(--muted);
 }
 
-.rti-metric-note {
+.tool-metric-note {
   font-family: var(--font-mono);
   font-size: var(--fs-2xs);
   color: var(--muted);
 }
 
 /* 统计条：一行等宽数字，标签在左、值在右，像仪表盘而不是卡片墙 */
-.rti-stats {
+.tool-stats {
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-4);
@@ -2762,86 +2941,86 @@ mark {
   background: var(--surface-2);
 }
 
-.rti-stat {
+.tool-stat {
   display: flex;
   align-items: baseline;
   gap: var(--sp-2);
 }
 
-.rti-stat b {
+.tool-stat b {
   font-size: var(--fs-2xs);
   font-weight: 400;
   color: var(--muted);
 }
 
-.rti-stat span {
+.tool-stat span {
   font-family: var(--font-mono);
   font-size: var(--fs-xs);
   color: var(--text);
 }
 
-.rti-warns,
-.rti-errors {
+.tool-warns,
+.tool-errors {
   margin: 0;
   padding-left: var(--sp-4);
   font-size: var(--fs-xs);
   line-height: var(--lh-base);
 }
 
-.rti-warns li {
+.tool-warns li {
   color: var(--warn);
 }
 
-.rti-errors li {
+.tool-errors li {
   color: var(--danger);
 }
 
-.rti-note {
+.tool-note {
   font-size: var(--fs-2xs);
   line-height: var(--lh-base);
   color: var(--muted);
 }
 
-.rti-note b {
+.tool-note b {
   color: var(--text-2);
   font-weight: 600;
 }
 
 /* --- 图表 --- */
-.rti-chart {
+.tool-chart {
   display: flex;
   flex-direction: column;
   gap: var(--sp-1);
   min-width: 0;
 }
 
-.rti-canvas {
+.tool-canvas {
   display: block;
   width: 100%;
   background: var(--surface);
 }
 
-.rti-canvas-hot {
+.tool-canvas-hot {
   cursor: crosshair;
 }
 
-.rti-chart-title {
+.tool-chart-title {
   font-size: var(--fs-2xs);
   color: var(--muted);
 }
 
-.rti-chart-tools {
+.tool-chart-tools {
   display: flex;
   gap: var(--sp-2);
 }
 
-.rti-legend {
+.tool-legend {
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-3);
 }
 
-.rti-legend-item {
+.tool-legend-item {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
@@ -2849,19 +3028,19 @@ mark {
   color: var(--text-2);
 }
 
-.rti-legend-swatch {
+.tool-legend-swatch {
   display: inline-block;
   width: 10px;
   height: 10px;
   border-radius: var(--r-xs);
 }
 
-.rti-legend-glyph {
+.tool-legend-glyph {
   font-size: var(--fs-xs);
   line-height: 1;
 }
 
-.rti-legend-r2 {
+.tool-legend-r2 {
   font-family: var(--font-mono);
   font-size: var(--fs-2xs);
   font-style: normal;
@@ -2961,7 +3140,7 @@ mark {
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.32);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2997,6 +3176,437 @@ mark {
   display: flex;
   gap: var(--sp-2);
   justify-content: flex-end;
+}
+
+/* ============================================================================
+   8.2 · 工具集共享骨架（v0.1.6 · P0）
+   ----------------------------------------------------------------------------
+   8.1 里那批 .tool-* 原本是 RTI 的私有类名（rti-*），在 v0.1.6 一次性中性化：
+   它们是**所有工具共用的词汇**（写着一个工具的样式飞到另一个工具上，
+   就是"样式飞地"的起点）。本节点只补骨架独有的部分：
+
+     · 版式：instant / inspector / workbench（registry.layout 驱动）
+     · 状态：保存徽标、风险徽标、提示行（结果落后 / 已恢复存档）
+     · 崩溃隔离页
+     · 左栏的检索 / 分组折叠 / 收藏（条目 14）
+     · 新工具写内容时用得上的一小组通用件
+
+   一条硬原则仍然成立：**这里不许出现任何具体工具的名字**。
+   ============================================================================ */
+.tool {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 工具条右端的弹簧：把"段落切换"和"全局动作"推到两端 */
+.tool-spring {
+  margin-left: auto;
+}
+
+/* 风险徽标：由 capabilities 驱动，把"危险度"做成看得见的事实 */
+.tool-status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex-wrap: wrap;
+}
+
+.tool-risk {
+  padding: 0 var(--sp-1);
+  line-height: 18px;
+  font-size: var(--fs-2xs);
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-xs);
+  white-space: nowrap;
+}
+
+.tool-risk.is-warn {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+.tool-risk.is-danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+/* 版式：instant 窄栏居中；workbench 铺满；inspector 左输入右结果 */
+.tool-layout {
+  min-width: 0;
+}
+
+.tool-layout-instant {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.tool-layout-workbench {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+/* inspector 版式：默认是"上输入下结果"的纵向流；只有调用方真的给了 aside，
+   外壳才会在类名上补一个 is-split 把它变成两列。
+   这个区分不是洁癖：grid 的两列模板一旦套在**只有一个子元素**的结构上，
+   那个子元素会被放进第一列（minmax(280px, 360px)），右列整片空着 ——
+   看起来像"内容莫名其妙只有 360px 宽"，其实是版式被误用了。 */
+.tool-layout-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.tool-layout-inspector.is-split {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+}
+
+.tool-col {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+/* inspector 的左列（输入 / 控制）：结果很长时它粘在视野里，不用来回滚。
+   只有显式传了 aside 的工具才会走到两列分支，所以不会影响单列工具。 */
+.tool-col-in {
+  min-width: 0;
+  position: sticky;
+  top: var(--sp-4);
+  align-self: start;
+}
+
+/* inspector 的右列（结果 / 列表）：吃掉剩余宽度，自身不外溢。 */
+.tool-col-out {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* --- 输入列：紧凑靠"组件内部的密度"，不靠改卡片留白 ----------------------
+   参数面板的价值在于"录完就能在右边看到结果"，所以左列把纵向空间用在数据行上：
+   卡片留白（padding / gap）与结果列**完全同值**，一律走上面的全局规范；
+   左列单独收的只有控件自身的密度：
+     · 标签列固定 120px，输入框吃掉剩余宽度（参数名短、数值栏宽才好点）
+     · 组头排成"两行固定格"，几组之间的输入框左右边缘严格对齐
+   作用域限定在左输入列，正文与结果区不受影响；也刻意不碰 .tool-input-temp
+   那类"旁边还要并排按钮"的固定窄格。 */
+.tool-col-in .tool-field {
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: var(--sp-2);
+}
+
+.tool-col-in .tool-field .tool-input {
+  width: 100%;
+}
+
+/* 组头：两行定格的 grid，而不是让 flex-wrap 撞运气 ——
+   撞运气的后果是每组折行位置都不一样，几组摞起来就是"参差不齐"。
+     第一行：折叠开关 + 组名 + 主输入（吃掉剩余宽度）
+     第二行：本组统计 + 操作按钮（靠右） */
+.tool-col-in .tool-group-head {
+  display: grid;
+  grid-template-columns: auto 76px minmax(0, 1fr);
+  grid-template-areas:
+    'caret label input'
+    'meta  meta  acts';
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+}
+
+.tool-col-in .tool-group-toggle {
+  grid-area: caret;
+}
+
+.tool-col-in .tool-group-label {
+  grid-area: label;
+}
+
+.tool-col-in .tool-group-head .tool-input {
+  grid-area: input;
+  width: 100%;
+}
+
+.tool-col-in .tool-group-meta {
+  grid-area: meta;
+}
+
+.tool-col-in .tool-group-acts {
+  grid-area: acts;
+  justify-content: flex-end;
+}
+
+/* workbench 不吃 --tool-rail 的居中留白：它就是要横向铺开 */
+.tool-body.is-wide {
+  padding-inline: var(--sp-4);
+}
+
+/* 提示行：需要用户注意的一句话（结果落后 / 已恢复存档 / 降级模式） */
+.tool-hint.is-warn {
+  color: var(--warn);
+}
+
+.tool-hint.is-info {
+  color: var(--accent);
+}
+
+.tool-hint.tool-stale {
+  padding: var(--sp-1) var(--sp-2);
+  background: var(--surface-2);
+  border-left: 3px solid currentColor;
+  border-radius: var(--r-xs);
+  max-width: 100%;
+}
+
+/* --- 崩溃隔离：任何工具抛异常都只影响它自己 --- */
+.tool-crash {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-6) var(--sp-4);
+  text-align: left;
+}
+
+.tool-crash-main {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: flex-start;
+  max-width: 560px;
+}
+
+.tool-crash-icon {
+  display: flex;
+  color: var(--danger);
+}
+
+.tool-crash-title {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.tool-crash-msg {
+  margin: var(--sp-1) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  word-break: break-word;
+}
+
+/* 出错组件链：只在排查时有用，所以压到最弱一级，不跟 message 抢注意力 */
+.tool-crash-where {
+  margin: var(--sp-1) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+  color: var(--muted);
+  word-break: break-word;
+}
+
+.tool-crash-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  max-width: 560px;
+  flex-wrap: wrap;
+}
+
+/* --- 左栏：检索 + 分组折叠 + 收藏（条目 14） --- */
+.tools-search {
+  flex-shrink: 0;
+  padding: var(--sp-2) var(--sp-2) 0;
+}
+
+.tools-search-input {
+  width: 100%;
+  height: var(--h-control);
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-xs);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--control-line);
+  border-radius: var(--r-sm);
+}
+
+.tools-search-input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+
+.tools-item-flag {
+  flex-shrink: 0;
+  margin-left: auto;
+  display: flex;
+  color: var(--muted);
+}
+
+.tools-item.is-on .tools-item-flag {
+  color: var(--accent);
+}
+
+/* 分组头：可折叠，但**只有一层** —— 工具多了靠搜索与折叠解决，不做三级导航 */
+.tools-group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  width: 100%;
+  padding: var(--sp-1) var(--sp-2);
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+  text-align: left;
+}
+
+.tools-group-head:hover {
+  color: var(--text-2);
+}
+
+.tools-group-count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+}
+
+.tools-fav {
+  flex-shrink: 0;
+  padding: 1px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: var(--r-xs);
+}
+
+.tools-fav.is-on {
+  color: var(--warn);
+}
+
+.tools-none {
+  padding: var(--sp-3);
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+
+/* 分组容器与子清单：桌面端是一层朴素嵌套（不做三级导航）；
+   窄屏下整组被"摊平"（display: contents），子项直接成为段控条的 item。 */
+.tools-group {
+  min-width: 0;
+}
+
+.tools-sublist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.tools-group-label {
+  color: inherit;
+}
+
+.tools-nav-count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+}
+
+.tools-item-beta {
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+}
+
+/* --- 工具内容通用件（新工具靠这些把样式成本压到 0） --- */
+.tool-actions-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.tool-pre {
+  margin: 0;
+  max-height: 340px;
+  overflow: auto;
+  padding: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-base);
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tool-badge {
+  padding: 0 var(--sp-1);
+  line-height: 18px;
+  font-size: var(--fs-2xs);
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-xs);
+}
+
+.tool-badge.is-ok {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.tool-badge.is-warn {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+.tool-badge.is-danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.tool-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.tool-list-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+
+.tool-list-row b {
+  font-family: var(--font-mono);
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* 顺序色阶的小色块：密度/完成度这类连续语义（令牌是 --ramp-1..5） */
+.tool-ramp {
+  display: inline-block;
+  width: 100%;
+  height: 10px;
+  border-radius: var(--r-xs);
 }
 
 /* ============================================================================
@@ -3285,6 +3895,16 @@ mark {
     left: var(--sp-4);
     right: var(--sp-4);
   }
+
+  /* inspector 版式的左输入列在中等宽度就让位：两列挤在一起两边都难用 */
+  .tool-layout-inspector.is-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* 让位之后左列回到文档流里 —— sticky 在单列下只会浮在结果上方挡住它 */
+  .tool-layout-inspector.is-split .tool-col-in {
+    position: static;
+  }
 }
 
 /* --- 窄屏 / 手机：导航转横向段控条，快照列转横向条 --- */
@@ -3391,19 +4011,45 @@ mark {
     width: 100%;
     border-right: none;
     border-bottom: 1px solid var(--border);
+    /* 段控条：一行放下「搜索 + 工具条」，因此搜索与清单并排而不是叠成两层 */
+    flex-direction: row;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: 0 var(--sp-2);
   }
 
   .tools-nav-head {
     display: none;
   }
 
+  /* 窄屏上搜索降级成一个固定的窄输入框（与段控条同一行），不做浮层、不做折叠 */
+  .tools-search {
+    flex-shrink: 0;
+    width: 132px;
+    padding: 0;
+  }
+
+  /* 分组与折叠在这一档整体摊平：折叠头会把段控条撑成两层，
+     而被折叠那组的工具会连入口一起消失（见 ToolsPage 的 flat 分支） */
+  .tools-group,
+  .tools-sublist,
+  .tools-entry {
+    display: contents;
+  }
+
+  .tools-group-head {
+    display: none;
+  }
+
   .tools-list {
+    flex: 1;
+    min-width: 0;
     flex-direction: row;
     gap: var(--sp-1);
     overflow-x: auto;
     overflow-y: hidden;
     scrollbar-width: none;
-    padding: var(--sp-1) var(--sp-2);
+    padding: var(--sp-1) 0;
   }
 
   .tools-list::-webkit-scrollbar {
@@ -3422,6 +4068,11 @@ mark {
     display: none;
   }
 
+  /* 窄屏上收藏/最近标记也收起：段控条只留"能认出是哪个工具"这一件事 */
+  .tools-item-flag {
+    display: none;
+  }
+
   .tools-nav-foot {
     display: none;
   }
@@ -3434,25 +4085,25 @@ mark {
     padding-inline: var(--sp-3);
   }
 
-  .rti-bar {
+  .tool-bar {
     padding-inline: var(--sp-3);
   }
 
-  .rti-sec {
+  .tool-sec {
     padding: var(--sp-3);
   }
 
-  .rti-field {
+  .tool-field {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--sp-1);
   }
 
   /* 数据表在窄屏上横滚，而不是把输入框压到点不中 */
-  .rti-group-body {
+  .tool-group-body {
     overflow-x: auto;
   }
 
-  .rti-table {
+  .tool-table {
     min-width: 420px;
   }
 
@@ -3614,20 +4265,20 @@ mark {
   }
 
   /* 工具区在手机宽度上：结果大数字降一档，表单字段独占一行 */
-  .rti-hero-val {
+  .tool-hero-val {
     font-size: var(--fs-2xl);
   }
 
-  .rti-metrics {
+  .tool-metrics {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .rti-stats {
+  .tool-stats {
     gap: var(--sp-3);
   }
 
-  .rti-input,
-  .rti-input-wide {
+  .tool-input,
+  .tool-input-wide {
     width: 100%;
     max-width: 260px;
   }
@@ -3649,8 +4300,9 @@ mark {
   .settings-back,
   .ctx-menu-item,
   .tools-item,
-  .rti-tab,
-  .rti-row-del {
+  .tool-tab,
+  .tool-group-toggle,
+  .tool-row-del {
     min-height: 44px;
   }
 

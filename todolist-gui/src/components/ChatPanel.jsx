@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import { useChatAgent } from '../hooks/useChatAgent';
 import { COMMAND_HINTS } from '../lib/nlRules';
+import { visibleTools } from './tools/registry.js';
 import useAiSettings from '../hooks/useAiSettings';
 import Icon from './Icon.jsx';
 import ToolCallCard from './ToolCallCard.jsx';
@@ -38,8 +39,10 @@ function MessageText({ message }) {
   );
 }
 
-export default function ChatPanel({ store, onOpenList }) {
-  const agent = useChatAgent(store);
+export default function ChatPanel({ store, onOpenList, onOpenTool }) {
+  // tools：把 registry 清单交给识别层，`tool.open` 才能落到具体工具上。
+  // onOpenTool(id, plan)：对话页 → 工具页的路由回调（切页 + 预填参数）。
+  const agent = useChatAgent(store, { tools: visibleTools(), onOpenTool });
   const [input, setInput] = useState('');
   const [history, setHistory] = useState([]);
   const [histIdx, setHistIdx] = useState(-1);

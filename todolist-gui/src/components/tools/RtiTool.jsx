@@ -1,4 +1,4 @@
-// RTI 计算工具 —— 工具集里的第一个小工具。
+// RTI 计算工具 —— 工具集里的第一个小工具，也是 ToolShell 骨架的第一个消费者。
 //
 // 由一份独立的单文件网页（RTI计算工具.html）移植而来，改动只发生在两侧：
 //   · 视觉层：换成 todolist 的令牌体系（系统灰/系统蓝/发丝线/小方角），见 index.css 8.1
@@ -6,19 +6,28 @@
 // 功能与交互一律保留：三个页面、粘贴导入、PNG/CSV/JSON 导出、本机自动保存、
 // 画布上的悬停读值 / 点击固定 / 右键取消。
 //
+// v0.1.6 改造：页签条 / 保存徽标 / 导出・导入动作组 / 滚动容器 / toast / 粘贴弹窗
+// 这六件交给 ToolShell；存档读写交给 toolStorage（键名仍是 todolist.tool.rti.v1，
+// 因此不需要任何迁移）。本文件只剩"RTI 自己是什么"。
+//
+// 布局：三页都用 inspector 版式的两列 —— 左列录参数（窄而高），右列出结果与图（宽而高）。
+// 之所以要分列，是因为这三张图都是按容器宽度画的：挤在单列的 360px 里既看不清，
+// 又把结果推到首屏之外；并排之后"改一个数 → 右边立刻对照"才成立。
+//
 // 关于"存字符串还是存数字"：表单里存的是**用户正在输入的字符串**，
 // 解析统一在 lib/rti/calc.js 的 toNum 里做，落盘时再统一转回数字。
-// 这样既能正常输入 "76.4" 这种小数，导出的 JSON 又保持干净的数字形。
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { toNum, lifeCalc, rtiCalc } from '../../lib/rti/calc.js';
 import { DEMO_CMP, DEMO_LIFE, DEMO_RTI, EMPTY_CMP, EMPTY_LIFE, EMPTY_RTI } from '../../lib/rti/demo.js';
 import { downloadJSON, readTextFile, stamp } from '../../lib/rti/files.js';
+import ToolShell from './ToolShell.jsx';
+import { saveLabel, useRestoredState, useToolAutoSave, useToolPaste, useToolToast } from '../../hooks/useToolShell.js';
 import LifePane from './rti/LifePane.jsx';
 import RtiPane from './rti/RtiPane.jsx';
 import CmpPane from './rti/CmpPane.jsx';
 
-// 本机自动保存。键名带应用前缀，避免和别的页面抢 localStorage。
-const SAVE_KEY = 'todolist.tool.rti.v1';
+const TOOL_ID = 'rti';
+const STATE_VERSION = 1;
 
 const str = (x) => (x == null ? '' : String(x));
 const EMPTY_OUT = () => ({ result: null, warns: [], error: null, stale: false });
@@ -30,8 +39,6 @@ const EMPTY_OUT = () => ({ result: null, warns: [], error: null, stale: false })
 /** 界面状态 → 存档状态（把输入字符串收敛成数字或 null） */
 function toStorage(app) {
   return {
-    v: 1,
-    savedAt: Date.now(),
     life: {
       name: app.life.name,
       T: toNum(app.life.T),
@@ -94,6 +101,18 @@ function applyIn(s) {
   };
 }
 
+/** 存档结构校验（工具自己最清楚什么算合法） */
+function isValidArchive(s) {
+  return Boolean(
+    s.life &&
+      s.rti &&
+      s.cmp &&
+      Array.isArray(s.life.pts) &&
+      Array.isArray(s.rti.temps) &&
+      Array.isArray(s.cmp.mats)
+  );
+}
+
 /** 三页示例数据 → 界面状态（数字转字符串） */
 function demoState() {
   return {
@@ -120,39 +139,6 @@ function demoState() {
   };
 }
 
-function readStorage() {
-  try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) return null;
-    const s = JSON.parse(raw);
-    if (!s || s.v !== 1) return null;
-    if (!s.life || !s.rti || !s.cmp) return null;
-    if (!Array.isArray(s.life.pts) || !Array.isArray(s.rti.temps) || !Array.isArray(s.cmp.mats)) return null;
-    return applyIn(s);
-  } catch {
-    return null;
-  }
-}
-
-/* ---------------------------------------------------------------------------
-   粘贴导入：多分隔符容错（Excel 复制出来是 tab，手写常常是逗号/空格）
-   ------------------------------------------------------------------------- */
-
-function pasteRows(text) {
-  const rows = [];
-  text.split(/\r\n|\n|\r/).forEach((line) => {
-    if (!line.trim()) return;
-    let cells = line
-      .trim()
-      .split(/\t|,|，|;|；/)
-      .map((c) => c.trim())
-      .filter((c) => c !== '');
-    if (cells.length === 1) cells = cells[0].split(/\s+/).filter((c) => c !== '');
-    if (cells.length) rows.push(cells);
-  });
-  return rows;
-}
-
 const PANES = [
   { id: 'life', label: '寿命推算' },
   { id: 'rti', label: 'RTI 耐热指数' },
@@ -161,53 +147,37 @@ const PANES = [
 
 export default function RtiTool() {
   // 首次挂载时读一次存档；读到了就用存档，没读到就载入三页示例。
-  // （初始化函数可能被调用两次，但只做读取与赋值，是幂等的。）
-  const restored = useRef(false);
-  const [app, setApp] = useState(() => {
-    const saved = readStorage();
-    if (saved) {
-      restored.current = true;
-      return saved;
-    }
-    return demoState();
-  });
+  //
+  // ⚠ 这两行必须在**顶层**，不能把 useRestoredState 塞进 useState 的初始化器里：
+  // 初始化器是在 mountState 内部被调用的，此时它往"正在挂载的 hook 链表"里再插一个
+  // hook，链表就比后续渲染多出一节 —— 第二次渲染起整条链表错位，
+  // useCallback / useEffect 会读到别的 hook 的状态，报出
+  // "Cannot read properties of undefined (reading 'length')" 这种跟现场毫无关系的错。
+  const saved = useRestoredState(TOOL_ID, STATE_VERSION, { isValid: isValidArchive });
+  const [app, setApp] = useState(() => (saved ? applyIn(saved) : demoState()));
 
   const [pane, setPane] = useState('life');
   const [lifeOut, setLifeOut] = useState(EMPTY_OUT);
   const [rtiOut, setRtiOut] = useState(EMPTY_OUT);
   const [cmpDrawn, setCmpDrawn] = useState(false);
+  // 「画对比图」的重画计数：drawn 已经为 true 时再点一次也要能刷新，
+  // 所以除了布尔量还需要一个计数器。按钮在页头工具条上，状态只能由本组件持有。
+  const [cmpTick, setCmpTick] = useState(0);
 
-  const [paste, setPaste] = useState(null); // { title, hint, apply }
-  const [pasteText, setPasteText] = useState('');
-  const [pasteHint, setPasteHint] = useState('');
-  const [toast, setToast] = useState(null);
-  const [savedAt, setSavedAt] = useState(null);
-  const fileRef = useRef(null);
-  const toastTimer = useRef(null);
+  // 骨架提供的三件公共设施：toast / 粘贴弹窗 / 自动保存
+  const { toast, showToast } = useToolToast();
+  const { paste, open: openPaste } = useToolPaste(showToast);
+  const { savedAt } = useToolAutoSave(TOOL_ID, STATE_VERSION, toStorage(app));
 
-  const showToast = useCallback((msg) => {
-    setToast(msg);
-    clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 3400);
+  // 「已恢复上次的数据」是持久状态（用户得去点推算），所以放在骨架的提示行里，
+  // 而不是 3.4 秒就消失的 toast —— 提示本身要说清"下一步做什么"。
+  const [resumed, setResumed] = useState(Boolean(saved));
+
+  useEffect(() => {
+    if (saved) showToast('已恢复上次的数据（结果需重新推算）');
+    // 只在挂载时说一次：saved 是"首次挂载读到的那一份"，之后不再变
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => () => clearTimeout(toastTimer.current), []);
-
-  useEffect(() => {
-    if (restored.current) showToast('已恢复上次的数据（结果需重新推算）');
-  }, [showToast]);
-
-  // 自动保存：改动停下 400ms 后落盘，避免每敲一个字都写一次
-  useEffect(() => {
-    const t = setTimeout(() => {
-      try {
-        localStorage.setItem(SAVE_KEY, JSON.stringify(toStorage(app)));
-        setSavedAt(Date.now());
-      } catch {
-        /* localStorage 不可用（隐私模式等）→ 静默降级：导出/导入 JSON 仍然可用 */
-      }
-    }, 400);
-    return () => clearTimeout(t);
-  }, [app]);
 
   // 结果一旦落后于数据就标记出来 —— 免得"看着结果改数据"还以为结果是新的
   useEffect(() => {
@@ -225,12 +195,14 @@ export default function RtiTool() {
   const calcLife = () => {
     const out = lifeCalc(app.life);
     setLifeOut(out.error ? { result: null, warns: [], error: out.error, stale: false } : { ...out, error: null, stale: false });
+    if (out.result) setResumed(false);
   };
 
   /* --- 页 2 --- */
   const calcRti = () => {
     const out = rtiCalc(app.rti);
     setRtiOut(out.error ? { result: null, warns: [], error: out.error, stale: false } : { ...out, error: null, stale: false });
+    if (out.result) setResumed(false);
   };
 
   /* --- 跨页：把结果送进页 3 --- */
@@ -265,42 +237,7 @@ export default function RtiTool() {
     showToast(`已把「${name}」的 ${R.perT.length} 个温度点 t₅₀ 加入页 3 对比`);
   };
 
-  /* --- 粘贴导入 --- */
-  const openPaste = (title, hint, apply) => {
-    setPaste({ title, hint, apply });
-    setPasteText('');
-    setPasteHint(hint);
-  };
-  const closePaste = () => {
-    setPaste(null);
-    setPasteHint('');
-  };
-
-  useEffect(() => {
-    if (!paste) return undefined;
-    const onKey = (e) => {
-      if (e.key === 'Escape') closePaste();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [paste]);
-
-  const applyPaste = () => {
-    if (!paste) return;
-    const rows = pasteRows(pasteText);
-    if (!rows.length) {
-      setPasteHint('没有解析到有效内容，请粘贴后重试');
-      return;
-    }
-    const res = paste.apply(rows);
-    if (res == null) {
-      setPasteHint('未能解析出有效数据行，请检查列数与数值格式');
-      return;
-    }
-    closePaste();
-    showToast(res);
-  };
-
+  /* --- 粘贴导入（弹窗外壳由 ToolShell 渲染，这里只给解析规则） --- */
   const pasteLife = (rows) => {
     const pts = [];
     let skip = 0;
@@ -437,7 +374,7 @@ export default function RtiTool() {
   };
 
   const exportData = () => {
-    downloadJSON(`RTI工具数据-${stamp()}.json`, toStorage(app));
+    downloadJSON(`RTI工具数据-${stamp()}.json`, { v: STATE_VERSION, ...toStorage(app) });
     showToast('数据已导出为 JSON（含三页全部内容）');
   };
 
@@ -446,141 +383,136 @@ export default function RtiTool() {
       const text = await readTextFile(input);
       if (!text) return;
       const s = JSON.parse(text);
-      if (!s || s.v !== 1 || !s.life || !s.rti || !s.cmp) throw new Error('数据结构不匹配');
+      if (!s || !isValidArchive(s)) throw new Error('数据结构不匹配');
       setApp(applyIn(s));
       setLifeOut(EMPTY_OUT());
       setRtiOut(EMPTY_OUT());
       setCmpDrawn(false);
+      setResumed(false);
       showToast('数据已从文件导入（结果需重新推算）');
     } catch (err) {
       showToast(`导入失败：${(err && err.message) || err}`);
     }
   };
 
-  const savedLabel = savedAt
-    ? `已自动保存 ${String(new Date(savedAt).getHours()).padStart(2, '0')}:${String(new Date(savedAt).getMinutes()).padStart(2, '0')}`
-    : '自动保存已开启';
+  /* --- 当前页的主操作：钉在页头工具条上，跟着页签换 ---
+     三页的主操作原本都躺在左列最底下，数据一多就得先滚到底才能点。
+     放到工具条之后它常驻可见，"改一格 → 立刻重算"才成立。 */
+  const PRIMARY_ACTIONS = {
+    life: {
+      label: '推算 t₅₀',
+      title: '按 IEC 60216-1 终点时间法求 t₅₀',
+      onClick: calcLife,
+      primary: true,
+    },
+    rti: {
+      label: '推算 RTI',
+      title: '对 log₁₀ t₅₀ ~ 1/T 做回归，外推 RTI 与 95% 置信区间',
+      onClick: calcRti,
+      primary: true,
+    },
+    cmp: {
+      label: '画对比图',
+      title: '按当前数据与坐标范围重画图 3（图是按下这一刻的快照）',
+      onClick: () => {
+        setCmpDrawn(true);
+        setCmpTick((t) => t + 1);
+      },
+      primary: true,
+    },
+  };
+
+  /* --- 当前页拆成两半渲染：输入进左列（aside），结果进右列 ---
+     拆开纯粹是版式需要（左列是窄而高的表单、右列是宽而高的图，并排才装得进一屏），
+     两份实例共用同一份 state（app / out 都还由本组件单点持有），所以不会出现"两份数据"。 */
+  const panePart = (part) => {
+    switch (pane) {
+      case 'life':
+        return (
+          <LifePane
+            part={part}
+            state={app.life}
+            setState={setLife}
+            out={lifeOut}
+            onDemo={demoLife}
+            onClear={clearLife}
+            onPaste={() =>
+              openPaste(
+                '页 1 · 粘贴导入寿命数据',
+                '每行两列：老化时长 t（h）, 特性值。支持从 Excel 直接复制（制表符分隔）。',
+                pasteLife
+              )
+            }
+            onCalc={calcLife}
+            onToCmp={lifeToCmp}
+          />
+        );
+      case 'rti':
+        return (
+          <RtiPane
+            part={part}
+            state={app.rti}
+            setState={setRti}
+            out={rtiOut}
+            onDemo={demoRti}
+            onClear={clearRti}
+            onPaste={() =>
+              openPaste(
+                '页 2 · 粘贴导入多温度数据',
+                '每行三列：老化温度 T（°C）, 老化时长 t（h）, 特性值。相同温度会自动归到一组（同名更新，新温度追加）。',
+                pasteRti
+              )
+            }
+            onCalc={calcRti}
+            onToCmp={rtiToCmp}
+          />
+        );
+      case 'cmp':
+        return (
+          <CmpPane
+            part={part}
+            state={app.cmp}
+            setState={setCmp}
+            drawn={cmpDrawn}
+            tick={cmpTick}
+            onDemo={demoCmp}
+            onClear={clearCmp}
+            onPaste={() =>
+              openPaste(
+                '页 3 · 粘贴导入对比数据',
+                '每行三列：材料名, 温度, t₅₀；或两列：温度, t₅₀（填入第一个材料）。',
+                pasteCmp
+              )
+            }
+            onToast={showToast}
+          />
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
-    <div className="rti">
-      <div className="rti-bar">
-        <div className="rti-tabs">
-          {PANES.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              className={'rti-tab' + (pane === p.id ? ' is-on' : '')}
-              onClick={() => setPane(p.id)}
-              aria-current={pane === p.id ? 'true' : undefined}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-        <span className="rti-toolbar-spring" />
-        <span className="rti-save">{savedLabel}</span>
-        <button type="button" className="btn btn-sm" onClick={exportData} title="把三页数据导出为 JSON 文件">
-          导出数据
-        </button>
-        <button type="button" className="btn btn-sm" onClick={() => fileRef.current && fileRef.current.click()}>
-          导入数据
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="application/json,.json"
-          hidden
-          onChange={(e) => importData(e.target)}
-        />
-      </div>
-
-      {pane === 'life' && (
-        <LifePane
-          state={app.life}
-          setState={setLife}
-          out={lifeOut}
-          onDemo={demoLife}
-          onClear={clearLife}
-          onPaste={() =>
-            openPaste(
-              '页 1 · 粘贴导入寿命数据',
-              '每行两列：老化时长 t（h）, 特性值。支持从 Excel 直接复制（制表符分隔）。',
-              pasteLife
-            )
-          }
-          onCalc={calcLife}
-          onToCmp={lifeToCmp}
-        />
-      )}
-      {pane === 'rti' && (
-        <RtiPane
-          state={app.rti}
-          setState={setRti}
-          out={rtiOut}
-          onDemo={demoRti}
-          onClear={clearRti}
-          onPaste={() =>
-            openPaste(
-              '页 2 · 粘贴导入多温度数据',
-              '每行三列：老化温度 T（°C）, 老化时长 t（h）, 特性值。相同温度会自动归到一组（同名更新，新温度追加）。',
-              pasteRti
-            )
-          }
-          onCalc={calcRti}
-          onToCmp={rtiToCmp}
-        />
-      )}
-      {pane === 'cmp' && (
-        <CmpPane
-          state={app.cmp}
-          setState={setCmp}
-          drawn={cmpDrawn}
-          onDrawn={setCmpDrawn}
-          onDemo={demoCmp}
-          onClear={clearCmp}
-          onPaste={() =>
-            openPaste(
-              '页 3 · 粘贴导入对比数据',
-              '每行三列：材料名, 温度, t₅₀；或两列：温度, t₅₀（填入第一个材料）。',
-              pasteCmp
-            )
-          }
-          onToast={showToast}
-        />
-      )}
-
-      {paste && (
-        <div className="modal" onClick={(e) => e.target === e.currentTarget && closePaste()}>
-          <div className="modal-card">
-            <h3>{paste.title}</h3>
-            <textarea
-              className="paste-text"
-              spellCheck={false}
-              value={pasteText}
-              autoFocus
-              onChange={(e) => {
-                setPasteText(e.target.value);
-                setPasteHint(paste.hint);
-              }}
-            />
-            <p className="paste-hint">{pasteHint}</p>
-            <div className="modal-actions">
-              <button type="button" className="btn" onClick={closePaste}>
-                取消
-              </button>
-              <button type="button" className="btn btn-primary" onClick={applyPaste}>
-                解析并填充
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {toast && (
-        <div className="toast tool-toast">
-          <span>{toast}</span>
-        </div>
-      )}
-    </div>
+    <ToolShell
+      layout="inspector"
+      aside={panePart('in')}
+      tabs={PANES}
+      activeTab={pane}
+      onTabChange={setPane}
+      saveText={saveLabel(savedAt)}
+      hint={resumed ? '已从本机存档恢复上次的数据；结果是清空的，点对应页的「推算」按钮即可复现。' : null}
+      hintTone="info"
+      actions={[
+        PRIMARY_ACTIONS[pane],
+        { label: '导出数据', title: '把三页数据导出为 JSON 文件', onClick: exportData },
+      ]}
+      importAccept="application/json,.json"
+      onImport={importData}
+      importLabel="导入数据"
+      toast={toast}
+      paste={paste}
+    >
+      {panePart('out')}
+    </ToolShell>
   );
 }

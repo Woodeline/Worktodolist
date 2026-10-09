@@ -1,11 +1,18 @@
 #!/usr/bin/env node
 // 工具集 UI 级回归 —— 真实浏览器里点真按钮，核对真实数值。
 //
-// 为什么单测不够：`calc.test.js` 能证明 lifeCalc() 算得对，但证明不了
-// 「点「推算 t₅₀」→ 页面上出现 12,518 h」这条链路 —— 按钮没绑上、
-// 结果 state 放错页、画布没重画，逻辑层全绿也照样能坏。
-// 这里的断言值全部来自 lib/rti/demo.js 的数据集（有独立 Python 基准对拍），
-// 所以它们是"端到端"的：从示例数据一路到屏幕上的文本。
+// 分两层，职责不同：
+//
+//   ① 外壳契约（通用，认 registry 不认具体工具）
+//      遍历 registry 里每个可见工具，逐个激活，核对页头文案 / 标签 / 风险徽标 /
+//      版式类名 / 是否掉进崩溃页 / 本体有没有渲染出东西 / 有没有旧类名残留。
+//      期望值全部**从 registry 现算**，所以新增一个工具会自动进入门禁，
+//      这个脚本不需要跟着改 —— 这正是"加工具只改 registry"那句承诺的验证方式。
+//
+//   ② RTI 端到端数值（专用）
+//      从示例数据一路点到屏幕上的文本。断言值来自 lib/rti/demo.js 的数据集
+//      （有独立 Python 基准对拍），所以它们是"端到端"的：按钮没绑上、结果 state
+//      放错页、画布没重画 —— 逻辑层全绿也照样能坏，只有这一层能抓到。
 //
 // 顺带核对工具集外壳的两条结构约定：
 //   ① 顶栏是三个页签（对话 / 列表 / 工具），「工具」为当前页；
@@ -18,6 +25,15 @@ import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const ROOT = path.resolve(import.meta.dirname, '..');
+
+// 门禁的期望值直接来自 registry —— 不另抄一份清单，否则两边迟早漂移。
+const { visibleTools, findTool, riskBadges, canWrite } = await import(
+  pathToFileURL(path.join(ROOT, 'src', 'components', 'tools', 'registry.js')).href
+);
+const TOOL_LIST = visibleTools();
 
 const EDGE = process.env.EDGE || [
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
@@ -26,7 +42,7 @@ const EDGE = process.env.EDGE || [
 const BASE = process.env.SG_BASE || 'http://localhost:15181';
 const PORT = 9561;
 const PROFILE = path.join(tmpdir(), 'todolist-qa-tools-profile');
-const OUT = path.resolve(import.meta.dirname, '..', 'qa-artifacts');
+const OUT = path.join(ROOT, 'qa-artifacts');
 const WANT_SHOTS = process.argv.includes('--shots');
 const SAVE_KEY = 'todolist.tool.rti.v1';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -42,6 +58,9 @@ class CDP {
     this.seq = 0;
     this.pending = new Map();
     this.waiters = [];
+    // 页面控制台。工具崩溃时 ToolBoundary 会把原始 error + 组件栈打到 console.error，
+    // 而错误边界页面上只有一句 message —— 没有这一份就只剩"哪个工具坏了"，查不出为什么。
+    this.console = [];
     this.ws = new WebSocket(url);
     this.ready = new Promise((res, rej) => {
       this.ws.addEventListener('open', () => res());
@@ -57,6 +76,12 @@ class CDP {
         return;
       }
       if (m.method) {
+        if (m.method === 'Runtime.consoleAPICalled') {
+          const text = (m.params.args || [])
+            .map((a) => (a.value != null ? String(a.value) : a.description || a.type || ''))
+            .join(' ');
+          this.console.push({ type: m.params.type, text });
+        }
         for (let i = this.waiters.length - 1; i >= 0; i -= 1) {
           if (this.waiters[i].method === m.method) {
             const w = this.waiters.splice(i, 1)[0];
@@ -119,7 +144,7 @@ const HELPERS = `
   };
   // 画布上"到底画了东西没有"：画布自身位图是透明的，只有描过的像素才有 alpha
   window.__ink = () => {
-    const cv = window.__q('.rti-canvas');
+    const cv = window.__q('.tool-canvas');
     if (!cv || !cv.width || !cv.height) return { w: 0, h: 0, ink: 0 };
     const ctx = cv.getContext('2d');
     const d = ctx.getImageData(0, 0, cv.width, cv.height).data;
@@ -132,6 +157,7 @@ const HELPERS = `
 
 async function main() {
   if (!EDGE) throw new Error('找不到 Edge/Chrome，可设置 EDGE 环境变量');
+  if (!TOOL_LIST.length) throw new Error('registry 里没有可见工具，门禁无从校验');
   rmSync(PROFILE, { recursive: true, force: true });
 
   const proc = spawn(
@@ -215,7 +241,7 @@ async function main() {
     })()`, 10000);
     // 懒加载的工具组件要等它挂上（Suspense 的 fallback 会先出现）
     for (let i = 0; i < 40; i += 1) {
-      const ok = await evalJs(`!!document.querySelector('.rti-bar')`, 8000);
+      const ok = await evalJs(`!!document.querySelector('.tool-layout') && !document.querySelector('.tool-loading')`, 8000);
       if (ok) break;
       await sleep(120);
     }
@@ -238,7 +264,9 @@ async function main() {
 
   mkdirSync(OUT, { recursive: true });
 
-  // ── 1. 外壳结构：三个页签 + 清单驱动的左栏 + 右侧工作区 ──────────────────
+  /* ═══════════════════════════════════════════════════════════════════
+     1. 外壳结构：三个页签 + 清单驱动的左栏 + 右侧工作区
+     ═══════════════════════════════════════════════════════════════════ */
   await goto('tools', 1280, 900);
   const shell = await evalJs(`(() => {
     const q = window.__q;
@@ -254,12 +282,11 @@ async function main() {
       itemCount: items.length,
       itemNames: items.map((b) => (b.querySelector('.tools-item-name') || {}).textContent || ''),
       onCount: window.__qa('.tools-item.is-on').length,
+      groupHeads: window.__qa('.tools-group-head .tools-group-label').map((e) => e.textContent.trim()),
+      search: !!q('.tools-search-input'),
       navFoot: !!q('.tools-nav-foot'),
       navFootText: q('.tools-nav-foot') ? q('.tools-nav-foot').textContent : '',
       head: !!q('.tool-head'),
-      title: q('.tool-title') ? q('.tool-title').textContent.trim() : '',
-      tags: window.__qa('.tool-tag').map((e) => e.textContent.trim()),
-      sub: q('.tool-head-sub') ? q('.tool-head-sub').textContent.slice(0, 40) : '',
       // 左栏与工作区是并排的（而不是上下堆叠）
       sideBySide: (() => {
         const n = q('.tools-nav'); const p = q('.tool-pane');
@@ -270,38 +297,133 @@ async function main() {
   })()`);
   check('顶栏是三个页签，且第三项是「工具」', shell.tabCount === 3 && shell.tabs[2] === '工具', JSON.stringify(shell.tabs));
   check('工具集三段式结构到位（清单 / 工作区 / 页头）', shell.tools && shell.nav && shell.list && shell.pane && shell.head);
-  check('工具清单由 registry 驱动（当前 1 项，且默认选中）',
-    shell.itemCount === 1 && shell.onCount === 1 && shell.itemNames[0].includes('RTI'), JSON.stringify(shell.itemNames));
-  check('页头显示工具名与标签（RTI 耐热指数 / IEC 60216）',
-    shell.title === 'RTI 耐热指数' && shell.tags.some((t) => t.includes('IEC 60216')), `${shell.title} ${shell.tags}`);
+  check(
+    `左栏工具数 = registry 可见工具数（${TOOL_LIST.length}）`,
+    shell.itemCount === TOOL_LIST.length,
+    `DOM ${shell.itemCount} vs registry ${TOOL_LIST.length}`
+  );
+  check(
+    '左栏工具名与 registry 逐项一致，且默认选中恰好一个',
+    JSON.stringify(shell.itemNames) === JSON.stringify(TOOL_LIST.map((t) => t.name)) && shell.onCount === 1,
+    JSON.stringify(shell.itemNames)
+  );
+  // 分组折叠头：registry 的 GROUPS 收紧到 2 组（工程计算 / 待办数据）后，
+  // 下限随之从 3 改为 2。收藏组存在时会更多，所以用 ≥ 而不是等号。
+  check('左栏有搜索框与分组折叠头（条目 14）', shell.search === true && shell.groupHeads.length >= 2, JSON.stringify(shell.groupHeads));
   check('清单底部写明"怎么加新工具"', shell.navFoot && shell.navFootText.includes('registry.js'), shell.navFootText);
   check('左栏与工作区左右并排', shell.sideBySide === true);
   check('1280 宽下无横向溢出', shell.overflow <= 0, `overflow=${shell.overflow}`);
 
-  // ── 2. 页 1：示例数据 → 点「推算 t₅₀」→ 屏幕上出现基准值 ────────────────
+  /* ═══════════════════════════════════════════════════════════════════
+     2. 外壳契约 —— 逐个工具激活并核对
+     ═══════════════════════════════════════════════════════════════════ */
+  console.log('\n── 外壳契约（逐工具） ──');
+  const contract = await evalJs(`(async () => {
+    const q = window.__q;
+    const items = window.__qa('.tools-item');
+    const read = () => {
+      const pane = q('.tool-pane');
+      const layoutEl = pane ? pane.querySelector('.tool-layout') : null;
+      return {
+        title: q('.tool-title') ? q('.tool-title').textContent.trim() : '',
+        sub: q('.tool-head-sub') ? q('.tool-head-sub').textContent.trim() : '',
+        // 必须限定在页头里取 —— 工具本体也可能用 .tool-tag 画自己的分类芯片
+        // （批量优先级就有一排 @分类 / +项目），不限定就会把它们算进页头标签。
+        tags: window.__qa('.tool-head .tool-tag').map((e) => e.textContent.trim()),
+        risks: window.__qa('.tool-head .tool-risk').map((e) => e.textContent.trim()),
+        layout: layoutEl ? ((layoutEl.className.match(/tool-layout-([a-z]+)/) || [])[1] || '') : '',
+        crashed: !!q('.tool-crash'),
+        crashMsg: q('.tool-crash-msg') ? q('.tool-crash-msg').textContent.trim().slice(0, 160) : '',
+        crashWhere: q('.tool-crash-where') ? q('.tool-crash-where').textContent.trim().slice(0, 200) : '',
+        loading: !!q('.tool-loading'),
+        // 工具本体渲染出东西了没有（四种版式各自的第一屏构件）
+        rendered: !!(pane && pane.querySelector('.tool-sec, .tool-empty, .tool-instant-form, .tool-metric, .tool-field')),
+        // 类名中性化（rti-* → tool-*）之后不该再有旧前缀残留
+        legacy: pane ? pane.querySelectorAll('[class*="rti-"]').length : 0,
+        onCount: window.__qa('.tools-item.is-on').length,
+      };
+    };
+    const out = {};
+    for (const item of items) {
+      const name = (item.querySelector('.tools-item-name') || {}).textContent.trim();
+      item.click();
+      for (let i = 0; i < 80; i += 1) {
+        const r = read();
+        if (!r.loading && r.layout) break;
+        await new Promise((res) => setTimeout(res, 80));
+      }
+      await new Promise((res) => setTimeout(res, 60));
+      out[name] = read();
+    }
+    return out;
+  })()`, 120000);
+
+  for (const tool of TOOL_LIST) {
+    const got = contract[tool.name] || {};
+    const want = {
+      title: tool.name,
+      sub: tool.detail,
+      tags: tool.tags,
+      risks: riskBadges(tool).map((b) => b.label),
+      layout: tool.layout,
+      crashed: false,
+      rendered: true,
+      legacy: 0,
+    };
+    const bad = Object.keys(want).filter((k) => JSON.stringify(got[k]) !== JSON.stringify(want[k]));
+    check(
+      `[${tool.id}] 页头 / 标签 / 徽标 / 版式 / 不崩 / 有内容 / 无旧类名`,
+      bad.length === 0,
+      [bad.map((k) => `${k}: 得到 ${JSON.stringify(got[k])} 期望 ${JSON.stringify(want[k])}`).join('; '), got.crashMsg, got.crashWhere]
+        .filter(Boolean)
+        .join('  ||  ')
+    );
+  }
+  check(
+    '激活工具后选中态始终唯一',
+    Object.values(contract).every((r) => r.onCount === 1),
+    JSON.stringify(Object.fromEntries(Object.entries(contract).map(([k, v]) => [k, v.onCount])))
+  );
+
+  // 有工具崩了就把原始堆栈打出来 —— 页面上只有一句 message，定位不了
+  const crashes = cdp.console.filter((c) => c.text.includes('tool crash'));
+  if (crashes.length) {
+    console.log('\n── 崩溃原始堆栈（console.error） ──');
+    for (const c of crashes) console.log('  ' + c.text.replace(/\s+/g, ' ').slice(0, 900));
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     3. RTI 页 1：示例数据 → 点「推算 t₅₀」→ 屏幕上出现基准值
+     ═══════════════════════════════════════════════════════════════════ */
+  console.log('\n── RTI 端到端数值 ──');
+  await goto(`tools-${TOOL_LIST[0].id}`, 1280, 900);
   const p1 = await evalJs(`(async () => {
     const q = window.__q;
-    const tabLabels = window.__qa('.rti-tab').map((b) => b.textContent.trim());
-    const rows = window.__qa('.rti-table tbody tr').length;
+    const tabLabels = window.__qa('.tool-tab').map((b) => b.textContent.trim());
+    const rows = window.__qa('.tool-table tbody tr').length;
     const nameShown = q('#rti-life-name').value;
     window.__btn(document, '推算 t₅₀').click();
     await new Promise((r) => setTimeout(r, 250));
-    const hero = q('.rti-hero-val');
+    const hero = q('.tool-hero-val');
     return {
       tabLabels,
       rows,
       nameShown,
       hero: hero ? hero.textContent.replace(/\\s+/g, ' ').trim() : '',
-      sub: q('.rti-hero-sub') ? q('.rti-hero-sub').textContent.replace(/\\s+/g, ' ').trim() : '',
-      label: q('.rti-hero-label') ? q('.rti-hero-label').textContent.replace(/\\s+/g, ' ').trim() : '',
+      sub: q('.tool-hero-sub') ? q('.tool-hero-sub').textContent.replace(/\\s+/g, ' ').trim() : '',
+      label: q('.tool-hero-label') ? q('.tool-hero-label').textContent.replace(/\\s+/g, ' ').trim() : '',
       ink: window.__ink(),
-      chartTitle: q('.rti-chart-title') ? q('.rti-chart-title').textContent.trim() : '',
-      note: q('.rti-note') ? q('.rti-note').textContent.slice(0, 20) : '',
-      // 页 1 常态就有若干 .rti-hint（输入提示、行数统计），所以必须找那句特定的
-      staleHint: window.__qa('.rti-stack .rti-hint').some((e) => e.textContent.includes('还是上一次推算的')),
+      chartTitle: q('.tool-chart-title') ? q('.tool-chart-title').textContent.trim() : '',
+      note: q('.tool-note') ? q('.tool-note').textContent.slice(0, 20) : '',
+      // 页 1 常态就有若干 .tool-hint（输入提示、行数统计），所以必须找那句特定的
+      staleHint: window.__qa('.tool-stack .tool-hint').some((e) => e.textContent.includes('还是上一次推算的')),
     };
   })()`);
-  check('工具内三个页面页签齐全', JSON.stringify(p1.tabLabels) === JSON.stringify(['寿命推算', 'RTI 耐热指数', '多材料对比']), JSON.stringify(p1.tabLabels));
+  check(
+    '工具内三个页面页签齐全',
+    JSON.stringify(p1.tabLabels) === JSON.stringify(['寿命推算', 'RTI 耐热指数', '多材料对比']),
+    JSON.stringify(p1.tabLabels)
+  );
   check('默认载入页 1 示例数据（8 行、材料名可见）', p1.rows === 8 && p1.nameShown === '示例材料 A', `rows=${p1.rows} name=${p1.nameShown}`);
   check('点「推算 t₅₀」后主数字为基准值 12,518 h', p1.hero.includes('12,518'), p1.hero);
   check('求法标注为「半对数内插」（不是外推）', p1.sub.includes('半对数内插'), p1.sub);
@@ -311,142 +433,157 @@ async function main() {
   check('刚推算完不带"结果已过期"提示', p1.staleHint === false);
   if (WANT_SHOTS) await shot('tools-life-1280.png');
 
-  // ── 3. 结果过期标记：改一个数字，结果必须自己承认落后了 ─────────────────
+  /* ── 4. 结果过期标记：改一个数字，结果必须自己承认落后了 ─────────────── */
   const stale = await evalJs(`(async () => {
     window.__set(window.__q('#rti-life-p0'), '99.9');
     await new Promise((r) => setTimeout(r, 120));
-    const hints = window.__qa('.rti-stack .rti-hint').map((e) => e.textContent).join(' | ');
-    const heroStill = window.__q('.rti-hero-val').textContent.includes('12,518');
+    const hints = window.__qa('.tool-stack .tool-hint').map((e) => e.textContent).join(' | ');
+    const heroStill = window.__q('.tool-hero-val').textContent.includes('12,518');
     window.__set(window.__q('#rti-life-p0'), '98.6');
     await new Promise((r) => setTimeout(r, 120));
     return { hints, heroStill };
   })()`);
-  check('改动数据后结果被标记为过期（且不假装是新结果）',
-    stale.hints.includes('还是上一次推算的') && stale.heroStill === true, stale.hints);
+  check(
+    '改动数据后结果被标记为过期（且不假装是新结果）',
+    stale.hints.includes('还是上一次推算的') && stale.heroStill === true,
+    stale.hints
+  );
 
-  // ── 4. 页 2：Arrhenius 回归 → RTI / 置信区间 / 活化能，逐项对基准 ────────
+  /* ── 5. 页 2：Arrhenius 回归 → RTI / 置信区间 / 活化能，逐项对基准 ─────── */
   const p2 = await evalJs(`(async () => {
     const q = window.__q;
-    window.__qa('.rti-tab')[1].click();
-    await new Promise((r) => setTimeout(r, 200));
-    const groups = window.__qa('.rti-group').length;
+    window.__qa('.tool-tab')[1].click();
+    await new Promise((r) => setTimeout(r, 220));
+    const groups = window.__qa('.tool-group').length;
     window.__btn(document, '推算 RTI').click();
-    await new Promise((r) => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 320));
     // 页 2 有两张表：上面是录入表（每个温度一张），下面是 t₅₀ 结果表。
     // 必须只取结果表，否则会把录入行也算进来。
-    const sec = window.__qa('.rti-sec').find((s) => {
-      const t = s.querySelector('.rti-sec-title');
+    const sec = window.__qa('.tool-sec').find((s) => {
+      const t = s.querySelector('.tool-sec-title');
       return t && t.textContent.includes('各温度下的 t₅₀');
     });
     const perT = sec
-      ? Array.from(sec.querySelectorAll('.rti-table tbody tr')).map((tr) =>
+      ? Array.from(sec.querySelectorAll('.tool-table tbody tr')).map((tr) =>
           Array.from(tr.querySelectorAll('td')).map((td) => td.textContent.trim()))
       : [];
     return {
       groups,
-      metrics: window.__qa('.rti-metric-val').map((e) => e.textContent.replace(/\\s+/g, ' ').trim()),
-      metricLabels: window.__qa('.rti-metric-label').map((e) => e.textContent.trim()),
-      ciNotes: window.__qa('.rti-metric-note').map((e) => e.textContent.trim()),
-      stats: window.__qa('.rti-stat').map((e) => e.textContent.replace(/\\s+/g, ' ').trim()),
+      metrics: window.__qa('.tool-metric-val').map((e) => e.textContent.replace(/\\s+/g, ' ').trim()),
+      ciNotes: window.__qa('.tool-metric-note').map((e) => e.textContent.trim()),
+      stats: window.__qa('.tool-stat').map((e) => e.textContent.replace(/\\s+/g, ' ').trim()),
       perT,
       ink: window.__ink(),
-      err: q('.rti-errors') ? q('.rti-errors').textContent : '',
-      warn: window.__qa('.rti-warns li').map((e) => e.textContent.trim()),
+      err: q('.tool-errors') ? q('.tool-errors').textContent : '',
+      warn: window.__qa('.tool-warns li').map((e) => e.textContent.trim()),
     };
   })()`);
   check('页 2 载入 4 个温度组示例', p2.groups === 4, `groups=${p2.groups}`);
   check('无报错（示例数据本就不该触发校验）', p2.err === '', p2.err);
   // 注意 fmtH 的口径：≥10,000 才加千分位，所以 1329 / 3860 是原样数字
   const byTemp = Object.fromEntries(p2.perT.map((r) => [r[0], r[1]]));
-  const want = { 185: '1329 h', 170: '3860 h', 155: '12,518 h', 140: '43,499 h' };
-  check('4 个温度各自算出 t₅₀（基准：185→1329 / 170→3860 / 155→12,518 / 140→43,499）',
+  const wantPerT = { 185: '1329 h', 170: '3860 h', 155: '12,518 h', 140: '43,499 h' };
+  check(
+    '4 个温度各自算出 t₅₀（基准：185→1329 / 170→3860 / 155→12,518 / 140→43,499）',
     p2.perT.length === 4
       && p2.perT.every((r) => r[2].includes('内插'))
-      && Object.keys(want).every((T) => (byTemp[T] || '').startsWith(want[T])),
-    JSON.stringify(p2.perT.map((r) => [r[0], r[1]])));
+      && Object.keys(wantPerT).every((T) => (byTemp[T] || '').startsWith(wantPerT[T])),
+    JSON.stringify(p2.perT.map((r) => [r[0], r[1]]))
+  );
   check('RTI @ 20,000 h = 149.2 °C（基准）', p2.metrics[0] && p2.metrics[0].includes('149.2'), JSON.stringify(p2.metrics));
   check('RTI @ 100,000 h = 130.5 °C（基准）', p2.metrics[1] && p2.metrics[1].includes('130.5'), JSON.stringify(p2.metrics));
-  check('两个 RTI 都给出 95% 置信区间（不是"不可得"）',
+  check(
+    '两个 RTI 都给出 95% 置信区间（不是"不可得"）',
     p2.ciNotes.length === 2 && p2.ciNotes.every((t) => t.startsWith('95%CI ')) && p2.ciNotes[0].includes('148.9'),
-    JSON.stringify(p2.ciNotes));
+    JSON.stringify(p2.ciNotes)
+  );
   const statsText = p2.stats.join(' | ');
   check('活化能 Ea = 122.2 kJ/mol（基准）', statsText.includes('122.2 kJ/mol'), statsText);
   check('回归质量 R² = 0.99997、残差 s = 0.00447（基准）', statsText.includes('0.99997') && statsText.includes('0.00447'), statsText);
   check('自由度 df = 2（4 个温度点 − 2）', statsText.includes('df') && statsText.includes('2'), statsText);
   check('图 2（Arrhenius + 置信带）真的画出来了', p2.ink.w > 0 && p2.ink.ink > 300, JSON.stringify(p2.ink));
-  check('n = 4 时不该出现"温度点不足"以外的告警误报',
-    p2.warn.length === 0 || p2.warn.every((w) => !w.includes('无法')), JSON.stringify(p2.warn));
-  if (WANT_SHOTS) await shot('tools-rti-1280.png', '.rti-chart');
+  check('n = 4 时不该出现"温度点不足"以外的告警误报', p2.warn.length === 0 || p2.warn.every((w) => !w.includes('无法')), JSON.stringify(p2.warn));
+  if (WANT_SHOTS) await shot('tools-rti-1280.png', '.tool-chart');
 
-  // ── 5. 跨页：页 2 的结果一键送进页 3 并出图 ──────────────────────────────
+  /* ── 6. 跨页：页 2 的结果一键送进页 3 并出图 ────────────────────────── */
   // 页 3 出厂自带三材料示例，所以先清空 —— 否则"送过来 1 种"会被当成"追加了 1 种"，
   // 断言就证明不了这条链路。
   const p3 = await evalJs(`(async () => {
     const q = window.__q;
-    window.__qa('.rti-tab')[2].click();
+    window.__qa('.tool-tab')[2].click();
     await new Promise((r) => setTimeout(r, 250));
     window.__btn(document, '清空').click();
     await new Promise((r) => setTimeout(r, 250));
-    const emptied = window.__qa('.rti-group').length;
+    const emptied = window.__qa('.tool-group').length;
 
-    window.__qa('.rti-tab')[1].click();
+    window.__qa('.tool-tab')[1].click();
     await new Promise((r) => setTimeout(r, 250));
     window.__btn(document, '加入多材料对比').click();
     await new Promise((r) => setTimeout(r, 600));
 
-    const legend = window.__qa('.rti-legend-item').map((e) => e.textContent.replace(/\\s+/g, ' ').trim());
+    const legend = window.__qa('.tool-legend-item').map((e) => e.textContent.replace(/\\s+/g, ' ').trim());
     return {
       emptied,
-      paneOn: window.__qa('.rti-tab')[2].classList.contains('is-on'),
-      mats: window.__qa('.rti-group').length,
+      paneOn: window.__qa('.tool-tab')[2].classList.contains('is-on'),
+      mats: window.__qa('.tool-group').length,
       legend,
       ink: window.__ink(),
       toast: q('.tool-toast') ? q('.tool-toast').textContent.trim() : '',
-      chartTitle: q('.rti-chart-title') ? q('.rti-chart-title').textContent.trim() : '',
+      chartTitle: q('.tool-chart-title') ? q('.tool-chart-title').textContent.trim() : '',
     };
   })()`);
   check('页 3 先被清空（前置条件：0 种材料）', p3.emptied === 0, `emptied=${p3.emptied}`);
-  check('「加入多材料对比」自动切到页 3 并画出图',
-    p3.paneOn === true && p3.ink.w > 0 && p3.ink.ink > 300, JSON.stringify({ paneOn: p3.paneOn, ink: p3.ink }));
+  check(
+    '「加入多材料对比」自动切到页 3 并画出图',
+    p3.paneOn === true && p3.ink.w > 0 && p3.ink.ink > 300,
+    JSON.stringify({ paneOn: p3.paneOn, ink: p3.ink })
+  );
   check('页 3 出现 1 种材料、4 个温度点（来自页 2 的 perT）', p3.mats === 1, `mats=${p3.mats}`);
-  check('图例显示材料名与该材料拟合的 R²',
-    p3.legend.length === 1 && p3.legend[0].includes('示例材料') && p3.legend[0].includes('R²='), JSON.stringify(p3.legend));
+  check(
+    '图例显示材料名与该材料拟合的 R²',
+    p3.legend.length === 1 && p3.legend[0].includes('示例材料') && p3.legend[0].includes('R²='),
+    JSON.stringify(p3.legend)
+  );
   check('跨页操作给出明确回执（toast 说清加了几点）', p3.toast.includes('4 个温度点'), p3.toast);
   check('图注为「图 3」', p3.chartTitle.includes('图 3'), p3.chartTitle);
 
   // 换回三材料示例，验证图例按材料区分（颜色 + 形状双编码）
   const p3demo = await evalJs(`(async () => {
     window.__btn(document, '填入示例').click();
-    await new Promise((r) => setTimeout(r, 120));
+    await new Promise((r) => setTimeout(r, 150));
     window.__btn(document, '画对比图').click();
-    await new Promise((r) => setTimeout(r, 350));
-    const items = window.__qa('.rti-legend-item');
+    await new Promise((r) => setTimeout(r, 380));
+    const items = window.__qa('.tool-legend-item');
     return {
       legend: items.map((e) => e.textContent.replace(/\\s+/g, ' ').trim()),
-      swatches: items.map((e) => getComputedStyle(e.querySelector('.rti-legend-swatch')).backgroundColor),
-      glyphs: items.map((e) => e.querySelector('.rti-legend-glyph').textContent.trim()),
+      swatches: items.map((e) => getComputedStyle(e.querySelector('.tool-legend-swatch')).backgroundColor),
+      glyphs: items.map((e) => e.querySelector('.tool-legend-glyph').textContent.trim()),
       ink: window.__ink(),
     };
   })()`);
-  check('三材料示例：图例 3 条且各自 R² 与基准一致（0.9884 / 0.9901 / 0.9959）',
+  check(
+    '三材料示例：图例 3 条且各自 R² 与基准一致（0.9884 / 0.9901 / 0.9959）',
     p3demo.legend.length === 3
       && p3demo.legend.some((t) => t.includes('0.9884'))
       && p3demo.legend.some((t) => t.includes('0.9901'))
       && p3demo.legend.some((t) => t.includes('0.9959')),
-    JSON.stringify(p3demo.legend));
-  check('材料用「颜色 + 形状」双编码区分（不只是颜色）',
+    JSON.stringify(p3demo.legend)
+  );
+  check(
+    '材料用「颜色 + 形状」双编码区分（不只是颜色）',
     new Set(p3demo.swatches).size === 3 && new Set(p3demo.glyphs).size === 3,
-    `${JSON.stringify(p3demo.glyphs)} ${JSON.stringify(p3demo.swatches)}`);
+    `${JSON.stringify(p3demo.glyphs)} ${JSON.stringify(p3demo.swatches)}`
+  );
   check('图 3 三材料曲线真的画出来了', p3demo.ink.ink > 400, JSON.stringify(p3demo.ink));
-  if (WANT_SHOTS) await shot('tools-cmp-1280.png', '.rti-chart');
+  if (WANT_SHOTS) await shot('tools-cmp-1280.png', '.tool-chart');
 
-  // ── 6. 自动保存 → 刷新后原样回来（数据不会一刷新就没了） ─────────────────
+  /* ── 7. 自动保存 → 刷新后原样回来（数据不会一刷新就没了） ───────────── */
   const MARK = 'QA-恢复验证-' + Date.now();
   const saved = await evalJs(`(async () => {
-    window.__qa('.rti-tab')[0].click();          // 回到页 1（默认页，便于刷新后核对）
-    await new Promise((r) => setTimeout(r, 150));
+    window.__qa('.tool-tab')[0].click();          // 回到页 1（默认页，便于刷新后核对）
+    await new Promise((r) => setTimeout(r, 180));
     window.__set(window.__q('#rti-life-name'), ${JSON.stringify(MARK)});
-    await new Promise((r) => setTimeout(r, 700));  // 自动保存 debounce 400ms
+    await new Promise((r) => setTimeout(r, 800));  // 自动保存 debounce 400ms
     const raw = localStorage.getItem(${JSON.stringify(SAVE_KEY)});
     const s = raw ? JSON.parse(raw) : null;
     return {
@@ -457,56 +594,61 @@ async function main() {
       // 数据点的值必须是数字或 null，不能混进界面上的字符串
       ptTypes: s && s.life ? s.life.pts.map((p) => typeof p.t) : [],
       tempTypes: s && s.rti && s.rti.temps.length ? s.rti.temps.map((g) => typeof g.T) : [],
-      saveLabel: window.__q('.rti-save') ? window.__q('.rti-save').textContent.trim() : '',
+      saveLabel: window.__q('.tool-save') ? window.__q('.tool-save').textContent.trim() : '',
     };
   })()`);
-  check('改动后自动落盘到 localStorage（键 todolist.tool.rti.v1）',
-    saved.has && saved.v === 1 && saved.name === MARK, JSON.stringify({ has: saved.has, v: saved.v, name: saved.name }));
-  check('落盘的是数字而不是界面上的字符串（数据点 / P₀ / 各温度 T）',
+  check(
+    '改动后自动落盘到 localStorage（键 todolist.tool.rti.v1）',
+    saved.has && saved.v === 1 && saved.name === MARK,
+    JSON.stringify({ has: saved.has, v: saved.v, name: saved.name })
+  );
+  check(
+    '落盘的是数字而不是界面上的字符串（数据点 / P₀ / 各温度 T）',
     saved.p0Type === 'number'
       && saved.ptTypes.length === 8 && saved.ptTypes.every((t) => t === 'number')
       && saved.tempTypes.length === 4 && saved.tempTypes.every((t) => t === 'number'),
-    `p0=${saved.p0Type} pts=${JSON.stringify(saved.ptTypes)} temps=${JSON.stringify(saved.tempTypes)}`);
+    `p0=${saved.p0Type} pts=${JSON.stringify(saved.ptTypes)} temps=${JSON.stringify(saved.tempTypes)}`
+  );
   check('界面显示自动保存时间戳', saved.saveLabel.includes('已自动保存'), saved.saveLabel);
 
-  await goto('tools', 1280, 900);
+  await goto(`tools-${TOOL_LIST[0].id}`, 1280, 900);
   const restored = await evalJs(`(() => ({
     name: window.__q('#rti-life-name').value,
-    rows: window.__qa('.rti-table tbody tr').length,
-    paneOn: window.__qa('.rti-tab')[0].classList.contains('is-on'),
-    toast: window.__q('.tool-toast') ? window.__q('.tool-toast').textContent.trim() : '',
+    rows: window.__qa('.tool-table tbody tr').length,
+    paneOn: window.__qa('.tool-tab')[0].classList.contains('is-on'),
+    hint: window.__qa('.tool-hint').map((e) => e.textContent).join(' | '),
   }))()`);
   check('刷新后数据原样恢复（不是退回示例）', restored.name === MARK && restored.rows === 8, `${restored.name} / ${restored.rows} 行`);
   check('刷新后仍停在页 1（页签状态有自己的默认值）', restored.paneOn === true);
-  check('恢复后明确提示"结果需重新推算"', restored.toast.includes('已恢复上次的数据'), restored.toast);
+  check('恢复后常驻提示说清"结果需重新推算"', restored.hint.includes('已从本机存档恢复'), restored.hint);
 
-  // ── 7. 清空 / 示例：清干净，也能再填回来 ────────────────────────────────
+  /* ── 8. 清空 / 示例：清干净，也能再填回来 ──────────────────────────── */
   const cleared = await evalJs(`(async () => {
     window.__btn(document, '清空').click();
-    await new Promise((r) => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 220));
     const afterClear = {
       name: window.__q('#rti-life-name').value,
-      rows: window.__qa('.rti-table tbody tr').length,
-      heroGone: !window.__q('.rti-hero'),
+      rows: window.__qa('.tool-table tbody tr').length,
+      heroGone: !window.__q('.tool-hero'),
     };
     window.__btn(document, '填入示例').click();
-    await new Promise((r) => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 220));
     return {
       afterClear,
       nameBack: window.__q('#rti-life-name').value,
-      rowsBack: window.__qa('.rti-table tbody tr').length,
-      usableHint: window.__qa('.rti-hint').map((e) => e.textContent).find((t) => t.includes('行有效')) || '',
+      rowsBack: window.__qa('.tool-table tbody tr').length,
+      usableHint: window.__qa('.tool-hint').map((e) => e.textContent).find((t) => t.includes('行有效')) || '',
     };
   })()`);
-  check('「清空」把材料名与数据点都清掉、结果一并撤下',
+  check(
+    '「清空」把材料名与数据点都清掉、结果一并撤下',
     cleared.afterClear.name === '' && cleared.afterClear.rows === 1 && cleared.afterClear.heroGone === true,
-    JSON.stringify(cleared.afterClear));
-  check('清空后「填入示例」能重新填回完整示例',
-    cleared.nameBack === '示例材料 A' && cleared.rowsBack === 8, `${cleared.nameBack} / ${cleared.rowsBack} 行`);
-  check('页 1 明确告诉用户"几行有效"（不是默默忽略填错的行）',
-    cleared.usableHint.includes('8 行有效'), cleared.usableHint);
+    JSON.stringify(cleared.afterClear)
+  );
+  check('清空后「填入示例」能重新填回完整示例', cleared.nameBack === '示例材料 A' && cleared.rowsBack === 8, `${cleared.nameBack} / ${cleared.rowsBack} 行`);
+  check('页 1 明确告诉用户"几行有效"（不是默默忽略填错的行）', cleared.usableHint.includes('8 行有效'), cleared.usableHint);
 
-  // ── 8. 桌面窗口感：顶栏页签与工具清单的几何关系 ──────────────────────────
+  /* ── 9. 桌面窗口感：顶栏页签与工具清单的几何关系 ────────────────────── */
   const geo = await evalJs(`(() => {
     const nav = window.__q('.tools-nav');
     const list = window.__q('.tools-list');
@@ -523,14 +665,14 @@ async function main() {
   })()`);
   check('左栏清单项整行可点（桌面侧栏行为）', geo.itemFills === true, JSON.stringify(geo));
 
-  // ── 9. 暗色：画布必须按暗色令牌重画，不是浅底硬贴 ─────────────────────────
-  await goto('tools', 1280, 900, true);
+  /* ── 10. 暗色：画布必须按暗色令牌重画，不是浅底硬贴 ─────────────────── */
+  await goto(`tools-${TOOL_LIST[0].id}`, 1280, 900, true);
   const darkRes = await evalJs(`(async () => {
     window.__btn(document, '推算 t₅₀').click();
-    await new Promise((r) => setTimeout(r, 300));
-    const cv = window.__q('.rti-canvas');
+    await new Promise((r) => setTimeout(r, 320));
+    const cv = window.__q('.tool-canvas');
     return {
-      hero: window.__q('.rti-hero-val').textContent.includes('12,518'),
+      hero: window.__q('.tool-hero-val').textContent.includes('12,518'),
       ink: window.__ink(),
       // 画布底色跟随 --surface（暗色下必须变深）
       surface: getComputedStyle(cv).backgroundColor,
@@ -540,11 +682,16 @@ async function main() {
   })()`);
   check('暗色下数值不受影响（同一套算法与数据）', darkRes.hero === true);
   check('暗色下画布重画成功（不是一片空白）', darkRes.ink.ink > 300, JSON.stringify(darkRes.ink));
-  check('画布底色跟随 --surface 令牌（暗色下变深）', darkRes.surface !== 'rgb(255, 255, 255)' && darkRes.surface === 'rgb(42, 42, 42)', `${darkRes.surface} / ${darkRes.bodyVar}`);
+  // 期望值从 --surface 变量现算（UI 重定调后不再写死旧值 rgb(42,42,42)）
+  const bodyRgb = (() => {
+    const h = darkRes.bodyVar.replace('#', '');
+    return `rgb(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)})`;
+  })();
+  check('画布底色跟随 --surface 令牌（暗色下变深）', darkRes.surface !== 'rgb(255, 255, 255)' && darkRes.surface === bodyRgb, `${darkRes.surface} / ${darkRes.bodyVar}`);
   check('暗色 1280 宽下无横向溢出', darkRes.overflow <= 0, `overflow=${darkRes.overflow}`);
   if (WANT_SHOTS) await shot('tools-dark-1280.png');
 
-  // ── 10. 窄屏：左栏转横向段控条，工作区不横向溢出 ────────────────────────
+  /* ── 11. 窄屏：左栏转横向段控条，工作区不横向溢出 ───────────────────── */
   await goto('tools', 390, 844);
   const narrow = await evalJs(`(() => {
     const q = window.__q;
@@ -556,24 +703,35 @@ async function main() {
       // 横向条必须在工作区上方（而不是继续占着左边一列）
       navAbove: nav.getBoundingClientRect().bottom <= pane.getBoundingClientRect().top + 2,
       navHeight: Math.round(nav.getBoundingClientRect().height),
-      // 清单从竖列改成横排。只有 1 个工具时不会真溢出，所以不能拿"能滚"当判据，
-      // 要看 flex 方向本身
+      // 清单从竖列改成横排。看 flex 方向本身，而不是"能不能滚"
       listRow: getComputedStyle(list).flexDirection === 'row',
       navHeadHidden: getComputedStyle(q('.tools-nav-head')).display === 'none',
       descHidden: getComputedStyle(q('.tools-item-desc')).display === 'none',
-      tabsVisible: window.__qa('.rti-tab').every((b) => b.getBoundingClientRect().width > 0),
+      itemsVisible: window.__qa('.tools-item').every((b) => b.getBoundingClientRect().width > 0),
+      itemCount: window.__qa('.tools-item').length,
+      tabsVisible: window.__qa('.tool-tab').every((b) => b.getBoundingClientRect().width > 0),
       pane: !!pane,
     };
   })()`);
   check('390 宽下无横向溢出', narrow.overflow <= 0, `overflow=${narrow.overflow}`);
-  check('390 宽下左栏转为横向段控条（在工具上方，高度是一条而非一列）',
-    narrow.navAbove === true && narrow.listRow === true && narrow.navHeight < 80, JSON.stringify(narrow));
-  check('390 宽下收起说明性文案（段控条 / 描述 / 页脚），保留工具本体',
-    narrow.navHeadHidden === true && narrow.descHidden === true && narrow.pane === true);
+  check(
+    '390 宽下左栏转为横向段控条（在工具上方，高度是一条而非一列）',
+    narrow.navAbove === true && narrow.listRow === true && narrow.navHeight < 80,
+    JSON.stringify(narrow)
+  );
+  check(
+    '390 宽下收起说明性文案（段控条 / 描述 / 页脚），保留工具本体',
+    narrow.navHeadHidden === true && narrow.descHidden === true && narrow.pane === true
+  );
+  check(
+    `390 宽下全部 ${TOOL_LIST.length} 个工具都还有入口（不折叠、不分组）`,
+    narrow.itemsVisible === true && narrow.itemCount === TOOL_LIST.length,
+    `可见 ${narrow.itemCount} / 期望 ${TOOL_LIST.length}`
+  );
   check('390 宽下工具内页签仍可点', narrow.tabsVisible === true);
   if (WANT_SHOTS) await shot('tools-390.png');
 
-  // ── 11. 老页面没被这次改动带坏（对话 / 列表仍正常） ──────────────────────
+  /* ── 12. 老页面没被这次改动带坏（对话 / 列表仍正常） ───────────────── */
   await goto('chat', 1280, 820);
   const chatOk = await evalJs(`(() => ({
     panel: !!window.__q('.chat-panel'),
@@ -587,10 +745,13 @@ async function main() {
     main: !!window.__q('.main'),
     toolsLeak: !!window.__q('.tools') || !!window.__q('.rti'),
   }))()`);
-  check('列表页仍正常渲染，且没有工具集的残留 DOM',
-    listOk.main === true && listOk.rows > 0 && listOk.toolsLeak === false, JSON.stringify(listOk));
+  check(
+    '列表页仍正常渲染，且没有工具集的残留 DOM',
+    listOk.main === true && listOk.rows > 0 && listOk.toolsLeak === false,
+    JSON.stringify(listOk)
+  );
 
-  await evalJs(`(() => { try { localStorage.removeItem(${JSON.stringify(SAVE_KEY)}); } catch (e) {} return true; })()`);
+  await evalJs(`(() => { try { localStorage.removeItem(${JSON.stringify(SAVE_KEY)}); localStorage.removeItem('todolist.tools.meta.v1'); } catch (e) {} return true; })()`);
   cdp.ws.close();
   proc.kill();
   await sleep(200);

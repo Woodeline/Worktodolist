@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import { useTodoStore } from './hooks/useTodoStore';
+import { useTodoSnapshot } from './hooks/useTodoSnapshot';
 import useDebounce from './hooks/useDebounce';
 import useHotkeys from './hooks/useHotkeys';
 import { useContextMenu } from './hooks/useContextMenu.jsx';
@@ -383,11 +384,24 @@ export default function App() {
   const [tab, setTab] = useState('chat');
   // 设置是独立页面，不占页签：打开时主内容整体让位，Esc / 「返回」退出。
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // 工具页的只读投影：派生逻辑全在 lib/todoSnapshot.js（纯函数、可单测）。
+  // 工具拿到的是它，而不是 store —— "默认只读"因此是技术事实而非口头约定。
+  const snapshot = useTodoSnapshot(store);
+  // 对话页 → 工具页的路由请求：{ id, params, seq }。seq 每发一次自增，
+  // 工具页据此只消费一次（React 重渲染不会重复切页/重复聚焦）。
+  const [toolRequest, setToolRequest] = useState(null);
+  const toolReqSeq = useRef(0);
   // 设置页覆盖着主内容，所以点页签必须连带把设置页关掉 ——
   // 否则会出现"点了「列表」什么都没发生"的假死观感。
   const goTab = (next) => {
     setSettingsOpen(false);
     setTab(next);
+  };
+  // tool.open 的落地：切页 + 带参数（预填）+ 关掉设置页（一律走 goTab，不另写一套）
+  const openTool = (id, plan) => {
+    toolReqSeq.current += 1;
+    setToolRequest({ id, params: plan ? { query: plan } : null, seq: toolReqSeq.current });
+    goTab('tools');
   };
   const { openMenu } = useContextMenu();
 
@@ -492,9 +506,9 @@ export default function App() {
       {settingsOpen ? (
         <SettingsPage onClose={() => setSettingsOpen(false)} />
       ) : tab === 'chat' ? (
-        <ChatPanel store={store} onOpenList={() => setTab('list')} />
+        <ChatPanel store={store} onOpenList={() => setTab('list')} onOpenTool={openTool} />
       ) : tab === 'tools' ? (
-        <ToolsPage />
+        <ToolsPage snapshot={snapshot} store={store} request={toolRequest} />
       ) : (
         <>
           <TopBar store={store} />

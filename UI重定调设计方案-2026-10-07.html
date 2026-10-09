@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>UI 重定调设计方案 · 候选 C「信号仪表」· 2026-10-07</title>
+<style>
+:root{--font-ui:"Segoe UI","Microsoft YaHei UI","Microsoft YaHei",Meiryo,sans-serif;
+--font-mono:"Cascadia Mono",Consolas,monospace;
+--bg:#f4f5f6;--surface:#fff;--text:#1b1e22;--text-2:#4a5158;--muted:#79808a;
+--line:#e2e5e8;--accent:#0e7490;--sunk:#eef0f1;--amber:#8a5a00;--green:#146b41;}
+@media (prefers-color-scheme:dark){:root{--bg:#15171a;--surface:#1c1f23;--text:#e7eaed;
+--text-2:#b3bac2;--muted:#868d96;--line:#2c3137;--sunk:#131518;--amber:#e8bd63;--green:#7dd3a2;}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size:13px;line-height:1.65;padding:0 0 80px}
+.wrap{max-width:1280px;margin:0 auto;padding:0 24px}
+header{padding:44px 0 22px;border-bottom:1px solid var(--line)}
+.eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;color:var(--muted)}
+h1{font-size:27px;font-weight:600;margin:10px 0 0}
+.meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.chip{font-family:var(--font-mono);font-size:11px;padding:5px 9px;border:1px solid var(--line);border-radius:3px;background:var(--surface);color:var(--text-2)}
+.chip b{color:var(--accent)}
+.sum{margin:20px 0 0;padding:12px 16px;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:4px;color:var(--text-2)}
+nav.toc{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0 0}
+nav.toc a{font-family:var(--font-mono);font-size:11px;padding:5px 9px;border:1px solid var(--line);border-radius:3px;color:var(--text-2);text-decoration:none}
+nav.toc a:hover{border-color:var(--accent);color:var(--accent)}
+section{padding:8px 0 4px}
+h2{font-size:19px;margin:42px 0 4px;padding-top:14px;border-top:1px solid var(--line)}
+h3{font-size:14.5px;margin:22px 0 4px}
+p{margin:8px 0;color:var(--text-2)}
+p.lead{color:var(--text)}
+ul,ol{margin:8px 0 8px 22px;color:var(--text-2)}
+li{margin:4px 0}
+.note{font-size:12px;color:var(--muted)}
+.callout{margin:14px 0;padding:12px 16px;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:4px;font-size:12.5px;color:var(--text-2)}
+code{font-family:var(--font-mono);font-size:11px}
+pre{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:12px 14px;overflow:auto;font-size:11.5px;line-height:1.6}
+pre code{font-size:11.5px}
+table{width:100%;border-collapse:collapse;margin:18px 0 8px;background:var(--surface);border:1px solid var(--line)}
+th,td{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:middle}
+th{font-size:11px;font-family:var(--font-mono);letter-spacing:.06em;color:var(--muted);background:var(--sunk)}
+td.name{font-family:var(--font-mono);font-size:12px;white-space:nowrap}
+tr.grp td{background:var(--sunk);font-weight:600;font-size:12.5px}
+td.same{color:var(--muted)}td.old{color:var(--muted)}
+td.why{color:var(--text-2);font-size:12px}
+.act{font-family:var(--font-mono);font-size:10.5px;padding:3px 7px;border-radius:3px;white-space:nowrap;display:inline-block}
+.act.set{background:#e3f1f5;color:#0e7490}.act.frz{background:var(--sunk);color:var(--muted)}
+.act.rdf{background:#fdeee0;color:#8a4a00}
+@media (prefers-color-scheme:dark){.act.set{background:#12333e;color:#35c3e0}.act.rdf{background:#3a2a17;color:#e8bd63}}
+.sw{display:inline-block;width:11px;height:11px;border-radius:2px;border:1px solid rgba(128,128,128,.4);margin-right:5px;vertical-align:-1px}
+.badge{font-family:var(--font-mono);font-size:10.5px;padding:2px 7px;border-radius:3px;white-space:nowrap}
+.badge.pass{color:var(--green)}.badge.review{color:var(--amber)}.badge.base{color:var(--muted)}.badge.info{color:var(--muted)}
+/* ── mockup 区：组件只引用 --m-* 令牌（即新令牌系统的 var() 化复刻）── */
+.mockzone{border:1px dashed var(--line);border-radius:6px;padding:18px;margin:16px 0;background:var(--sunk)}
+.mz-bar{display:flex;gap:8px;align-items:center;margin:0 0 14px}
+.mz-bar button{font-family:var(--font-mono);font-size:11px;padding:5px 12px;border:1px solid var(--line);border-radius:3px;background:var(--surface);color:var(--text-2);cursor:pointer}
+.mz-bar button.on{border-color:var(--accent);color:var(--accent)}
+.mock{font-size:12px;line-height:1.5;border-radius:5px;overflow:hidden;
+border:1px solid var(--m-border);background:var(--m-bg);color:var(--m-text);
+font-family:var(--font-ui)}
+.mock + .mock{margin-top:18px}
+.mock .mono{font-family:var(--font-mono)}
+/* 顶栏 */
+.mk-top{display:flex;align-items:center;gap:14px;padding:0 14px;height:34px;background:var(--m-surface);border-bottom:1px solid var(--m-border);font-size:11.5px;color:var(--m-muted)}
+.mk-top .tabs{display:flex;gap:2px}
+.mk-top .tab{padding:0 10px;line-height:33px}
+.mk-top .tab.cur{color:var(--m-accent);border-bottom:2px solid var(--m-accent);font-weight:600}
+.mk-top .sp{flex:1}
+/* 列表 */
+.mk-list{display:flex;min-height:300px}
+.mk-side{width:170px;background:var(--m-surface);border-right:1px solid var(--m-border);padding:10px 8px;font-size:11.5px}
+.mk-side .si{display:flex;justify-content:space-between;padding:4px 8px;border-radius:3px;color:var(--m-text-2)}
+.mk-side .si.cur{background:var(--m-accent-soft);color:var(--m-accent);font-weight:600}
+.mk-side .si .n{font-family:var(--font-mono);color:var(--m-muted)}
+.mk-side .cap{font-family:var(--font-mono);font-size:10px;color:var(--m-muted);letter-spacing:.1em;margin:10px 8px 2px}
+.mk-main{flex:1;display:flex;flex-direction:column;min-width:0}
+.mk-add{margin:12px 14px 0;padding:7px 10px;border:1px solid var(--m-control-line);border-radius:3px;color:var(--m-muted);background:var(--m-surface)}
+.mk-add b{color:var(--m-accent)}
+.mk-rows{margin:8px 14px;border:1px solid var(--m-border);border-radius:4px;background:var(--m-surface)}
+.mk-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--m-border);font-size:12px}
+.mk-row:last-child{border-bottom:none}
+.mk-row.focus{outline:2px solid var(--m-accent);outline-offset:-2px;background:var(--m-surface)}
+.mk-row .cb{width:13px;height:13px;border:1px solid var(--m-control-line);border-radius:3px;flex:none}
+.mk-row .cb.done{background:var(--m-accent);border-color:var(--m-accent);position:relative}
+.mk-row .cb.done::after{content:"✓";position:absolute;inset:0;color:var(--m-accent-fg);font-size:9px;display:flex;align-items:center;justify-content:center}
+.mk-row .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mk-row.done .t{color:var(--m-muted);text-decoration:line-through}
+.mk-row .star{color:var(--m-warn)}
+.mk-row .pri{font-family:var(--font-mono);font-size:10px;padding:1px 6px;border-radius:2px;flex:none}
+.mk-row .pri.a{background:var(--m-danger-soft);color:var(--m-danger)}
+.mk-row .pri.b{background:var(--m-warn-soft);color:var(--m-warn)}
+.mk-row .pri.c{background:var(--m-surface-3);color:var(--m-muted)}
+.mk-row .due{font-family:var(--font-mono);font-size:10.5px;color:var(--m-muted);flex:none}
+.mk-row .due.over{color:var(--m-danger);font-weight:600}
+.mk-row .ctx{font-size:10.5px;color:var(--m-accent);background:var(--m-accent-soft);padding:1px 6px;border-radius:2px;flex:none}
+.mk-row .dot{width:8px;height:8px;border-radius:50%;flex:none}
+.mk-foot{margin:auto 14px 12px;padding-top:8px;border-top:1px solid var(--m-border);font-family:var(--font-mono);font-size:10.5px;color:var(--m-muted);display:flex;gap:14px}
+/* 对话 */
+.mk-chat{display:flex;min-height:300px}
+.mk-stream{flex:1;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.mk-bubble.user{align-self:flex-end;max-width:72%;background:var(--m-accent-soft);border:1px solid var(--m-accent-line);border-radius:6px 6px 2px 6px;padding:8px 12px;color:var(--m-text)}
+.mk-tool{background:var(--m-surface-2);border:1px solid var(--m-border);border-radius:4px;padding:8px 12px;font-family:var(--font-mono);font-size:10.5px;color:var(--m-text-2)}
+.mk-tool .hd{display:flex;gap:8px;align-items:center;color:var(--m-muted);margin-bottom:4px}
+.mk-tool .ok{color:var(--m-ok)}
+.mk-confirm{background:var(--m-surface);border:1px solid var(--m-border);border-left:3px solid var(--m-warn);border-radius:4px;padding:10px 12px;max-width:78%}
+.mk-confirm .acts{display:flex;gap:8px;margin-top:8px}
+.mk-btn{font-size:11px;padding:4px 12px;border-radius:3px;border:1px solid var(--m-control-line);background:var(--m-surface);color:var(--m-text)}
+.mk-btn.pri{background:var(--m-accent);border-color:var(--m-accent);color:var(--m-accent-fg);font-weight:600}
+.mk-input{margin:0 14px 12px;display:flex;gap:8px}
+.mk-input .box{flex:1;border:1px solid var(--m-control-line);border-radius:3px;padding:7px 10px;color:var(--m-muted);background:var(--m-surface)}
+.mk-input .send{background:var(--m-accent);color:var(--m-accent-fg);border-radius:3px;padding:7px 16px;font-weight:600}
+/* 工具 */
+.mk-toolpage{display:flex;min-height:300px}
+.mk-col{width:190px;border-right:1px solid var(--m-border);padding:12px;background:var(--m-surface)}
+.mk-col label{display:block;font-size:10.5px;color:var(--m-muted);margin:8px 0 3px}
+.mk-col .inp{border:1px solid var(--m-control-line);border-radius:3px;padding:5px 8px;background:var(--m-bg);font-family:var(--font-mono);font-size:11px}
+.mk-seg{display:flex;gap:4px}
+.mk-seg span{border:1px solid var(--m-control-line);border-radius:3px;padding:4px 10px;font-size:11px;color:var(--m-text-2)}
+.mk-seg span.on{background:var(--m-accent);border-color:var(--m-accent);color:var(--m-accent-fg)}
+.mk-chart{flex:1;padding:12px 14px;display:flex;flex-direction:column;min-width:0}
+.mk-badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.mk-bdg{font-family:var(--font-mono);font-size:10px;padding:2px 8px;border-radius:2px}
+.mk-bdg.b1{background:var(--m-accent-soft);color:var(--m-accent)}
+.mk-bdg.b2{background:var(--m-ok-soft);color:var(--m-ok)}
+.mk-bdg.b3{background:var(--m-warn-soft);color:var(--m-warn)}
+.mk-legend{display:flex;gap:12px;font-size:10.5px;color:var(--m-muted);margin-bottom:4px}
+.mk-legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.mk-sum{margin-top:8px;padding-top:8px;border-top:1px solid var(--m-border);font-family:var(--font-mono);font-size:10.5px;color:var(--m-text-2);display:flex;gap:16px}
+/* 设置 */
+.mk-set{max-width:640px;padding:14px;display:flex;flex-direction:column;gap:12px}
+.mk-card{background:var(--m-surface);border:1px solid var(--m-border);border-radius:5px}
+.mk-card .ch{padding:8px 14px;border-bottom:1px solid var(--m-border);font-weight:600;font-size:12px;display:flex;justify-content:space-between;align-items:center}
+.mk-card .ch .hint{font-weight:400;color:var(--m-muted);font-size:10.5px}
+.mk-card .cf{display:flex;align-items:center;padding:8px 14px;gap:12px;border-bottom:1px solid var(--m-border)}
+.mk-card .cf:last-child{border-bottom:none}
+.mk-card .cf .fl{width:130px;flex:none;font-size:12px}
+.mk-card .cf .fv{flex:1;display:flex;gap:6px;flex-wrap:wrap}
+.mk-card .cf .hint{width:100%;font-size:10.5px;color:var(--m-muted);flex-basis:100%}
+.mk-toggle{width:30px;height:16px;border-radius:999px;background:var(--m-surface-3);border:1px solid var(--m-control-line);position:relative;flex:none}
+.mk-toggle.on{background:var(--m-accent);border-color:var(--m-accent)}
+.mk-toggle i{position:absolute;top:1px;left:1px;width:12px;height:12px;border-radius:50%;background:var(--m-surface)}
+.mk-toggle.on i{left:auto;right:1px}
+.mk-tag{font-family:var(--font-mono);font-size:10px;padding:2px 7px;border:1px solid var(--m-border);border-radius:2px;color:var(--m-text-2)}
+.mk-tag.on{border-color:var(--m-accent);color:var(--m-accent);background:var(--m-accent-soft)}
+footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+svg text{font-family:var(--font-mono)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style></head><body><div class="wrap">
+
+<header>
+  <div class="eyebrow">todolist gui · ui re-baseline · phase 4 · design spec</div>
+  <h1>UI 重定调设计方案 · 候选 C「信号仪表」</h1>
+  <div class="meta">
+    <span class="chip">日期 <b>2026-10-07</b></span>
+    <span class="chip">基线 <b>index.css §1（95 令牌）</b></span>
+    <span class="chip">验证 <b>scripts/ui-rebase-token-validate.py v2 全过</b></span>
+    <span class="chip">处置 <b>换值 ~40 / 冻结 ~50 / 重定义 1</b></span>
+    <span class="chip">新增 0 · 删除 0</span>
+    <span class="chip">画布 <b>ardot 15 frame 已交付</b></span>
+  </div>
+  <div class="sum">本文档是「todo.txt GUI · UI 重定调」的完整设计方案：记录调性裁决（候选 C）、推导链、95 令牌差异与验证结论、页面级示意（var() 复刻）、明暗对称策略与落地清单。附录 B 对比度 / CVD 矩阵由内嵌 JS 在打开时<b>现场计算</b>，数值永远与令牌表同步。本次为设计交付，不改产品代码。</div>
+  <nav class="toc">
+    <a href="#s0">0 判读卡</a><a href="#s1">1 背景动机</a><a href="#s2">2 方向论述</a>
+    <a href="#s3">3 新令牌系统</a><a href="#s4">4 页面级示意</a><a href="#s5">5 明暗对称</a>
+    <a href="#s6">6 落地清单</a><a href="#aA">附录 A 令牌全集</a><a href="#aB">附录 B 对比度矩阵</a>
+  </nav>
+</header>
+
+<!-- ============ 0 判读卡 ============ -->
+<section id="s0">
+<h2>0 · 判读卡</h2>
+<table>
+<tr><th style="width:150px">条目</th><th>结论</th></tr>
+<tr><td class="name">一句话新调性</td>
+<td><b>信号仪表</b> —— 冷灰面板分域、示波器青强调、等宽字符扩权到标题/页签/计数、双线描边与紧凑圆角；工具理性的仪器面板，让「数据 · 状态 · 信号」成为视觉主角。</td></tr>
+<tr><td class="name">被推翻的旧口径</td>
+<td>2026-10-06 拍板的「贴近原生桌面工具」（跟随系统灰 + 系统蓝）—— 本次推翻其<b>视觉部分</b>：面板层级改为 bg 暗 / surface 亮的反转关系，强调色由系统蓝 <code>#0f5fbf</code> 改为示波器青 <code>#0e7490</code>。结构、交互、令牌架构<b>全部保留</b>。新拍板将写入 MEMORY.md（见 §6 备案）。</td></tr>
+<tr><td class="name">不变的纪律红线</td>
+<td>① 数据源唯一（<code>todo.txt / done.txt</code>）；② 间距只有一套，改密度不动卡片留白；③ 组件禁裸值、令牌唯一入口 <code>index.css §1</code>（本次换调零组件改动的前提）；④ AI 兜底四约束；⑤ 明暗同语义等价、语义色冻结。</td></tr>
+</table>
+</section>
+
+<!-- ============ 1 背景动机 ============ -->
+<section id="s1">
+<h2>1 · 背景动机</h2>
+<p class="lead">v0.1.3 → v0.1.6 三轮演进后，结构已经稳定（三页签 / 工具集 4 工具 / 设置集中化 / ToolShell 三版式），但视觉调性仍停留在「系统默认灰 + 默认蓝」——<b>产品有了骨架，没有签名</b>。</p>
+<p>三个具体痛点：</p>
+<ul>
+<li><b>面板层级弱</b>：bg（#f0f0f0）与 surface（#ffffff）的关系沿用「窗口灰 + 白卡」的 OS 惯性，surface 亮于 bg 但层级语言与桌面系统混同，缺乏「仪器底座」的分区感。</li>
+<li><b>强调色无辨识度</b>：<code>#0f5fbf</code> 与 Windows 默认蓝同质——选中态、焦点环、主按钮淹没在系统 UI 的海洋里。</li>
+<li><b>气质分裂</b>：mono 字体只出现在数据单元格，标题 / 页签 / 计数仍走 UI 栈；一个以「文本协议 + 信号数据」为本体的产品，最有性格的资源（等宽字符）没有被用足。</li>
+</ul>
+<p>时机：组件全面令牌化 + <code>css-check / contrast</code> 门禁已稳定运行（基线 365 tests），换调性的边际成本处于历史最低点——<b>理论上只动 §1 的 ~95 个令牌，组件零改动</b>。这正是本次方案的全部赌注与全部红利。</p>
+</section>
+
+<!-- ============ 2 方向论述 ============ -->
+<section id="s2">
+<h2>2 · 方向论述（三候选 + 裁决记录）</h2>
+<p class="lead">Phase 1 以两条正交轴生成候选：<b>血统</b>（工具理性 ↔ 日用感性）× <b>表现度</b>（素 ↔ 浓）。三候选以同构 DOM 微样张交付（<code>方向候选样张-2026-10-07.html</code>），换调只改令牌——当场实证了「组件禁裸值」红利。</p>
+<svg viewBox="0 0 680 300" style="width:100%;max-width:680px;display:block;margin:14px 0" role="img" aria-label="三候选正交轴定位图">
+  <line x1="60" y1="250" x2="640" y2="250" stroke="#79808a" stroke-width="1"/>
+  <line x1="80" y1="270" x2="80" y2="30" stroke="#79808a" stroke-width="1"/>
+  <polygon points="640,250 632,246 632,254" fill="#79808a"/><polygon points="80,30 76,38 84,38" fill="#79808a"/>
+  <text x="612" y="270" font-size="11" fill="#79808a">血统 → 工具理性</text>
+  <text x="30" y="46" font-size="11" fill="#79808a">↑ 表现度 浓</text>
+  <text x="30" y="242" font-size="11" fill="#79808a">素</text>
+  <circle cx="230" cy="196" r="9" fill="#0f5fbf" opacity=".85"/>
+  <text x="246" y="193" font-size="12" fill="currentColor">A · 墨水编辑器</text>
+  <text x="246" y="209" font-size="10" fill="#79808a">纸墨双极 · 单一藏蓝 · 克制到无装饰</text>
+  <circle cx="540" cy="96" r="9" fill="#8a5a00" opacity=".85"/>
+  <text x="556" y="93" font-size="12" fill="currentColor">B · 纸感手帐</text>
+  <text x="556" y="109" font-size="10" fill="#79808a">暖纸底 · 棕橙 · 软阴影大圆角</text>
+  <circle cx="470" cy="150" r="10" fill="#0e7490"/>
+  <circle cx="470" cy="150" r="15" fill="none" stroke="#0e7490" stroke-dasharray="3 3"/>
+  <text x="494" y="146" font-size="12" font-weight="bold" fill="currentColor">C · 信号仪表 ✓</text>
+  <text x="494" y="162" font-size="10" fill="#79808a">冷灰分域 · 示波器青 · mono 扩权</text>
+</svg>
+<table>
+<tr><th style="width:130px">候选</th><th style="width:150px">轴位</th><th>机制摘要</th><th style="width:210px">裁决观察</th></tr>
+<tr><td class="name">A · 墨水编辑器</td><td>工具理性 × 素</td><td>纸白 / 墨黑双极、单一藏蓝强调、衬线标题克制混排；签名感来自「几乎没有装饰」。</td><td>与文本协议气质契合，但表现度过素——选中态、状态色、图表都缺乏可仰仗的系统色。</td></tr>
+<tr><td class="name">B · 纸感手帐</td><td>日用感性 × 浓</td><td>暖纸底、棕橙强调、大圆角 + 软阴影；温度优先。</td><td>与「高密度工具 / 信号数据」的内容本质冲突：暖调会稀释状态色的可读性。</td></tr>
+<tr><td class="name">C · 信号仪表 ✓</td><td>工具理性 × 中浓</td><td>冷灰面板分域（bg 暗 / surface 亮反转）、示波器青强调、mono 扩权到标题/页签/计数、双线描边（sh-2 加 1px 描边分量）、圆角收紧一档。</td><td>与产品内容（todo 文本协议 / RTI 信号 / 图表）同构；换调成本与 A 相当，签名感最强。</td></tr>
+</table>
+<div class="callout"><b>裁决记录（决策点① · 2026-10-07）</b>：用户回复「C」，候选 C 当选。A、B 用户未陈述落选理由，按选择结果落选备案；微样张存档于 <code>方向候选样张-2026-10-07.html</code> 备查。</div>
+</section>
+
+<!-- ============ 3 新令牌系统 ============ -->
+<section id="s3">
+<h2>3 · 新令牌系统（差异表 + 对比度徽标）</h2>
+<p class="lead">推导链五步：<b>调性关键词</b>（仪器 · 终端 · 刻度 · 高密度 · 青）→ <b>视觉机制</b>（冷灰面板分域 + 双线描边 + mono 扩权）→ <b>令牌值域</b> → <b>明暗双套</b> → <b>约束回验</b>。</p>
+<svg viewBox="0 0 680 92" style="width:100%;max-width:680px;display:block;margin:10px 0" role="img" aria-label="推导链">
+  <g font-size="11" fill="currentColor">
+    <rect x="6" y="26" width="112" height="40" rx="4" fill="none" stroke="#0e7490"/><text x="62" y="44" text-anchor="middle">调性关键词</text><text x="62" y="58" text-anchor="middle" font-size="9" fill="#79808a">仪器·终端·青</text>
+    <rect x="146" y="26" width="112" height="40" rx="4" fill="none" stroke="#0e7490"/><text x="202" y="44" text-anchor="middle">视觉机制</text><text x="202" y="58" text-anchor="middle" font-size="9" fill="#79808a">分域·描边·mono</text>
+    <rect x="286" y="26" width="112" height="40" rx="4" fill="none" stroke="#0e7490"/><text x="342" y="44" text-anchor="middle">令牌值域</text><text x="342" y="58" text-anchor="middle" font-size="9" fill="#79808a">~95 项逐一定值</text>
+    <rect x="426" y="26" width="112" height="40" rx="4" fill="none" stroke="#0e7490"/><text x="482" y="44" text-anchor="middle">明暗双套</text><text x="482" y="58" text-anchor="middle" font-size="9" fill="#79808a">锚点反解</text>
+    <rect x="566" y="26" width="108" height="40" rx="4" fill="#0e7490"/><text x="620" y="44" text-anchor="middle" fill="#fff">约束回验</text><text x="620" y="58" text-anchor="middle" font-size="9" fill="#cdeef5">脚本 v2 全过</text>
+    <g stroke="#79808a" fill="#79808a"><line x1="118" y1="46" x2="142" y2="46"/><polygon points="146,46 140,43 140,49"/><line x1="258" y1="46" x2="282" y2="46"/><polygon points="286,46 280,43 280,49"/><line x1="398" y1="46" x2="422" y2="46"/><polygon points="426,46 420,43 420,49"/><line x1="538" y1="46" x2="562" y2="46"/><polygon points="566,46 560,43 560,49"/></g>
+  </g>
+</svg>
+<p><b>锚点反解法</b>：--bg / --text 两端锚点按正文 4.5:1 反推；中间表面按 Oklch L 等感知明度排布；--control-line 对 surface ≥3:1 反解（WCAG 1.4.11 控件边界）；--accent 对 --accent-fg ≥4.5:1。强调色不做手工钦定——候选列表逐个过「对比度全项 + CVD vs danger/warn」闸门，取 vs-ok ΔE 最大者：<code>#0e7490</code>（浅）/ <code>#46c9ec</code>（暗）。</p>
+<h3>3.1 差异表（换值 / 重定义项）</h3>
+<p class="note">冻结项（语义色、字阶、间距、结构尺寸等 ~50 项）不在本表，全集见附录 A。语义色冻结 = 颜色只编码状态、语义不动，是「明暗同语义等价」红线的直接兑现。</p>
+
+<table><tr><th style="width:120px">令牌</th><th style="width:66px">处置</th><th style="width:150px">现值（浅）</th><th style="width:150px">新值（浅）</th><th style="width:150px">现值（暗）</th><th style="width:150px">新值（暗）</th><th>理由</th></tr>
+<tr class="grp"><td colspan="6">中性表面</td></tr>
+<tr><td class="name">bg</td><td><span class="act set">换值</span></td><td class="old"><span class="sw" style="background:#f0f0f0"></span><code>#f0f0f0</code></td><td><span class="sw" style="background:#ececee"></span><code>#ececee</code></td><td class="old"><span class="sw" style="background:#1f1f1f"></span><code>#1f1f1f</code></td><td><span class="sw" style="background:#131417"></span><code>#131417</code></td><td class="why">面板灰取代窗口灰：从「贴近系统」改为「仪器底座」——刻意让 surface 亮于 bg，面板像嵌进底座（网页惯性反转）</td></tr>
+<tr><td class="name">surface</td><td><span class="act set">换值</span></td><td class="old"><span class="sw" style="background:#ffffff"></span><code>#ffffff</code></td><td><span class="sw" style="background:#f9f9fa"></span><code>#f9f9fa</code></td><td class="old"><span class="sw" style="background:#2a2a2a"></span><code>#2a2a2a</code></td><td><span class="sw" style="background:#1c1e22"></span><code>#1c1e22</code></td><td class="why">内容面板高台；与 bg 距 0.03 Oklch L</td></tr>
+<tr><td class="name">surface-2</td><td><span class="act set">换值</span></td><td class="old"><span class="sw" style="background:#f4f4f4"></span><code>#f4f4f4</code></td><td><span class="sw" style="background:#f1f1f3"></span><code>#f1f1f3</code></td><td class="old"><span class="sw" style="background:#333333"></span><code>#333333</code></td><td><span class="sw" style="background:#24262b"></span><code>#24262b</code></td><td class="why">二级表面（表头/工具条），Oklch L 等感知插值</td></tr>
+<tr><td class="name">surface-3</td><td><span class="act set">换值</span></td><td class="old"><span class="sw" style="background:#e9e9e9"></span><code>#e9e9e9</code></td><td><span class="sw" style="background:#e6e6e9"></span><code>#e6e6e9</code></td><td class="old"><span class="sw" style="background:#3d3d3d"></span><code>#3d3d3d</code></td><td><span class="sw" style="background:#2e3137"></span><code>#2e3137</code></td><td class="why">三级表面/凹陷区，同上</td></tr>
+<tr><td class="name">border</td><td><span class="act set">换值</span></td><td class="old"><span class="sw" style="background:#e3e3e3"></span><code>#e3e3e3</code></td><td><span class="sw" style="background:#dcdce0"></span><code>#dcdce0</code></td><td class="old"><span class="sw" style="background:#3a3a3a"></span><code>#3a3a3a</code></td><td><span class="sw" style="background:#2c2f35"></span><code>#2c2f35</code></td><td class="why">发丝线随表面系移动；纯装饰无阈值</td></tr>
+<tr><td class="name">border-strong</td><td><span class="act set">换值</span></td><td class="old"><span class="sw" style="background:#c9c9c9"></span><code>#c9c9c9</code></td><td><span class="sw" style="background:#b4b4bc"></span><code>#b4b4bc</code></td><td class="old"><span class="sw" style="background:#555555"></span><code>#555555</code></td><td><span class="sw" style="background:#4b5058"></span><code>#4b5058</code></td><td class="why">强装饰线；冷灰偏蓝贴合仪表气质</td></tr>
+<tr><td class="name">control-line</td><td><span class="act set">换值</span></td><td class="old"><span class="sw" style="background:#7d7d7d"></span><code>#7d7d7d</code></td><td><span class="sw" style="background:#767b83"></span><code>#767b83</code></td><td class="old"><span class="sw" style="background:#8f8f8f"></span><code>#8f8f8f</code></td><td><span class="sw" style="background:#8b919b"></span><code>#8b919b</code></td><td class="why">对 surface 3:1 反解：#767b83=4.05:1。语义（WCAG 1.4.11 控件边界）不变</td></tr>
+<tr class="grp"><td colspan="6">文字</td></tr>
+<tr><td class="name">text</td><td><span class="act set">换值</span></td><td class="old"><span class="sw" style="background:#1b1b1b"></span><code>#1b1b1b</code></td><td><span class="sw" style="background:#16181c"></span><code>#16181c</code></td><td class="old"><span class="sw" style="background:#f0f0f0"></span><code>#f0f0f0</code></td><td><span class="sw" style="background:#ecedef"></span><code>#ecedef</code></td><td class="why">锚点：微冷墨色 #16181c，对 surface 16.9:1</td></tr>
+<tr><td class="name">text-2</td><td><span class="act set">换值</span></td><td class="old"><span class="sw" style="background:#444444"></span><code>#444444</code></td><td><span class="sw" style="background:#3d434c"></span><code>#3d434c</code></td><td class="old"><span class="sw" style="background:#cfcfcf"></span><code>#cfcfcf</code></td><td><span class="sw" style="background:#c3c7ce"></span><code>#c3c7ce</code></td><td class="why">次级文字随中性系转冷</td></tr>
+<tr><td class="name">muted</td><td><span class="act set">换值</span></td><td class="old"><span class="sw" style="background:#5f5f5f"></span><code>#5f5f5f</code></td><td><span class="sw" style="background:#5d636d"></span><code>#5d636d</code></td><td class="old"><span class="sw" style="background:#a3a3a3"></span><code>#a3a3a3</code></td><td><span class="sw" style="background:#949aa4"></span><code>#949aa4</code></td><td class="why">弱化文字 5.75:1；加蓝灰统一色温</td></tr>
+<tr class="grp"><td colspan="6">强调色</td></tr>
+<tr><td class="name">accent</td><td><span class="act rdf">重定义</span></td><td class="old"><span class="sw" style="background:#0f5fbf"></span><code>#0f5fbf</code></td><td><span class="sw" style="background:#0e7490"></span><code>#0e7490</code></td><td class="old"><span class="sw" style="background:#77a9f0"></span><code>#77a9f0</code></td><td><span class="sw" style="background:#46c9ec"></span><code>#46c9ec</code></td><td class="why">系统蓝 -&gt; 示波器青 #0e7490。候选自动裁决：对比度全项 + CVD vs danger/warn 闸门全过。vs ok（RECORD 项，见附录 B）：浅色主题下 4.5:1 文字对比与 tritan ΔE&gt;=12 不可兼得，取候选内最优 #0e7490（dE 见附录），缓解=产品无纯色编码场景；dark #46c9ec 全项含 vs-ok 通过</td></tr>
+<tr><td class="name">accent-hover</td><td><span class="act set">换值</span></td><td class="old"><span class="sw" style="background:#0d4fa0"></span><code>#0d4fa0</code></td><td><span class="sw" style="background:#0b5c73"></span><code>#0b5c73</code></td><td class="old"><span class="sw" style="background:#94bcf7"></span><code>#94bcf7</code></td><td><span class="sw" style="background:#5bd3ea"></span><code>#5bd3ea</code></td><td class="why">青系内降位（浅色变深/暗色变亮）</td></tr>
+<tr><td class="name">accent-soft</td><td><span class="act set">换值</span></td><td class="old"><span class="sw" style="background:#e8f0fb"></span><code>#e8f0fb</code></td><td><span class="sw" style="background:#e3f1f5"></span><code>#e3f1f5</code></td><td class="old"><span class="sw" style="background:#1e2733"></span><code>#1e2733</code></td><td><span class="sw" style="background:#12333e"></span><code>#12333e</code></td><td class="why">青调软底（徽标/选中态）</td></tr>
+<tr><td class="name">accent-line</td><td><span class="act set">换值</span></td><td class="old"><span class="sw" style="background:#b9d0ee"></span><code>#b9d0ee</code></td><td><span class="sw" style="background:#a8cdd8"></span><code>#a8cdd8</code></td><td class="old"><span class="sw" style="background:#37506e"></span><code>#37506e</code></td><td><span class="sw" style="background:#2b5e6f"></span><code>#2b5e6f</code></td><td class="why">青调装饰线</td></tr>
+<tr class="grp"><td colspan="6">阴影 / 遮罩 / 焦点环</td></tr>
+<tr><td class="name">sh-1</td><td><span class="act set">换值</span></td><td class="old"><code>0 1px 1px rgba(0,0,0,.06)</code></td><td><code>0 1px 1px rgba(10,14,20,.08)</code></td><td class="old"><code>0 1px 1px rgba(0,0,0,.4)</code></td><td><code>0 1px 1px rgba(0,0,0,.5)</code></td><td class="why">窄硬贴边姿态保留，阴影色转冷 rgba(10,14,20)</td></tr>
+<tr><td class="name">sh-2</td><td><span class="act set">换值</span></td><td class="old"><code>0 2px 6px rgba(0,0,0,.1)</code></td><td><code>0 1px 2px rgba(10,14,20,.1), 0 0 0 1px rgba(10,14,20,.05)</code></td><td class="old"><code>0 2px 6px rgba(0,0,0,.45)</code></td><td><code>0 1px 2px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.03)</code></td><td class="why">加入 0 0 0 1px 描边分量——「分区仪表」的双线语言</td></tr>
+<tr><td class="name">sh-3</td><td><span class="act set">换值</span></td><td class="old"><code>0 8px 24px rgba(0,0,0,.16), 0 2px 6px rgba(0,0,0,.08)</code></td><td><code>0 12px 28px rgba(10,14,20,.18), 0 2px 6px rgba(10,14,20,.1)</code></td><td class="old"><code>0 8px 24px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.35)</code></td><td><code>0 12px 28px rgba(0,0,0,.6), 0 2px 6px rgba(0,0,0,.4)</code></td><td class="why">浮层纵深维持，色温同步</td></tr>
+<tr><td class="name">overlay</td><td><span class="act set">换值</span></td><td class="old"><code>rgba(0,0,0,.28)</code></td><td><code>rgba(10,14,20,.32)</code></td><td class="old"><code>rgba(0,0,0,.55)</code></td><td><code>rgba(0,0,0,.58)</code></td><td class="why">遮罩微冷微重（.28 -&gt; .32；暗 .55 -&gt; .58）</td></tr>
+<tr><td class="name">ring</td><td><span class="act set">换值</span></td><td class="old"><code>0 0 0 2px rgba(15,95,191,.35)</code></td><td><code>0 0 0 2px rgba(14,116,144,.4)</code></td><td class="old"><code>0 0 0 2px rgba(119,169,240,.4)</code></td><td><code>0 0 0 2px rgba(53,195,224,.4)</code></td><td class="why">焦点环跟随强调色换青</td></tr>
+<tr class="grp"><td colspan="6">圆角</td></tr>
+<tr><td class="name">r-sm</td><td><span class="act set">换值</span></td><td class="old"><code>3px</code></td><td><code>2px</code></td><td class="old"><code>—</code></td><td><code>—</code></td><td class="why">3 -&gt; 2px</td></tr>
+<tr><td class="name">r-md</td><td><span class="act set">换值</span></td><td class="old"><code>4px</code></td><td><code>3px</code></td><td class="old"><code>—</code></td><td><code>—</code></td><td class="why">4 -&gt; 3px</td></tr>
+<tr><td class="name">r-lg</td><td><span class="act set">换值</span></td><td class="old"><code>6px</code></td><td><code>4px</code></td><td class="old"><code>—</code></td><td><code>—</code></td><td class="why">6 -&gt; 4px</td></tr>
+<tr><td class="name">r-xl</td><td><span class="act set">换值</span></td><td class="old"><code>8px</code></td><td><code>6px</code></td><td class="old"><code>—</code></td><td><code>—</code></td><td class="why">8 -&gt; 6px</td></tr>
+<tr class="grp"><td colspan="6">动效</td></tr>
+<tr><td class="name">dur-2</td><td><span class="act set">换值</span></td><td class="old"><code>140ms</code></td><td><code>100ms</code></td><td class="old"><code>—</code></td><td><code>100ms</code></td><td class="why">140 -&gt; 100ms：仪表响应「立刻」</td></tr>
+<tr><td class="name">dur-3</td><td><span class="act set">换值</span></td><td class="old"><code>180ms</code></td><td><code>140ms</code></td><td class="old"><code>—</code></td><td><code>140ms</code></td><td class="why">180 -&gt; 140ms：抽屉/模态保留过程感</td></tr>
+<tr class="grp"><td colspan="6">字体</td></tr>
+<tr><td class="name">font-display</td><td><span class="act rdf">重定义</span></td><td class="old"><code>var(--font-ui)（占位）</code></td><td><code>var(--font-mono)</code></td><td class="old"><code>—</code></td><td><code>var(--font-mono)</code></td><td class="why">占位（=font-ui）-&gt; var(--font-mono)：标题/页签/计数类改由等宽字符承担个性 —— 本候选最强单点重定义</td></tr>
+<tr class="grp"><td colspan="6">图表 · 轴线与状态</td></tr>
+<tr><td class="name">chart-axis</td><td><span class="act set">换值</span></td><td class="old"><span class="sw" style="background:#5f5f5f"></span><code>#5f5f5f</code></td><td><span class="sw" style="background:#5d636d"></span><code>#5d636d</code></td><td class="old"><span class="sw" style="background:#a3a3a3"></span><code>#a3a3a3</code></td><td><span class="sw" style="background:#949aa4"></span><code>#949aa4</code></td><td class="why">刻度文字对齐 muted，5.75:1</td></tr>
+<tr><td class="name">chart-grid</td><td><span class="act set">换值</span></td><td class="old"><span class="sw" style="background:#e8e8e8"></span><code>#e8e8e8</code></td><td><span class="sw" style="background:#e4e4e7"></span><code>#e4e4e7</code></td><td class="old"><span class="sw" style="background:#3a3a3a"></span><code>#3a3a3a</code></td><td><span class="sw" style="background:#2c2f35"></span><code>#2c2f35</code></td><td class="why">网格线随表面系</td></tr>
+<tr><td class="name">chart-frame</td><td><span class="act set">换值</span></td><td class="old"><span class="sw" style="background:#8f8f8f"></span><code>#8f8f8f</code></td><td><span class="sw" style="background:#6f747d"></span><code>#6f747d</code></td><td class="old"><span class="sw" style="background:#7a7a7a"></span><code>#7a7a7a</code></td><td><span class="sw" style="background:#7d828c"></span><code>#7d828c</code></td><td class="why">坐标轴 4.46:1</td></tr>
+<tr class="grp"><td colspan="6">顺序色阶</td></tr>
+<tr><td class="name">ramp-1</td><td><span class="act set">换值</span></td><td class="old"><span class="sw" style="background:#eef4fc"></span><code>#eef4fc</code></td><td><span class="sw" style="background:#eef7f9"></span><code>#eef7f9</code></td><td class="old"><span class="sw" style="background:#1c2735"></span><code>#1c2735</code></td><td><span class="sw" style="background:#141f26"></span><code>#141f26</code></td><td class="why">蓝相 -&gt; 青相（与强调色同血统）；首轮步差 7.5 不足，本轮加宽至 &gt;=10 重验</td></tr>
+<tr><td class="name">ramp-2</td><td><span class="act set">换值</span></td><td class="old"><span class="sw" style="background:#cfe0f6"></span><code>#cfe0f6</code></td><td><span class="sw" style="background:#c8e3ec"></span><code>#c8e3ec</code></td><td class="old"><span class="sw" style="background:#26394f"></span><code>#26394f</code></td><td><span class="sw" style="background:#1d3b4b"></span><code>#1d3b4b</code></td><td class="why">—</td></tr>
+<tr><td class="name">ramp-3</td><td><span class="act set">换值</span></td><td class="old"><span class="sw" style="background:#9dc0ea"></span><code>#9dc0ea</code></td><td><span class="sw" style="background:#93c6d9"></span><code>#93c6d9</code></td><td class="old"><span class="sw" style="background:#365576"></span><code>#365576</code></td><td><span class="sw" style="background:#2b5b72"></span><code>#2b5b72</code></td><td class="why">—</td></tr>
+<tr><td class="name">ramp-4</td><td><span class="act set">换值</span></td><td class="old"><span class="sw" style="background:#5b8fd4"></span><code>#5b8fd4</code></td><td><span class="sw" style="background:#5094b0"></span><code>#5094b0</code></td><td class="old"><span class="sw" style="background:#5583b8"></span><code>#5583b8</code></td><td><span class="sw" style="background:#4a8cae"></span><code>#4a8cae</code></td><td class="why">—</td></tr>
+<tr><td class="name">ramp-5</td><td><span class="act set">换值</span></td><td class="old"><span class="sw" style="background:#1e5aa8"></span><code>#1e5aa8</code></td><td><span class="sw" style="background:#0c6480"></span><code>#0c6480</code></td><td class="old"><span class="sw" style="background:#8fbcf7"></span><code>#8fbcf7</code></td><td><span class="sw" style="background:#86cde8"></span><code>#86cde8</code></td><td class="why">—</td></tr>
+</table>
+<p class="note">处置统计：<b>换值 32</b> · <b>冻结 38</b> · <b>重定义 2</b> · 新增 0 · 删除 0。重定义唯一一项：<code>font-display</code> 由占位（=font-ui）改为 <code>var(--font-mono)</code>——标题/页签/计数改由等宽字符承担个性，是本候选最强单点重定义。</p>
+<h3>3.2 关键对比度徽标（打开文档时由 JS 现算）</h3>
+<div id="keymarks" class="mockzone" style="background:var(--surface)"></div>
+<h3>3.3 REVIEW 项与用户裁决</h3>
+<div class="callout"><b>accent vs ok（浅色主题）· 色相内不可解</b>：能过 4.5:1 文字对比的青色与 ok 绿在 tritanopia（蓝黄色盲，约 0.01% 人群）下明度碰撞——4.5:1 把 accent 明度锁死在碰撞区，色相内数学上无解（5 个候选全试，ΔE 7.2–9.8）。已取候选内最优并如实上报。<b>用户裁决（决策点② · 2026-10-07）：选 A —— 接受现值 + 双编码缓解</b>（产品所有状态均为图标/文字双编码，无纯色辨析场景）。附录 B 中该项标注 REVIEW·A。另：danger vs warn（deutan ΔE≈4.7）为现网既有旧账（语义色冻结、零回归），列入实施后优化清单。</div>
+</section>
+
+<!-- ============ 4 页面级示意 ============ -->
+<section id="s4">
+<h2>4 · 页面级示意（var() 复刻）</h2>
+<p class="lead">以下 mockup 用 HTML/CSS 复刻核心界面，<b>组件样式只引用 <code>--m-*</code> 令牌变量</b>（即新令牌系统的 var() 化）——切换主题只是换一组变量值，DOM 一字不动。这就是落地后「改 §1 即整站换调」的实证。</p>
+<div class="mockzone" id="mockzone">
+<div class="mz-bar"><span style="font-size:11px;color:var(--muted);font-family:var(--font-mono)">MOCKUP THEME</span>
+<button id="btnL" class="on">浅色</button><button id="btnD">暗色</button>
+<span style="font-size:11px;color:var(--muted)">（对应画布 frame：01 / 07 / 08 / 10；暗色镜像 04 / 13 / 14）</span></div>
+
+<!-- 4.1 列表 -->
+<div class="mock" data-cap="列表 · 常态">
+  <div class="mk-top"><div class="tabs"><span class="tab">对话</span><span class="tab cur">列表</span><span class="tab">工具</span></div><span class="sp"></span><span class="mono">2026-10-07 · 周三</span><span class="mono">v0.1.6</span></div>
+  <div class="mk-list">
+    <aside class="mk-side">
+      <div class="si cur"><span>今天</span><span class="n">3</span></div>
+      <div class="si"><span>全部</span><span class="n">12</span></div>
+      <div class="si"><span>已完成</span><span class="n">48</span></div>
+      <div class="si"><span>收集箱</span><span class="n">2</span></div>
+      <div class="cap">项目</div>
+      <div class="si"><span>@强化</span><span class="n">5</span></div>
+      <div class="si"><span>@回测</span><span class="n">4</span></div>
+      <div class="cap">动力观察</div>
+      <div class="si"><span>回测开巷</span><span class="n">2</span></div>
+    </aside>
+    <div class="mk-main">
+      <div class="mk-add">+ 添加任务，回车录入：(A) 优先级 ·+项目 ·@上下文 <span class="mono">due:2026-10-09</span>　<b>语法直查 (A)(B)(C)=高/中/低</b></div>
+      <div class="mk-rows">
+        <div class="mk-row focus"><span class="cb"></span><span class="t">回测脚本接入移动回撤出场</span><span class="star">★</span><span class="pri a">高 A</span><span class="due over">逾期 10月8日</span><span class="ctx">@回测</span></div>
+        <div class="mk-row"><span class="cb"></span><span class="t">整理主力吸筹指标参数对照表</span><span class="pri b">中 B</span><span class="due">10月9日</span><span class="ctx">@强化</span></div>
+        <div class="mk-row"><span class="cb"></span><span class="t">军信股份周线参数二次验证</span><span class="pri c">低 C</span><span class="due">10月12日</span><span class="ctx">@回测</span></div>
+        <div class="mk-row"><span class="cb"></span><span class="t">人民网日线止损回测报告</span><span class="pri c">低 C</span><span class="due">10月13日</span><span class="ctx">@回测</span></div>
+        <div class="mk-row done"><span class="cb done"></span><span class="t">升级 ghfast 镜像脚本</span><span class="due">10月6日 完成</span></div>
+      </div>
+      <div class="mk-foot"><span>今天 3 项</span><span>全部 12 项</span><span>排序=手动</span><span>数据源 todo.txt · 只读白名单</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- 4.2 对话 · 提议确认 -->
+<div class="mock" data-cap="对话 · 消息流 + 提议确认">
+  <div class="mk-top"><div class="tabs"><span class="tab cur">对话</span><span class="tab">列表</span><span class="tab">工具</span></div><span class="sp"></span><span class="mono">写入需此确认后落盘</span></div>
+  <div class="mk-chat">
+    <div class="mk-stream">
+      <div class="mk-bubble user">把军信股份的周线验证排到下周，加个星标</div>
+      <div class="mk-tool"><div class="hd"><span>tool · nl-parseIntent</span><span>本地规则命中</span><span class="ok">● 0 规则请求</span></div>intent=update　target=军信股份周线验证（score 0.83）<br/>patches: due=2026-10-12（下周一）　star=1<br/>confidence=0.92　needsConfirm=true　nearMatches=[全部核对 B 0.31]</div>
+      <div class="mk-confirm">识别到 1 处修改：<b>due 改为下周一（10月12日）+ 加星标</b>。这是写文件的操作，确认后才会写入 todo.txt。<div class="acts"><span class="mk-btn pri">确认写入</span><span class="mk-btn">只改日期</span><span class="mk-btn">取消</span></div></div>
+      <div class="mk-input"><div class="box">输入任务指令，或直接对话…</div><div class="send">发送</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- 4.3 工具 · workbench -->
+<div class="mock" data-cap="工具 · workbench（周统计图表）">
+  <div class="mk-top"><div class="tabs"><span class="tab">对话</span><span class="tab">列表</span><span class="tab cur">工具</span></div><span class="sp"></span><span class="mono">registry · 4 工具 · 写白名单=bulkprio</span></div>
+  <div class="mk-toolpage">
+    <div class="mk-col">
+      <label>范围</label>
+      <div class="inp">2026-09-01 → 2026-10-07</div>
+      <label>粒度</label>
+      <div class="mk-seg"><span class="on">日</span><span>周</span><span>月</span></div>
+      <label>序列（对照 --ramp）</label>
+      <div class="inp">完成数 · 新增数</div>
+    </div>
+    <div class="mk-chart">
+      <div class="mk-badges"><span class="mk-bdg b1">样本量 n=48 充分</span><span class="mk-bdg b2">未来 3 天无外推 · 置信度足</span><span class="mk-bdg b3">2 天缺位回调</span></div>
+      <div class="mk-legend"><span><i style="background:var(--m-ramp-4)"></i>完成数</span><span><i style="background:var(--m-ramp-2)"></i>新增数</span><span><i style="background:var(--m-chart-thr)"></i>阈值 · 日完成 ≥ 4</span></div>
+      <svg viewBox="0 0 560 180" style="width:100%;display:block" role="img" aria-label="周统计柱状图示意">
+        <line x1="34" y1="10" x2="34" y2="152" stroke="var(--m-axis)" stroke-width="1"/>
+        <line x1="34" y1="152" x2="552" y2="152" stroke="var(--m-axis)" stroke-width="1"/>
+        <g stroke="var(--m-grid)" stroke-width="1"><line x1="34" y1="118" x2="552" y2="118"/><line x1="34" y1="84" x2="552" y2="84"/><line x1="34" y1="50" x2="552" y2="50"/></g>
+        <rect x="52"  y="112" width="26" height="40" fill="var(--m-ramp-2)"/>
+        <rect x="122" y="96"  width="26" height="56" fill="var(--m-ramp-3)"/>
+        <rect x="192" y="72"  width="26" height="80" fill="var(--m-ramp-4)"/>
+        <rect x="262" y="88"  width="26" height="64" fill="var(--m-ramp-3)"/>
+        <rect x="332" y="46"  width="26" height="106" fill="var(--m-ramp-5)"/>
+        <rect x="402" y="60"  width="26" height="92" fill="var(--m-ramp-4)"/>
+        <rect x="472" y="120" width="26" height="32" fill="var(--m-ramp-2)"/>
+        <line x1="34" y1="76" x2="552" y2="76" stroke="var(--m-chart-thr)" stroke-width="1.5" stroke-dasharray="5 3"/>
+        <g font-size="8.5" fill="var(--m-axis)"><text x="58" y="164">09-08</text><text x="128" y="164">09-15</text><text x="198" y="164">09-22</text><text x="268" y="164">09-29</text><text x="338" y="164">10-05</text><text x="408" y="164">10-06</text><text x="478" y="164">10-07</text></g>
+        <text x="500" y="70" font-size="9" fill="var(--m-chart-thr)">阈值 ≥ 4</text>
+      </svg>
+      <div class="mk-sum"><span>Σ完成 48</span><span>日均 4.6</span><span>峰值 10-05</span><span style="color:var(--m-warn)">外推段不纳入均值</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- 4.4 设置 -->
+<div class="mock" data-cap="设置 · 集中化">
+  <div class="mk-top"><div class="tabs"><span class="tab">对话</span><span class="tab">列表</span><span class="tab">工具</span></div><span class="sp"></span><span class="mono">Ctrl+, 关闭设置</span></div>
+  <div class="mk-set">
+    <div class="mk-card"><div class="ch">外观 <span class="hint">调性 · 明暗</span></div>
+      <div class="cf"><span class="fl">主题</span><span class="fv"><span class="mk-tag on">跟随系统</span><span class="mk-tag">浅色</span><span class="mk-tag">暗色</span></span></div>
+      <div class="cf"><span class="fl">强调色预览</span><span class="fv"><span class="mk-tag on mono">accent #0e7490</span><span class="mk-tag mono">accent-fg 对比 4.5:1 ✓</span></span></div>
+    </div>
+    <div class="mk-card"><div class="ch">AI 兜底 <span class="hint">默认关闭 · 一行请求都不发</span></div>
+      <div class="cf"><span class="fl">启用 AI 兜底</span><span class="fv"><span class="mk-toggle on"><i></i></span><span class="mk-tag mono">本地 unknown 才触发</span></span><span class="hint">AI 不自造 id；只从给定清单挑 targetIndex，序号→id 本地映射</span></div>
+    </div>
+    <div class="mk-card"><div class="ch">数据 <span class="hint">todo.txt / done.txt 唯一数据源</span></div>
+      <div class="cf"><span class="fl">写白名单</span><span class="fv"><span class="mk-tag on">bulkprio</span><span class="mk-tag">其余工具只读</span></span></div>
+    </div>
+  </div>
+</div>
+</div>
+</section>
+
+<!-- ============ 5 明暗对称 ============ -->
+<section id="s5">
+<h2>5 · 明暗对称</h2>
+<p class="lead">两条纪律：<b>明暗同语义换明度</b>（同一令牌在两主题只换明度角色、不变语义；暗色饱和度微升补偿低端明度下的辨识力）、<b>同语义等价验证</b>（附录 B 的矩阵对 light/dark 各跑一遍，同一检查项同一阈值）。</p>
+<p>锚点反解：浅色以 <code>#ececee</code> 底 / <code>#16181c</code> 墨为锚（正文 4.5:1 富余），暗色以 <code>#131417</code> / <code>#ecedef</code> 为锚；中间表面按 Oklch L 等感知排布——浅色 surface(0.978) 亮于 bg(0.902) 的「高台」关系，在暗色镜像为 surface(0.136) 亮于 bg(0.085)，面板始终浮出底座。</p>
+
+<table><tr><th style="width:120px">令牌</th><th style="width:170px">浅色</th><th style="width:170px">暗色</th><th>对称策略</th></tr>
+<tr class="grp"><td colspan="5">底座 / 面板</td></tr>
+<tr><td class="name">bg</td><td><span class="sw" style="background:#ececee"></span><code>#ececee</code></td><td><span class="sw" style="background:#131417"></span><code>#131417</code></td><td class="why">面板灰取代窗口灰：从「贴近系统」改为「仪器底座」——刻意让 surface 亮于 bg，面板像嵌进底座（网页惯性反转）</td></tr>
+<tr><td class="name">surface</td><td><span class="sw" style="background:#f9f9fa"></span><code>#f9f9fa</code></td><td><span class="sw" style="background:#1c1e22"></span><code>#1c1e22</code></td><td class="why">内容面板高台；与 bg 距 0.03 Oklch L</td></tr>
+<tr><td class="name">surface-2</td><td><span class="sw" style="background:#f1f1f3"></span><code>#f1f1f3</code></td><td><span class="sw" style="background:#24262b"></span><code>#24262b</code></td><td class="why">二级表面（表头/工具条），Oklch L 等感知插值</td></tr>
+<tr><td class="name">surface-3</td><td><span class="sw" style="background:#e6e6e9"></span><code>#e6e6e9</code></td><td><span class="sw" style="background:#2e3137"></span><code>#2e3137</code></td><td class="why">三级表面/凹陷区，同上</td></tr>
+<tr class="grp"><td colspan="5">分隔</td></tr>
+<tr><td class="name">border</td><td><span class="sw" style="background:#dcdce0"></span><code>#dcdce0</code></td><td><span class="sw" style="background:#2c2f35"></span><code>#2c2f35</code></td><td class="why">发丝线随表面系移动；纯装饰无阈值</td></tr>
+<tr><td class="name">border-strong</td><td><span class="sw" style="background:#b4b4bc"></span><code>#b4b4bc</code></td><td><span class="sw" style="background:#4b5058"></span><code>#4b5058</code></td><td class="why">强装饰线；冷灰偏蓝贴合仪表气质</td></tr>
+<tr><td class="name">control-line</td><td><span class="sw" style="background:#767b83"></span><code>#767b83</code></td><td><span class="sw" style="background:#8b919b"></span><code>#8b919b</code></td><td class="why">对 surface 3:1 反解：#767b83=4.05:1。语义（WCAG 1.4.11 控件边界）不变</td></tr>
+<tr class="grp"><td colspan="5">文字</td></tr>
+<tr><td class="name">text</td><td><span class="sw" style="background:#16181c"></span><code>#16181c</code></td><td><span class="sw" style="background:#ecedef"></span><code>#ecedef</code></td><td class="why">锚点：微冷墨色 #16181c，对 surface 16.9:1</td></tr>
+<tr><td class="name">text-2</td><td><span class="sw" style="background:#3d434c"></span><code>#3d434c</code></td><td><span class="sw" style="background:#c3c7ce"></span><code>#c3c7ce</code></td><td class="why">次级文字随中性系转冷</td></tr>
+<tr><td class="name">muted</td><td><span class="sw" style="background:#5d636d"></span><code>#5d636d</code></td><td><span class="sw" style="background:#949aa4"></span><code>#949aa4</code></td><td class="why">弱化文字 5.75:1；加蓝灰统一色温</td></tr>
+<tr class="grp"><td colspan="5">强调</td></tr>
+<tr><td class="name">accent</td><td><span class="sw" style="background:#0e7490"></span><code>#0e7490</code></td><td><span class="sw" style="background:#46c9ec"></span><code>#46c9ec</code></td><td class="why">系统蓝 -&amp;gt; 示波器青 #0e7490。候选自动裁决：对比度全项 + CVD vs danger/warn 闸门全过。vs ok（RECORD 项，见附录 B）：浅色主题下 4.5:1 文字对比与 tritan ΔE&amp;gt;=12 不可兼得，取候选内最优 #0e7490（dE 见附录），缓解=产品无纯色编码场景；dark #46c9ec 全项含 vs-ok 通过</td></tr>
+<tr><td class="name">accent-hover</td><td><span class="sw" style="background:#0b5c73"></span><code>#0b5c73</code></td><td><span class="sw" style="background:#5bd3ea"></span><code>#5bd3ea</code></td><td class="why">青系内降位（浅色变深/暗色变亮）</td></tr>
+<tr><td class="name">accent-fg</td><td><span class="sw" style="background:#ffffff"></span><code>#ffffff</code></td><td><span class="sw" style="background:#06161b"></span><code>#06161b</code></td><td class="why">浅色 #ffffff / 暗色深青黑，均过 4.5:1</td></tr>
+<tr><td class="name">accent-soft</td><td><span class="sw" style="background:#e3f1f5"></span><code>#e3f1f5</code></td><td><span class="sw" style="background:#12333e"></span><code>#12333e</code></td><td class="why">青调软底（徽标/选中态）</td></tr>
+<tr><td class="name">accent-line</td><td><span class="sw" style="background:#a8cdd8"></span><code>#a8cdd8</code></td><td><span class="sw" style="background:#2b5e6f"></span><code>#2b5e6f</code></td><td class="why">青调装饰线</td></tr>
+<tr class="grp"><td colspan="5">语义</td></tr>
+<tr><td class="name">danger</td><td><span class="sw" style="background:#b3261e"></span><code>#b3261e</code></td><td><span class="sw" style="background:#ff9c92"></span><code>#ff9c92</code></td><td class="why">明暗同语义换明度；暗色饱和度微升补偿</td></tr>
+<tr><td class="name">warn</td><td><span class="sw" style="background:#8a5a00"></span><code>#8a5a00</code></td><td><span class="sw" style="background:#e8bd63"></span><code>#e8bd63</code></td><td class="why">明暗同语义换明度；暗色饱和度微升补偿</td></tr>
+<tr><td class="name">ok</td><td><span class="sw" style="background:#146b41"></span><code>#146b41</code></td><td><span class="sw" style="background:#7dd3a2"></span><code>#7dd3a2</code></td><td class="why">明暗同语义换明度；暗色饱和度微升补偿</td></tr>
+<tr class="grp"><td colspan="5">语义软底</td></tr>
+<tr><td class="name">danger-soft</td><td><span class="sw" style="background:#fdecea"></span><code>#fdecea</code></td><td><span class="sw" style="background:#3a201d"></span><code>#3a201d</code></td><td class="why">明暗同语义换明度；暗色饱和度微升补偿</td></tr>
+<tr><td class="name">warn-soft</td><td><span class="sw" style="background:#fdf3e0"></span><code>#fdf3e0</code></td><td><span class="sw" style="background:#362c17"></span><code>#362c17</code></td><td class="why">明暗同语义换明度；暗色饱和度微升补偿</td></tr>
+<tr><td class="name">ok-soft</td><td><span class="sw" style="background:#e6f4ec"></span><code>#e6f4ec</code></td><td><span class="sw" style="background:#163024"></span><code>#163024</code></td><td class="why">明暗同语义换明度；暗色饱和度微升补偿</td></tr>
+<tr class="grp"><td colspan="5">图表</td></tr>
+<tr><td class="name">chart-axis</td><td><span class="sw" style="background:#5d636d"></span><code>#5d636d</code></td><td><span class="sw" style="background:#949aa4"></span><code>#949aa4</code></td><td class="why">刻度文字对齐 muted，5.75:1</td></tr>
+<tr><td class="name">chart-grid</td><td><span class="sw" style="background:#e4e4e7"></span><code>#e4e4e7</code></td><td><span class="sw" style="background:#2c2f35"></span><code>#2c2f35</code></td><td class="why">网格线随表面系</td></tr>
+<tr><td class="name">chart-frame</td><td><span class="sw" style="background:#6f747d"></span><code>#6f747d</code></td><td><span class="sw" style="background:#7d828c"></span><code>#7d828c</code></td><td class="why">坐标轴 4.46:1</td></tr>
+<tr><td class="name">chart-thr</td><td><span class="sw" style="background:#b3261e"></span><code>#b3261e</code></td><td><span class="sw" style="background:#ff9c92"></span><code>#ff9c92</code></td><td class="why">=语义 danger</td></tr>
+<tr class="grp"><td colspan="5">顺序色阶</td></tr>
+<tr><td class="name">ramp-1</td><td><span class="sw" style="background:#eef7f9"></span><code>#eef7f9</code></td><td><span class="sw" style="background:#141f26"></span><code>#141f26</code></td><td class="why">蓝相 -&amp;gt; 青相（与强调色同血统）；首轮步差 7.5 不足，本轮加宽至 &amp;gt;=10 重验</td></tr>
+<tr><td class="name">ramp-2</td><td><span class="sw" style="background:#c8e3ec"></span><code>#c8e3ec</code></td><td><span class="sw" style="background:#1d3b4b"></span><code>#1d3b4b</code></td><td class="why">明暗同语义换明度；暗色饱和度微升补偿</td></tr>
+<tr><td class="name">ramp-3</td><td><span class="sw" style="background:#93c6d9"></span><code>#93c6d9</code></td><td><span class="sw" style="background:#2b5b72"></span><code>#2b5b72</code></td><td class="why">明暗同语义换明度；暗色饱和度微升补偿</td></tr>
+<tr><td class="name">ramp-4</td><td><span class="sw" style="background:#5094b0"></span><code>#5094b0</code></td><td><span class="sw" style="background:#4a8cae"></span><code>#4a8cae</code></td><td class="why">明暗同语义换明度；暗色饱和度微升补偿</td></tr>
+<tr><td class="name">ramp-5</td><td><span class="sw" style="background:#0c6480"></span><code>#0c6480</code></td><td><span class="sw" style="background:#86cde8"></span><code>#86cde8</code></td><td class="why">明暗同语义换明度；暗色饱和度微升补偿</td></tr>
+</table>
+</section>
+
+<!-- ============ 6 落地清单 ============ -->
+<section id="s6">
+<h2>6 · 落地清单（实施阶段执行，本次不含代码改动）</h2>
+<h3>6.1 实施顺序</h3>
+<ol>
+<li><code>index.css §1</code> 一次提交替换 95 令牌（同步重写头部注释为「信号仪表」口径与推导链摘要）。</li>
+<li>styleguide 15 视图逐屏目检（<code>?view=list</code>），确认无残留裸值与新调性一致。</li>
+<li>门禁回归：<code>test:ui</code>（css-check + contrast）→ <code>test:responsive</code> → <code>test:settings / test:tools</code> → <code>npm run build</code> + 全量 <code>test</code>。</li>
+<li>对照本档附录 B 数值抽验渲染对比度（浏览器 devtools 或脚本）。</li>
+</ol>
+<h3>6.2 零改动组件红利</h3>
+<p>组件禁裸值红线保证换调理论上 <b>0 组件改动</b>。§4 的 mockup 即实证：同构 DOM 只换 <code>--m-*</code> 变量即整页换调。实施时如发现个别硬编码残留（预计为 rgba 阴影、内联 SVG 描边之类），按「顺手转令牌」最小处理并记录。</p>
+<h3>6.3 风险与回滚</h3>
+<ul>
+<li>令牌全部集中在 <code>§1</code>：回滚 = 单 commit revert，无散落改动。</li>
+<li>对比度 / CVD 由脚本门禁保证，回归风险前置到设计期消化。</li>
+<li>REVIEW 项（accent vs ok 浅色 tritan）已由用户裁决 A 接受；如后续需要翻转，执行路径=ok 微调向黄绿（连带 ok-soft）后重跑验证脚本。</li>
+<li>danger vs warn（deutan ΔE≈4.7）旧账：列入实施后优化清单，与本次解耦。</li>
+</ul>
+<h3>6.4 备案（本次设计交付内完成 / 实施阶段完成）</h3>
+<ul>
+<li><b>CHANGELOG</b>：记录调性变更与理由（本档 §0–§2 为素材）。</li>
+<li><b>MEMORY.md</b>：推翻 2026-10-06「原生桌面工具」拍板，写入「信号仪表」新拍板。</li>
+<li><b>index.css 头部注释重写</b>：属实施阶段（本次只备案）。</li>
+<li><b>画布字体替代</b>：Ardot 画布以 Sarasa Gothic SC / Cascadia Mono 替代系统栈（画布环境无系统字体），落地实现不受影响。</li>
+<li><b>验证脚本</b>：<code>scripts/ui-rebase-token-validate.py</code> 为计划外新增的可复现工具，随本方案归档。</li>
+</ul>
+</section>
+
+<!-- ============ 附录 A ============ -->
+<section id="aA">
+<h2>附录 A · 令牌全集对账表（95 项）</h2>
+<p class="note">现值取 <code>index.css §1</code> 基线；新值 = 验证器输出。冻结项新旧同值（仅列出备查）。</p>
+
+<table class="mini"><tr><th style="width:130px">令牌</th><th style="width:64px">处置</th><th style="width:170px">现值（浅）</th><th style="width:170px">新值（浅）</th><th style="width:170px">现值（暗）</th><th style="width:170px">新值（暗）</th></tr>
+<tr><td class="name">bg</td><td><span class="act set">换值</span></td><td class=""><span class="sw" style="background:#f0f0f0"></span><code>#f0f0f0</code></td><td><span class="sw" style="background:#ececee"></span><code>#ececee</code></td><td class=""><span class="sw" style="background:#1f1f1f"></span><code>#1f1f1f</code></td><td><span class="sw" style="background:#131417"></span><code>#131417</code></td></tr>
+<tr><td class="name">surface</td><td><span class="act set">换值</span></td><td class=""><span class="sw" style="background:#ffffff"></span><code>#ffffff</code></td><td><span class="sw" style="background:#f9f9fa"></span><code>#f9f9fa</code></td><td class=""><span class="sw" style="background:#2a2a2a"></span><code>#2a2a2a</code></td><td><span class="sw" style="background:#1c1e22"></span><code>#1c1e22</code></td></tr>
+<tr><td class="name">surface-2</td><td><span class="act set">换值</span></td><td class=""><span class="sw" style="background:#f4f4f4"></span><code>#f4f4f4</code></td><td><span class="sw" style="background:#f1f1f3"></span><code>#f1f1f3</code></td><td class=""><span class="sw" style="background:#333333"></span><code>#333333</code></td><td><span class="sw" style="background:#24262b"></span><code>#24262b</code></td></tr>
+<tr><td class="name">surface-3</td><td><span class="act set">换值</span></td><td class=""><span class="sw" style="background:#e9e9e9"></span><code>#e9e9e9</code></td><td><span class="sw" style="background:#e6e6e9"></span><code>#e6e6e9</code></td><td class=""><span class="sw" style="background:#3d3d3d"></span><code>#3d3d3d</code></td><td><span class="sw" style="background:#2e3137"></span><code>#2e3137</code></td></tr>
+<tr><td class="name">border</td><td><span class="act set">换值</span></td><td class=""><span class="sw" style="background:#e3e3e3"></span><code>#e3e3e3</code></td><td><span class="sw" style="background:#dcdce0"></span><code>#dcdce0</code></td><td class=""><span class="sw" style="background:#3a3a3a"></span><code>#3a3a3a</code></td><td><span class="sw" style="background:#2c2f35"></span><code>#2c2f35</code></td></tr>
+<tr><td class="name">border-strong</td><td><span class="act set">换值</span></td><td class=""><span class="sw" style="background:#c9c9c9"></span><code>#c9c9c9</code></td><td><span class="sw" style="background:#b4b4bc"></span><code>#b4b4bc</code></td><td class=""><span class="sw" style="background:#555555"></span><code>#555555</code></td><td><span class="sw" style="background:#4b5058"></span><code>#4b5058</code></td></tr>
+<tr><td class="name">control-line</td><td><span class="act set">换值</span></td><td class=""><span class="sw" style="background:#7d7d7d"></span><code>#7d7d7d</code></td><td><span class="sw" style="background:#767b83"></span><code>#767b83</code></td><td class=""><span class="sw" style="background:#8f8f8f"></span><code>#8f8f8f</code></td><td><span class="sw" style="background:#8b919b"></span><code>#8b919b</code></td></tr>
+<tr><td class="name">text</td><td><span class="act set">换值</span></td><td class=""><span class="sw" style="background:#1b1b1b"></span><code>#1b1b1b</code></td><td><span class="sw" style="background:#16181c"></span><code>#16181c</code></td><td class=""><span class="sw" style="background:#f0f0f0"></span><code>#f0f0f0</code></td><td><span class="sw" style="background:#ecedef"></span><code>#ecedef</code></td></tr>
+<tr><td class="name">text-2</td><td><span class="act set">换值</span></td><td class=""><span class="sw" style="background:#444444"></span><code>#444444</code></td><td><span class="sw" style="background:#3d434c"></span><code>#3d434c</code></td><td class=""><span class="sw" style="background:#cfcfcf"></span><code>#cfcfcf</code></td><td><span class="sw" style="background:#c3c7ce"></span><code>#c3c7ce</code></td></tr>
+<tr><td class="name">muted</td><td><span class="act set">换值</span></td><td class=""><span class="sw" style="background:#5f5f5f"></span><code>#5f5f5f</code></td><td><span class="sw" style="background:#5d636d"></span><code>#5d636d</code></td><td class=""><span class="sw" style="background:#a3a3a3"></span><code>#a3a3a3</code></td><td><span class="sw" style="background:#949aa4"></span><code>#949aa4</code></td></tr>
+<tr><td class="name">accent</td><td><span class="act rdf">重定义</span></td><td class=""><span class="sw" style="background:#0f5fbf"></span><code>#0f5fbf</code></td><td><span class="sw" style="background:#0e7490"></span><code>#0e7490</code></td><td class=""><span class="sw" style="background:#77a9f0"></span><code>#77a9f0</code></td><td><span class="sw" style="background:#46c9ec"></span><code>#46c9ec</code></td></tr>
+<tr><td class="name">accent-hover</td><td><span class="act set">换值</span></td><td class=""><span class="sw" style="background:#0d4fa0"></span><code>#0d4fa0</code></td><td><span class="sw" style="background:#0b5c73"></span><code>#0b5c73</code></td><td class=""><span class="sw" style="background:#94bcf7"></span><code>#94bcf7</code></td><td><span class="sw" style="background:#5bd3ea"></span><code>#5bd3ea</code></td></tr>
+<tr><td class="name">accent-fg</td><td><span class="act frz">冻结</span></td><td class="same"><span class="sw" style="background:#ffffff"></span><code>#ffffff</code></td><td><span class="sw" style="background:#ffffff"></span><code>#ffffff</code></td><td class="same"><span class="sw" style="background:#10151d"></span><code>#10151d</code></td><td><span class="sw" style="background:#06161b"></span><code>#06161b</code></td></tr>
+<tr><td class="name">accent-soft</td><td><span class="act set">换值</span></td><td class=""><span class="sw" style="background:#e8f0fb"></span><code>#e8f0fb</code></td><td><span class="sw" style="background:#e3f1f5"></span><code>#e3f1f5</code></td><td class=""><span class="sw" style="background:#1e2733"></span><code>#1e2733</code></td><td><span class="sw" style="background:#12333e"></span><code>#12333e</code></td></tr>
+<tr><td class="name">accent-line</td><td><span class="act set">换值</span></td><td class=""><span class="sw" style="background:#b9d0ee"></span><code>#b9d0ee</code></td><td><span class="sw" style="background:#a8cdd8"></span><code>#a8cdd8</code></td><td class=""><span class="sw" style="background:#37506e"></span><code>#37506e</code></td><td><span class="sw" style="background:#2b5e6f"></span><code>#2b5e6f</code></td></tr>
+<tr><td class="name">danger</td><td><span class="act frz">冻结</span></td><td class="same"><span class="sw" style="background:#b3261e"></span><code>#b3261e</code></td><td><span class="sw" style="background:#b3261e"></span><code>#b3261e</code></td><td class="same"><span class="sw" style="background:#ff9c92"></span><code>#ff9c92</code></td><td><span class="sw" style="background:#ff9c92"></span><code>#ff9c92</code></td></tr>
+<tr><td class="name">danger-soft</td><td><span class="act frz">冻结</span></td><td class="same"><span class="sw" style="background:#fdecea"></span><code>#fdecea</code></td><td><span class="sw" style="background:#fdecea"></span><code>#fdecea</code></td><td class="same"><span class="sw" style="background:#3a201d"></span><code>#3a201d</code></td><td><span class="sw" style="background:#3a201d"></span><code>#3a201d</code></td></tr>
+<tr><td class="name">danger-line</td><td><span class="act frz">冻结</span></td><td class="same"><span class="sw" style="background:#f0c8c4"></span><code>#f0c8c4</code></td><td><span class="sw" style="background:#f0c8c4"></span><code>#f0c8c4</code></td><td class="same"><span class="sw" style="background:#5f3430"></span><code>#5f3430</code></td><td><span class="sw" style="background:#5f3430"></span><code>#5f3430</code></td></tr>
+<tr><td class="name">warn</td><td><span class="act frz">冻结</span></td><td class="same"><span class="sw" style="background:#8a5a00"></span><code>#8a5a00</code></td><td><span class="sw" style="background:#8a5a00"></span><code>#8a5a00</code></td><td class="same"><span class="sw" style="background:#e8bd63"></span><code>#e8bd63</code></td><td><span class="sw" style="background:#e8bd63"></span><code>#e8bd63</code></td></tr>
+<tr><td class="name">warn-soft</td><td><span class="act frz">冻结</span></td><td class="same"><span class="sw" style="background:#fdf3e0"></span><code>#fdf3e0</code></td><td><span class="sw" style="background:#fdf3e0"></span><code>#fdf3e0</code></td><td class="same"><span class="sw" style="background:#362c17"></span><code>#362c17</code></td><td><span class="sw" style="background:#362c17"></span><code>#362c17</code></td></tr>
+<tr><td class="name">ok</td><td><span class="act frz">冻结</span></td><td class="same"><span class="sw" style="background:#146b41"></span><code>#146b41</code></td><td><span class="sw" style="background:#146b41"></span><code>#146b41</code></td><td class="same"><span class="sw" style="background:#7dd3a2"></span><code>#7dd3a2</code></td><td><span class="sw" style="background:#7dd3a2"></span><code>#7dd3a2</code></td></tr>
+<tr><td class="name">ok-soft</td><td><span class="act frz">冻结</span></td><td class="same"><span class="sw" style="background:#e6f4ec"></span><code>#e6f4ec</code></td><td><span class="sw" style="background:#e6f4ec"></span><code>#e6f4ec</code></td><td class="same"><span class="sw" style="background:#163024"></span><code>#163024</code></td><td><span class="sw" style="background:#163024"></span><code>#163024</code></td></tr>
+<tr><td class="name">mark-bg</td><td><span class="act frz">冻结</span></td><td class="same"><span class="sw" style="background:#fde68a"></span><code>#fde68a</code></td><td><span class="sw" style="background:#fde68a"></span><code>#fde68a</code></td><td class="same"><span class="sw" style="background:#6b4c0d"></span><code>#6b4c0d</code></td><td><span class="sw" style="background:#6b4c0d"></span><code>#6b4c0d</code></td></tr>
+<tr><td class="name">mark-fg</td><td><span class="act frz">冻结</span></td><td class="same"><span class="sw" style="background:#4a2c00"></span><code>#4a2c00</code></td><td><span class="sw" style="background:#4a2c00"></span><code>#4a2c00</code></td><td class="same"><span class="sw" style="background:#ffe9b0"></span><code>#ffe9b0</code></td><td><span class="sw" style="background:#ffe9b0"></span><code>#ffe9b0</code></td></tr>
+<tr><td class="name">chart-axis</td><td><span class="act set">换值</span></td><td class=""><span class="sw" style="background:#5f5f5f"></span><code>#5f5f5f</code></td><td><span class="sw" style="background:#5d636d"></span><code>#5d636d</code></td><td class=""><span class="sw" style="background:#a3a3a3"></span><code>#a3a3a3</code></td><td><span class="sw" style="background:#949aa4"></span><code>#949aa4</code></td></tr>
+<tr><td class="name">chart-grid</td><td><span class="act set">换值</span></td><td class=""><span class="sw" style="background:#e8e8e8"></span><code>#e8e8e8</code></td><td><span class="sw" style="background:#e4e4e7"></span><code>#e4e4e7</code></td><td class=""><span class="sw" style="background:#3a3a3a"></span><code>#3a3a3a</code></td><td><span class="sw" style="background:#2c2f35"></span><code>#2c2f35</code></td></tr>
+<tr><td class="name">chart-frame</td><td><span class="act set">换值</span></td><td class=""><span class="sw" style="background:#8f8f8f"></span><code>#8f8f8f</code></td><td><span class="sw" style="background:#6f747d"></span><code>#6f747d</code></td><td class=""><span class="sw" style="background:#7a7a7a"></span><code>#7a7a7a</code></td><td><span class="sw" style="background:#7d828c"></span><code>#7d828c</code></td></tr>
+<tr><td class="name">chart-thr</td><td><span class="act frz">冻结</span></td><td class="same"><span class="sw" style="background:#b3261e"></span><code>#b3261e</code></td><td><span class="sw" style="background:#b3261e"></span><code>#b3261e</code></td><td class="same"><span class="sw" style="background:#ff9c92"></span><code>#ff9c92</code></td><td><span class="sw" style="background:#ff9c92"></span><code>#ff9c92</code></td></tr>
+<tr><td class="name">chart-thr-ink</td><td><span class="act frz">冻结</span></td><td class="same"><span class="sw" style="background:#7f1811"></span><code>#7f1811</code></td><td><span class="sw" style="background:#7f1811"></span><code>#7f1811</code></td><td class="same"><span class="sw" style="background:#ffc9c2"></span><code>#ffc9c2</code></td><td><span class="sw" style="background:#ffc9c2"></span><code>#ffc9c2</code></td></tr>
+<tr><td class="name">chart-warn</td><td><span class="act frz">冻结</span></td><td class="same"><span class="sw" style="background:#8a5a00"></span><code>#8a5a00</code></td><td><span class="sw" style="background:#8a5a00"></span><code>#8a5a00</code></td><td class="same"><span class="sw" style="background:#e8bd63"></span><code>#e8bd63</code></td><td><span class="sw" style="background:#e8bd63"></span><code>#e8bd63</code></td></tr>
+<tr><td class="name">chart-1</td><td><span class="act frz">冻结</span></td><td class="same"><span class="sw" style="background:#15509b"></span><code>#15509b</code></td><td><span class="sw" style="background:#15509b"></span><code>#15509b</code></td><td class="same"><span class="sw" style="background:#7fb2f5"></span><code>#7fb2f5</code></td><td><span class="sw" style="background:#7fb2f5"></span><code>#7fb2f5</code></td></tr>
+<tr><td class="name">chart-2</td><td><span class="act frz">冻结</span></td><td class="same"><span class="sw" style="background:#a03a12"></span><code>#a03a12</code></td><td><span class="sw" style="background:#a03a12"></span><code>#a03a12</code></td><td class="same"><span class="sw" style="background:#f0916a"></span><code>#f0916a</code></td><td><span class="sw" style="background:#f0916a"></span><code>#f0916a</code></td></tr>
+<tr><td class="name">chart-3</td><td><span class="act frz">冻结</span></td><td class="same"><span class="sw" style="background:#0d6b52"></span><code>#0d6b52</code></td><td><span class="sw" style="background:#0d6b52"></span><code>#0d6b52</code></td><td class="same"><span class="sw" style="background:#6fd2ab"></span><code>#6fd2ab</code></td><td><span class="sw" style="background:#6fd2ab"></span><code>#6fd2ab</code></td></tr>
+<tr><td class="name">chart-4</td><td><span class="act frz">冻结</span></td><td class="same"><span class="sw" style="background:#6b3fa0"></span><code>#6b3fa0</code></td><td><span class="sw" style="background:#6b3fa0"></span><code>#6b3fa0</code></td><td class="same"><span class="sw" style="background:#c0a3f0"></span><code>#c0a3f0</code></td><td><span class="sw" style="background:#c0a3f0"></span><code>#c0a3f0</code></td></tr>
+<tr><td class="name">chart-5</td><td><span class="act frz">冻结</span></td><td class="same"><span class="sw" style="background:#8a6100"></span><code>#8a6100</code></td><td><span class="sw" style="background:#8a6100"></span><code>#8a6100</code></td><td class="same"><span class="sw" style="background:#e0c46a"></span><code>#e0c46a</code></td><td><span class="sw" style="background:#e0c46a"></span><code>#e0c46a</code></td></tr>
+<tr><td class="name">chart-6</td><td><span class="act frz">冻结</span></td><td class="same"><span class="sw" style="background:#a52a63"></span><code>#a52a63</code></td><td><span class="sw" style="background:#a52a63"></span><code>#a52a63</code></td><td class="same"><span class="sw" style="background:#f592b8"></span><code>#f592b8</code></td><td><span class="sw" style="background:#f592b8"></span><code>#f592b8</code></td></tr>
+<tr><td class="name">chart-7</td><td><span class="act frz">冻结</span></td><td class="same"><span class="sw" style="background:#1f6f7d"></span><code>#1f6f7d</code></td><td><span class="sw" style="background:#1f6f7d"></span><code>#1f6f7d</code></td><td class="same"><span class="sw" style="background:#7fd0e0"></span><code>#7fd0e0</code></td><td><span class="sw" style="background:#7fd0e0"></span><code>#7fd0e0</code></td></tr>
+<tr><td class="name">chart-8</td><td><span class="act frz">冻结</span></td><td class="same"><span class="sw" style="background:#5a5346"></span><code>#5a5346</code></td><td><span class="sw" style="background:#5a5346"></span><code>#5a5346</code></td><td class="same"><span class="sw" style="background:#c3bdb0"></span><code>#c3bdb0</code></td><td><span class="sw" style="background:#c3bdb0"></span><code>#c3bdb0</code></td></tr>
+<tr><td class="name">ramp-1</td><td><span class="act set">换值</span></td><td class=""><span class="sw" style="background:#eef4fc"></span><code>#eef4fc</code></td><td><span class="sw" style="background:#eef7f9"></span><code>#eef7f9</code></td><td class=""><span class="sw" style="background:#1c2735"></span><code>#1c2735</code></td><td><span class="sw" style="background:#141f26"></span><code>#141f26</code></td></tr>
+<tr><td class="name">ramp-2</td><td><span class="act set">换值</span></td><td class=""><span class="sw" style="background:#cfe0f6"></span><code>#cfe0f6</code></td><td><span class="sw" style="background:#c8e3ec"></span><code>#c8e3ec</code></td><td class=""><span class="sw" style="background:#26394f"></span><code>#26394f</code></td><td><span class="sw" style="background:#1d3b4b"></span><code>#1d3b4b</code></td></tr>
+<tr><td class="name">ramp-3</td><td><span class="act set">换值</span></td><td class=""><span class="sw" style="background:#9dc0ea"></span><code>#9dc0ea</code></td><td><span class="sw" style="background:#93c6d9"></span><code>#93c6d9</code></td><td class=""><span class="sw" style="background:#365576"></span><code>#365576</code></td><td><span class="sw" style="background:#2b5b72"></span><code>#2b5b72</code></td></tr>
+<tr><td class="name">ramp-4</td><td><span class="act set">换值</span></td><td class=""><span class="sw" style="background:#5b8fd4"></span><code>#5b8fd4</code></td><td><span class="sw" style="background:#5094b0"></span><code>#5094b0</code></td><td class=""><span class="sw" style="background:#5583b8"></span><code>#5583b8</code></td><td><span class="sw" style="background:#4a8cae"></span><code>#4a8cae</code></td></tr>
+<tr><td class="name">ramp-5</td><td><span class="act set">换值</span></td><td class=""><span class="sw" style="background:#1e5aa8"></span><code>#1e5aa8</code></td><td><span class="sw" style="background:#0c6480"></span><code>#0c6480</code></td><td class=""><span class="sw" style="background:#8fbcf7"></span><code>#8fbcf7</code></td><td><span class="sw" style="background:#86cde8"></span><code>#86cde8</code></td></tr>
+<tr><td class="name">sh-1</td><td><span class="act set">换值</span></td><td class=""><code>0 1px 1px rgba(0,0,0,.06)</code></td><td><code>0 1px 1px rgba(10,14,20,.08)</code></td><td class=""><code>0 1px 1px rgba(0,0,0,.4)</code></td><td><code>0 1px 1px rgba(0,0,0,.5)</code></td></tr>
+<tr><td class="name">sh-2</td><td><span class="act set">换值</span></td><td class=""><code>0 2px 6px rgba(0,0,0,.1)</code></td><td><code>0 1px 2px rgba(10,14,20,.1), 0 0 0 1px rgba(10,14,20,.05)</code></td><td class=""><code>0 2px 6px rgba(0,0,0,.45)</code></td><td><code>0 1px 2px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.03)</code></td></tr>
+<tr><td class="name">sh-3</td><td><span class="act set">换值</span></td><td class=""><code>0 8px 24px rgba(0,0,0,.16), 0 2px 6px rgba(0,0,0,.08)</code></td><td><code>0 12px 28px rgba(10,14,20,.18), 0 2px 6px rgba(10,14,20,.1)</code></td><td class=""><code>0 8px 24px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.35)</code></td><td><code>0 12px 28px rgba(0,0,0,.6), 0 2px 6px rgba(0,0,0,.4)</code></td></tr>
+<tr><td class="name">overlay</td><td><span class="act set">换值</span></td><td class=""><code>rgba(0,0,0,.28)</code></td><td><code>rgba(10,14,20,.32)</code></td><td class=""><code>rgba(0,0,0,.55)</code></td><td><code>rgba(0,0,0,.58)</code></td></tr>
+<tr><td class="name">ring</td><td><span class="act set">换值</span></td><td class=""><code>0 0 0 2px rgba(15,95,191,.35)</code></td><td><code>0 0 0 2px rgba(14,116,144,.4)</code></td><td class=""><code>0 0 0 2px rgba(119,169,240,.4)</code></td><td><code>0 0 0 2px rgba(53,195,224,.4)</code></td></tr>
+<tr><td class="name">r-xs</td><td><span class="act frz">冻结</span></td><td class="same"><code>2px</code></td><td><code>2px</code></td><td class="same"><code>—</code></td><td><code>—</code></td></tr>
+<tr><td class="name">r-sm</td><td><span class="act set">换值</span></td><td class=""><code>3px</code></td><td><code>2px</code></td><td class=""><code>—</code></td><td><code>—</code></td></tr>
+<tr><td class="name">r-md</td><td><span class="act set">换值</span></td><td class=""><code>4px</code></td><td><code>3px</code></td><td class=""><code>—</code></td><td><code>—</code></td></tr>
+<tr><td class="name">r-lg</td><td><span class="act set">换值</span></td><td class=""><code>6px</code></td><td><code>4px</code></td><td class=""><code>—</code></td><td><code>—</code></td></tr>
+<tr><td class="name">r-xl</td><td><span class="act set">换值</span></td><td class=""><code>8px</code></td><td><code>6px</code></td><td class=""><code>—</code></td><td><code>—</code></td></tr>
+<tr><td class="name">r-pill</td><td><span class="act frz">冻结</span></td><td class="same"><code>999px</code></td><td><code>999px</code></td><td class="same"><code>—</code></td><td><code>—</code></td></tr>
+<tr><td class="name">dur-1</td><td><span class="act frz">冻结</span></td><td class="same"><code>90ms</code></td><td><code>90ms</code></td><td class="same"><code>—</code></td><td><code>—</code></td></tr>
+<tr><td class="name">dur-2</td><td><span class="act set">换值</span></td><td class=""><code>140ms</code></td><td><code>100ms</code></td><td class=""><code>—</code></td><td><code>100ms</code></td></tr>
+<tr><td class="name">dur-3</td><td><span class="act set">换值</span></td><td class=""><code>180ms</code></td><td><code>140ms</code></td><td class=""><code>—</code></td><td><code>140ms</code></td></tr>
+<tr><td class="name">ease</td><td><span class="act frz">冻结</span></td><td class="same"><code>cubic-bezier(.2,.9,.3,1)</code></td><td><code>cubic-bezier(.2,.9,.3,1)</code></td><td class="same"><code>—</code></td><td><code>—</code></td></tr>
+<tr><td class="name">ease-out</td><td><span class="act frz">冻结</span></td><td class="same"><code>cubic-bezier(.33,1,.68,1)</code></td><td><code>cubic-bezier(.33,1,.68,1)</code></td><td class="same"><code>—</code></td><td><code>—</code></td></tr>
+<tr><td class="name">font-ui</td><td><span class="act frz">冻结</span></td><td class="same"><code>&quot;Segoe UI&quot;,&quot;Microsoft YaHei UI&quot;,…</code></td><td><code>&quot;Segoe UI&quot;,&quot;Microsoft YaHei UI&quot;,…</code></td><td class="same"><code>—</code></td><td><code>—</code></td></tr>
+<tr><td class="name">font-display</td><td><span class="act rdf">重定义</span></td><td class=""><code>var(--font-ui)（占位）</code></td><td><code>var(--font-mono)</code></td><td class=""><code>—</code></td><td><code>var(--font-mono)</code></td></tr>
+<tr><td class="name">font-body</td><td><span class="act frz">冻结</span></td><td class="same"><code>var(--font-ui)</code></td><td><code>var(--font-ui)</code></td><td class="same"><code>—</code></td><td><code>—</code></td></tr>
+<tr><td class="name">font-mono</td><td><span class="act frz">冻结</span></td><td class="same"><code>&quot;Cascadia Mono&quot;,Consolas,…</code></td><td><code>&quot;Cascadia Mono&quot;,Consolas,…</code></td><td class="same"><code>—</code></td><td><code>—</code></td></tr>
+<tr><td class="name">h-control</td><td><span class="act frz">冻结</span></td><td class="same"><code>26px</code></td><td><code>26px</code></td><td class="same"><code>—</code></td><td><code>—</code></td></tr>
+<tr><td class="name">h-control-lg</td><td><span class="act frz">冻结</span></td><td class="same"><code>30px</code></td><td><code>30px</code></td><td class="same"><code>—</code></td><td><code>—</code></td></tr>
+<tr><td class="name">sidebar-w</td><td><span class="act frz">冻结</span></td><td class="same"><code>224px</code></td><td><code>224px</code></td><td class="same"><code>—</code></td><td><code>—</code></td></tr>
+<tr><td class="name">snapshot-w</td><td><span class="act frz">冻结</span></td><td class="same"><code>252px</code></td><td><code>252px</code></td><td class="same"><code>—</code></td><td><code>—</code></td></tr>
+<tr><td class="name">rail-max</td><td><span class="act frz">冻结</span></td><td class="same"><code>900px</code></td><td><code>900px</code></td><td class="same"><code>—</code></td><td><code>—</code></td></tr>
+<tr><td class="name">tool-rail</td><td><span class="act frz">冻结</span></td><td class="same"><code>1120px</code></td><td><code>1120px</code></td><td class="same"><code>—</code></td><td><code>—</code></td></tr>
+<tr><td class="name">fs-2xs..3xl</td><td><span class="act frz">冻结</span></td><td class="same"><code>11/12/13/13/15/18/24/30px</code></td><td><code>11/12/13/13/15/18/24/30px</code></td><td class="same"><code>—</code></td><td><code>—</code></td></tr>
+<tr><td class="name">lh-tight..loose</td><td><span class="act frz">冻结</span></td><td class="same"><code>1.25/1.45/1.55/1.8</code></td><td><code>1.25/1.45/1.55/1.8</code></td><td class="same"><code>—</code></td><td><code>—</code></td></tr>
+<tr><td class="name">sp-1..8</td><td><span class="act frz">冻结</span></td><td class="same"><code>4/8/12/16/24/32/48/64px</code></td><td><code>4/8/12/16/24/32/48/64px</code></td><td class="same"><code>—</code></td><td><code>—</code></td></tr>
+</table>
+</section>
+
+<!-- ============ 附录 B ============ -->
+<section id="aB">
+<h2>附录 B · 对比度计算矩阵（内嵌 JS 现算）</h2>
+<p class="note">本表所有数值由下方内嵌脚本在打开文档时现场计算——WCAG 相对亮度 / 对比度、CIE Lab ΔE76、Brettel/Viénot 三型色觉模拟（protanopia / deuteranopia / tritanopia 取最差）。令牌值与附录 A 同源，改表即改算。</p>
+<h3>B.1 对比度（WCAG 2.x）</h3>
+<div id="tbl-contrast"></div>
+<h3>B.2 CVD 可辨性（ΔE76 ≥ 12 为闸门）</h3>
+<p class="note"><b>PASS</b> = 闸门项（accent vs danger/warn，计划原文口径）。<b>REVIEW·A</b> = accent vs ok：浅色主题色彩学冲突，用户已裁决接受现值 + 双编码缓解（括号内为旧强调色基线 ΔE 对照）。<b>BASELINE</b> = 语义色两两之间（本次全冻结、与现网持平、非回归）。</p>
+<div id="tbl-cvd"></div>
+<h3>B.3 顺序色阶相邻步差（ΔE ≥ 10）与表面阶梯（Oklch L）</h3>
+<div id="tbl-seq"></div>
+<h3>B.4 图表分类色两两最小 ΔE（信息项，阈值 25）</h3>
+<div id="tbl-chart"></div>
+</section>
+
+<footer>
+  UI 重定调设计方案 · 候选 C「信号仪表」· 2026-10-07 · 自包含单文件（无外链 / 无位图 / reduced-motion 降级）。<br/>
+  复算：<code>python scripts/ui-rebase-token-validate.py</code>（附录 B 同口径）· 重新生成本档：<code>python scripts/ui-rebase-doc-generate.py</code> · 配套交付：Ardot 画布 15 frame（fileId 733927098119198）· <code>方向候选样张-2026-10-07.html</code> · <code>令牌差异表-2026-10-07.html</code>
+</footer>
+</div>
+
+<script>
+/* ── 附录 B 现算引擎：与 ui-rebase-token-validate.py 同算法 ── */
+var TOK = {"light": {"bg": "#ececee", "surface": "#f9f9fa", "surface-2": "#f1f1f3", "surface-3": "#e6e6e9", "border": "#dcdce0", "border-strong": "#b4b4bc", "control-line": "#767b83", "text": "#16181c", "text-2": "#3d434c", "muted": "#5d636d", "accent": "#0e7490", "accent-hover": "#0b5c73", "accent-fg": "#ffffff", "accent-soft": "#e3f1f5", "accent-line": "#a8cdd8", "danger": "#b3261e", "danger-soft": "#fdecea", "danger-line": "#f0c8c4", "warn": "#8a5a00", "warn-soft": "#fdf3e0", "ok": "#146b41", "ok-soft": "#e6f4ec", "mark-bg": "#fde68a", "mark-fg": "#4a2c00", "chart-axis": "#5d636d", "chart-grid": "#e4e4e7", "chart-frame": "#6f747d", "chart-thr": "#b3261e", "chart-thr-ink": "#7f1811", "chart-warn": "#8a5a00", "chart-1": "#15509b", "chart-2": "#a03a12", "chart-3": "#0d6b52", "chart-4": "#6b3fa0", "chart-5": "#8a6100", "chart-6": "#a52a63", "chart-7": "#1f6f7d", "chart-8": "#5a5346", "ramp-1": "#eef7f9", "ramp-2": "#c8e3ec", "ramp-3": "#93c6d9", "ramp-4": "#5094b0", "ramp-5": "#0c6480", "sh-1": "0 1px 1px rgba(10,14,20,.08)", "sh-2": "0 1px 2px rgba(10,14,20,.1), 0 0 0 1px rgba(10,14,20,.05)", "sh-3": "0 12px 28px rgba(10,14,20,.18), 0 2px 6px rgba(10,14,20,.1)", "overlay": "rgba(10,14,20,.32)", "ring": "0 0 0 2px rgba(14,116,144,.4)", "r-xs": "2px", "r-sm": "2px", "r-md": "3px", "r-lg": "4px", "r-xl": "6px", "r-pill": "999px", "dur-1": "90ms", "dur-2": "100ms", "dur-3": "140ms", "ease": "cubic-bezier(.2,.9,.3,1)", "ease-out": "cubic-bezier(.33,1,.68,1)", "font-ui": "\"Segoe UI\",\"Microsoft YaHei UI\",…", "font-display": "var(--font-mono)", "font-body": "var(--font-ui)", "font-mono": "\"Cascadia Mono\",Consolas,…", "h-control": "26px", "h-control-lg": "30px", "sidebar-w": "224px", "snapshot-w": "252px", "rail-max": "900px", "tool-rail": "1120px", "fs-2xs..3xl": "11/12/13/13/15/18/24/30px", "lh-tight..loose": "1.25/1.45/1.55/1.8", "sp-1..8": "4/8/12/16/24/32/48/64px"}, "dark": {"bg": "#131417", "surface": "#1c1e22", "surface-2": "#24262b", "surface-3": "#2e3137", "border": "#2c2f35", "border-strong": "#4b5058", "control-line": "#8b919b", "text": "#ecedef", "text-2": "#c3c7ce", "muted": "#949aa4", "accent": "#46c9ec", "accent-hover": "#5bd3ea", "accent-fg": "#06161b", "accent-soft": "#12333e", "accent-line": "#2b5e6f", "danger": "#ff9c92", "danger-soft": "#3a201d", "danger-line": "#5f3430", "warn": "#e8bd63", "warn-soft": "#362c17", "ok": "#7dd3a2", "ok-soft": "#163024", "mark-bg": "#6b4c0d", "mark-fg": "#ffe9b0", "chart-axis": "#949aa4", "chart-grid": "#2c2f35", "chart-frame": "#7d828c", "chart-thr": "#ff9c92", "chart-thr-ink": "#ffc9c2", "chart-warn": "#e8bd63", "chart-1": "#7fb2f5", "chart-2": "#f0916a", "chart-3": "#6fd2ab", "chart-4": "#c0a3f0", "chart-5": "#e0c46a", "chart-6": "#f592b8", "chart-7": "#7fd0e0", "chart-8": "#c3bdb0", "ramp-1": "#141f26", "ramp-2": "#1d3b4b", "ramp-3": "#2b5b72", "ramp-4": "#4a8cae", "ramp-5": "#86cde8", "sh-1": "0 1px 1px rgba(0,0,0,.5)", "sh-2": "0 1px 2px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.03)", "sh-3": "0 12px 28px rgba(0,0,0,.6), 0 2px 6px rgba(0,0,0,.4)", "overlay": "rgba(0,0,0,.58)", "ring": "0 0 0 2px rgba(53,195,224,.4)", "dur-2": "100ms", "dur-3": "140ms", "font-display": "var(--font-mono)"}};
+var OLD_ACC = {"light": "#0f5fbf", "dark": "#77a9f0"};
+var CHECKS = [{"t": "light", "f": "text", "b": "surface", "thr": 4.5}, {"t": "light", "f": "text", "b": "bg", "thr": 4.5}, {"t": "light", "f": "text", "b": "surface-2", "thr": 4.5}, {"t": "light", "f": "text-2", "b": "surface", "thr": 4.5}, {"t": "light", "f": "text-2", "b": "surface-2", "thr": 4.5}, {"t": "light", "f": "muted", "b": "surface", "thr": 4.5}, {"t": "light", "f": "accent", "b": "surface", "thr": 4.5}, {"t": "light", "f": "accent", "b": "accent-soft", "thr": 4.5}, {"t": "light", "f": "accent-fg", "b": "accent", "thr": 4.5}, {"t": "light", "f": "accent-fg", "b": "accent-hover", "thr": 4.5}, {"t": "light", "f": "danger", "b": "surface", "thr": 4.5}, {"t": "light", "f": "danger", "b": "danger-soft", "thr": 4.5}, {"t": "light", "f": "warn", "b": "surface", "thr": 4.5}, {"t": "light", "f": "warn", "b": "warn-soft", "thr": 4.5}, {"t": "light", "f": "ok", "b": "surface", "thr": 4.5}, {"t": "light", "f": "ok", "b": "ok-soft", "thr": 4.5}, {"t": "light", "f": "mark-fg", "b": "mark-bg", "thr": 4.5}, {"t": "light", "f": "control-line", "b": "surface", "thr": 3}, {"t": "light", "f": "control-line", "b": "surface-2", "thr": 3}, {"t": "light", "f": "chart-frame", "b": "surface", "thr": 3}, {"t": "light", "f": "chart-axis", "b": "surface", "thr": 4.5}, {"t": "light", "f": "chart-thr", "b": "surface", "thr": 3}, {"t": "light", "f": "chart-warn", "b": "surface", "thr": 3}, {"t": "light", "f": "chart-1", "b": "surface", "thr": 3}, {"t": "light", "f": "chart-2", "b": "surface", "thr": 3}, {"t": "light", "f": "chart-3", "b": "surface", "thr": 3}, {"t": "light", "f": "chart-4", "b": "surface", "thr": 3}, {"t": "light", "f": "chart-5", "b": "surface", "thr": 3}, {"t": "light", "f": "chart-6", "b": "surface", "thr": 3}, {"t": "light", "f": "chart-7", "b": "surface", "thr": 3}, {"t": "light", "f": "chart-8", "b": "surface", "thr": 3}, {"t": "dark", "f": "text", "b": "surface", "thr": 4.5}, {"t": "dark", "f": "text", "b": "bg", "thr": 4.5}, {"t": "dark", "f": "text-2", "b": "surface", "thr": 4.5}, {"t": "dark", "f": "muted", "b": "surface", "thr": 4.5}, {"t": "dark", "f": "accent", "b": "surface", "thr": 4.5}, {"t": "dark", "f": "accent", "b": "accent-soft", "thr": 4.5}, {"t": "dark", "f": "accent-fg", "b": "accent", "thr": 4.5}, {"t": "dark", "f": "accent-fg", "b": "accent-hover", "thr": 4.5}, {"t": "dark", "f": "danger", "b": "danger-soft", "thr": 4.5}, {"t": "dark", "f": "warn", "b": "warn-soft", "thr": 4.5}, {"t": "dark", "f": "ok", "b": "ok-soft", "thr": 4.5}, {"t": "dark", "f": "mark-fg", "b": "mark-bg", "thr": 4.5}, {"t": "dark", "f": "control-line", "b": "surface", "thr": 3}, {"t": "dark", "f": "chart-frame", "b": "surface", "thr": 3}, {"t": "dark", "f": "chart-axis", "b": "surface", "thr": 4.5}, {"t": "dark", "f": "chart-1", "b": "surface", "thr": 3}, {"t": "dark", "f": "chart-2", "b": "surface", "thr": 3}, {"t": "dark", "f": "chart-3", "b": "surface", "thr": 3}, {"t": "dark", "f": "chart-4", "b": "surface", "thr": 3}, {"t": "dark", "f": "chart-5", "b": "surface", "thr": 3}, {"t": "dark", "f": "chart-6", "b": "surface", "thr": 3}, {"t": "dark", "f": "chart-7", "b": "surface", "thr": 3}, {"t": "dark", "f": "chart-8", "b": "surface", "thr": 3}];
+var CVDROWS = [{"t": "light", "a": "accent", "b": "danger", "mode": "gate"}, {"t": "light", "a": "accent", "b": "warn", "mode": "gate"}, {"t": "light", "a": "accent", "b": "ok", "mode": "review"}, {"t": "light", "a": "danger", "b": "warn", "mode": "base"}, {"t": "light", "a": "danger", "b": "ok", "mode": "base"}, {"t": "light", "a": "warn", "b": "ok", "mode": "base"}, {"t": "dark", "a": "accent", "b": "danger", "mode": "gate"}, {"t": "dark", "a": "accent", "b": "warn", "mode": "gate"}, {"t": "dark", "a": "accent", "b": "ok", "mode": "review"}, {"t": "dark", "a": "danger", "b": "warn", "mode": "base"}, {"t": "dark", "a": "danger", "b": "ok", "mode": "base"}, {"t": "dark", "a": "warn", "b": "ok", "mode": "base"}];
+function h2rgb(h){h=h.slice(1);return [0,2,4].map(function(i){return parseInt(h.substr(i,2),16)/255;});}
+function lin(c){return c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4);}
+function lum(h){var v=h2rgb(h).map(lin);return 0.2126*v[0]+0.7152*v[1]+0.0722*v[2];}
+function contrast(f,b){var a=[lum(f),lum(b)].sort(function(x,y){return y-x;});return (a[0]+0.05)/(a[1]+0.05);}
+function lab(h){var v=h2rgb(h).map(lin),r=v[0],g=v[1],b=v[2];
+ function f(t){return t>0.008856?Math.pow(t,1/3):7.787*t+16/116;}
+ var X=f((0.4124564*r+0.3575761*g+0.1804375*b)/0.95047),Y=f(0.2126729*r+0.7151522*g+0.0721750*b),Z=f((0.0193339*r+0.1191920*g+0.9503041*b)/1.08883);
+ return [116*Y-16,500*(X-Y),200*(Y-Z)];}
+function dE(a,b){var p=lab(a),q=lab(b);return Math.sqrt(Math.pow(p[0]-q[0],2)+Math.pow(p[1]-q[1],2)+Math.pow(p[2]-q[2],2));}
+var CVD={protanopia:[[0.152286,1.052583,-0.204868],[0.114503,0.786281,0.099216],[-0.003882,-0.048116,1.051998]],
+deuteranopia:[[0.367322,0.860646,-0.227968],[0.280085,0.672501,0.047413],[-0.011820,0.042940,0.968881]],
+tritanopia:[[1.255528,-0.076749,-0.178779],[-0.078411,0.930809,0.147602],[0.004733,0.691367,0.303900]]};
+function cvd(h,k){var v=h2rgb(h).map(lin),m=CVD[k];
+ var o=[0,1,2].map(function(i){return m[i][0]*v[0]+m[i][1]*v[1]+m[i][2]*v[2];});
+ function cl(x){return Math.min(1,Math.max(0,x));}
+ function gm(x){return x<=0.0031308?12.92*x:1.055*Math.pow(x,1/2.4)-0.055;}
+ return '#'+o.map(function(x){return Math.round(gm(cl(x))*255).toString(16).padStart(2,'0');}).join('');}
+function cvdWorst(a,b){var w=1e9,wk='';for(var k in CVD){var d=dE(cvd(a,k),cvd(b,k));if(d<w){w=d;wk=k;}}return [w,wk];}
+function oklchL(h){var v=h2rgb(h).map(lin),r=v[0],g=v[1],b=v[2];
+ var l=0.4122214708*r+0.5363325363*g+0.0514459929*b,m=0.2119034982*r+0.6806995451*g+0.1073969566*b,s=0.0883024619*r+0.2817188376*g+0.6299787005*b;
+ l=Math.pow(l,1/3);m=Math.pow(m,1/3);s=Math.pow(s,1/3);
+ return 0.2104542553*l+0.7936177850*m-0.0040720468*s;}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function sw(v){return /^#[0-9a-f]{6}$/i.test(v)?'<span class="sw" style="background:'+v+'"></span>':'';}
+function badge(cls,txt){return '<span class="badge '+cls+'">'+txt+'</span>';}
+function table(head,rows){var h='<table class="mini"><tr>'+head.map(function(x){return '<th>'+x+'</th>';}).join('')+'</tr>';
+ rows.forEach(function(r){h+='<tr>'+r.map(function(c){return '<td>'+c+'</td>';}).join('')+'</tr>';});return h+'</table>';}
+
+var rc=[];
+CHECKS.forEach(function(c){var T=TOK[c.t],r=contrast(T[c.f],T[c.b]);
+ rc.push([c.t,c.f+' / '+c.b,'<code>'+T[c.f]+'</code> on <code>'+T[c.b]+'</code>',
+ '<b>'+r.toFixed(2)+':1</b>',badge(r>=c.thr?'pass':'review',r>=c.thr?'PASS':'FAIL')]);});
+document.getElementById('tbl-contrast').innerHTML=table(['主题','检查项','值对','结果','状态'],rc);
+
+var vc=[];
+CVDROWS.forEach(function(r){var T=TOK[r.t],d=T[r.a],b=T[r.b],w=cvdWorst(d,b);
+ var st,txt;
+ if(r.mode==='gate'){st=w[0]>=12?'pass':'review';txt=w[0]>=12?'PASS':'FAIL';}
+ else if(r.mode==='review'){var base=cvdWorst(OLD_ACC[r.t],b)[0];
+   st=w[0]>=12?'pass':'review';txt=(w[0]>=12?'PASS':'REVIEW·A')+'（旧强调色基线 ΔE='+base.toFixed(1)+'）';}
+ else{st=w[0]>=12?'pass':'base';txt=w[0]>=12?'PASS':'BASELINE（现网旧账，冻结非回归）';}
+ vc.push([r.t,r.a+' vs '+r.b,'<code>'+d+'</code> vs <code>'+b+'</code>',
+ 'ΔE='+w[0].toFixed(1)+'（worst: '+w[1]+'）',badge(st,txt)]);});
+document.getElementById('tbl-cvd').innerHTML=table(['主题','色对','值对','最差模拟 ΔE76','状态'],vc);
+
+var sq=[];
+['light','dark'].forEach(function(t){var T=TOK[t],ds=[];
+ for(var i=1;i<5;i++){ds.push(dE(T['ramp-'+i],T['ramp-'+(i+1)]));}
+ var ok=ds.every(function(x){return x>=10;});
+ sq.push([t,'ramp-1→5',ds.map(function(x){return x.toFixed(1);}).join(' · '),
+ badge(ok?'pass':'review',ok?'PASS':'FAIL')]);
+ var lad=['bg','surface-3','surface-2','surface'].map(function(n){return n+' L='+oklchL(T[n]).toFixed(3);}).join(' · ');
+ sq.push([t,'表面阶梯（Oklch L）',lad,badge('info','INFO')]);});
+document.getElementById('tbl-seq').innerHTML=table(['主题','检查项','结果','状态'],sq);
+
+var ch=[];
+['light','dark'].forEach(function(t){var T=TOK[t],mn=1e9,pair='';
+ for(var i=1;i<9;i++)for(var j=i+1;j<9;j++){var d=dE(T['chart-'+i],T['chart-'+j]);if(d<mn){mn=d;pair='chart-'+i+'/chart-'+j;}}
+ ch.push([t,'8 系列两两最小','ΔE='+mn.toFixed(1)+'（'+pair+'）',badge(mn>=25?'pass':'review',mn>=25?'PASS':'FAIL')]);});
+document.getElementById('tbl-chart').innerHTML=table(['主题','检查项','结果','状态'],ch);
+
+/* mockup 主题切换 */
+var mz=document.getElementById('mockzone');
+document.getElementById('btnL').onclick=function(){mz.querySelectorAll('.mock').forEach(function(m){m.classList.remove('inv');});
+ this.classList.add('on');document.getElementById('btnD').classList.remove('on');};
+document.getElementById('btnD').onclick=function(){mz.querySelectorAll('.mock').forEach(function(m){m.classList.add('inv');});
+ this.classList.add('on');document.getElementById('btnL').classList.remove('on');};
+</script>
+</body></html>

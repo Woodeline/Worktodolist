@@ -1,5 +1,0 @@
-{"seq":1,"ts":"2026-10-07T02:00:19.243Z","type":"user","payload":{"text":"加一条 明天 交周报"}}
-{"seq":2,"ts":"2026-10-07T02:00:19.396Z","type":"intent","payload":{"intent":"add","confidence":"high","target":null,"source":"local"}}
-{"seq":3,"ts":"2026-10-07T02:00:19.594Z","type":"tool_call","payload":{"callId":"call-1","tool":{"name":"todo.add","params":{"title":"交周报","due":"2026-10-08"}}}}
-{"seq":4,"ts":"2026-10-07T02:00:19.802Z","type":"tool_result","payload":{"callId":"call-1","status":"ok","durationMs":405,"reply":"已添加任务：交周报，截止 2026-10-08","params":{"due":"2026-10-08","title":"交周报"}}}
-{"seq":5,"ts":"2026-10-07T02:00:20.020Z","type":"agent","payload":{"text":"已添加任务：交周报，截止 2026-10-08","kind":"text"}}

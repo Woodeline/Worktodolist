@@ -77,8 +77,8 @@ const PROBES = {
   toolPane: '.tool-pane',
   toolsList: '.tools-list',
   toolsItem: '.tools-item',
-  rtiTab: '.rti-tab',
-  rtiRowDel: '.rti-row-del',
+  rtiTab: '.tool-tab',
+  rtiRowDel: '.tool-row-del',
 };
 
 // 三档视口 + 断点边界。width 是**视口**宽度（媒体查询看的就是这个）。
@@ -303,8 +303,8 @@ const MEASURE_FN = `(() => {
     iconbtn: hitBox('.icon-btn'),
     tab: hitBox('.tab'),
     toolsitem: hitBox('.tools-item'),
-    rtitab: hitBox('.rti-tab'),
-    rtidel: hitBox('.rti-row-del'),
+    rtitab: hitBox('.tool-tab'),
+    rtidel: hitBox('.tool-row-del'),
   };
   return JSON.stringify(out);
 })()`;
