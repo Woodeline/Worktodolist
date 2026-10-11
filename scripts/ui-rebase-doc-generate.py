@@ -10,14 +10,16 @@ UI 重定调设计方案 · HTML 生成器（Phase 4）
 附录 B 的对比度 / CVD / ΔE 矩阵按计划要求由**内嵌 JS 在浏览器端现算渲染**，
 不使用任何目测数值。
 
-产物：UI重定调设计方案-2026-10-07.html（自包含单文件，无外链、无位图，
+产物：docs/design/2026-10-07-UI重定调设计方案.html（自包含单文件，无外链、无位图，
 抽象论述图用内联 SVG，reduced-motion 降级）。
 """
 import io, os, json, html, runpy, contextlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 VALIDATE = os.path.join(HERE, 'ui-rebase-token-validate.py')
-OUT = r'C:\Users\王佐成\WorkBuddy\todolist\UI重定调设计方案-2026-10-07.html'
+# 产物落进仓库根的 docs/design/；从脚本位置反推，不写死绝对路径。
+OUT = os.path.normpath(os.path.join(HERE, os.pardir, 'docs', 'design',
+                                    '2026-10-07-UI重定调设计方案.html'))
 
 # ── 复用验证器：令牌全集 / 处置行 / 强调色裁决结果 ──
 with contextlib.redirect_stdout(io.StringIO()):

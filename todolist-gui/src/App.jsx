@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import { useTodoStore } from './hooks/useTodoStore';
+import { useNativeShell } from './hooks/useNativeShell';
+import { isTauri } from './lib/runtime.js';
 import { useTodoSnapshot } from './hooks/useTodoSnapshot';
 import useDebounce from './hooks/useDebounce';
 import useHotkeys from './hooks/useHotkeys';
@@ -39,6 +41,10 @@ export function UnsupportedPage() {
 }
 
 export function WelcomePage({ store }) {
+  // 这一步的文案在两种运行方式下必须不同：壳里 `ws_pick` 走系统目录选择框，
+  // 选完即可写，**没有**任何"允许编辑文件"的授权弹窗。照抄浏览器文案会让用户
+  // 干等一个永远不出现的对话框。浏览器分支的字符串保持原样不动。
+  const shell = isTauri();
   return (
     <div className="welcome">
       <h1>待办清单</h1>
@@ -49,28 +55,44 @@ export function WelcomePage({ store }) {
           在弹出的窗口里找到 <code>WorkBuddy</code> 文件夹，再进去选中 <code>todolist</code> 文件夹，点「选择文件夹」
         </li>
         <li>
-          浏览器弹出「是否允许编辑文件」时，点 <strong>允许</strong>（有的版本写「编辑文件」）
+          {shell ? (
+            <>选完即可读写，这里不会再弹授权框</>
+          ) : (
+            <>
+              浏览器弹出「是否允许编辑文件」时，点 <strong>允许</strong>（有的版本写「编辑文件」）
+            </>
+          )}
         </li>
       </ol>
       <button className="btn btn-primary btn-lg" onClick={store.pickDirectory}>
         选好文件夹，开始用
       </button>
       <p className="hint">
-        你的任务存在 <code>todo.txt</code> 这个纯文本文件里（可以用记事本打开看）。授权一次浏览器会记住，下次打开直接进来。
+        你的任务存在 <code>todo.txt</code> 这个纯文本文件里（可以用记事本打开看）。
+        {shell ? '选一次会记住，下次打开直接进来。' : '授权一次浏览器会记住，下次打开直接进来。'}
       </p>
     </div>
   );
 }
 
 export function ReauthPage({ store }) {
+  const shell = isTauri();
   return (
     <div className="welcome">
       <h1>再点一下就能继续</h1>
-      <p className="welcome-sub">浏览器出于安全，隔一段时间需要重新确认一次文件权限。</p>
+      <p className="welcome-sub">
+        {shell
+          ? '上次选的数据目录现在不可用了（可能被移动、改名或所在磁盘没挂上）。'
+          : '浏览器出于安全，隔一段时间需要重新确认一次文件权限。'}
+      </p>
       <button className="btn btn-primary btn-lg" onClick={store.reauthorize}>
-        重新授权
+        {shell ? '重新选一次目录' : '重新授权'}
       </button>
-      <p className="hint">点完会弹出一个确认框，点「允许 / 编辑文件」即可，数据不会丢。</p>
+      <p className="hint">
+        {shell
+          ? '重新选中同一个文件夹即可，数据不会丢。'
+          : '点完会弹出一个确认框，点「允许 / 编辑文件」即可，数据不会丢。'}
+      </p>
     </div>
   );
 }
@@ -380,6 +402,9 @@ export function Tabs({ tab, onChange, store, onOpenSettings, settingsOpen }) {
 
 export default function App() {
   const store = useTodoStore();
+  // 壳级行为：关窗握手刷盘 / 启动时一次 git 提交 / 09:00 提醒。
+  // 浏览器版内部整体短路（isTauri() 为假），不产生任何副作用或网络请求。
+  useNativeShell(store);
   const query = useDebounce(store.search, 150);
   const [tab, setTab] = useState('chat');
   // 设置是独立页面，不占页签：打开时主内容整体让位，Esc / 「返回」退出。

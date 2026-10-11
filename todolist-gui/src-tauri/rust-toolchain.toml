@@ -1,0 +1,17 @@
+# 本项目在 Windows 上必须用 MSVC 工具链构建，不能用 GNU。
+#
+# 本机实测（2026-10-11）GNU 路线会连续踩三个坑，且都只在 GNU 下出现：
+#   1. rust-mingw 组件不提供 windres —— tauri-build 的 winres 步骤（把图标、版本信息、
+#      Common-Controls 6.0 清单编进 exe）直接失败；
+#   2. 用户目录名是中文（C:\Users\王佐成\...）。生成的 resource.rc 里图标写的是绝对路径，
+#      windres 打不开，报 can't open icon file ...: Invalid argument；
+#   3. 链接参数超过 Windows 32KB 命令行上限后改走 @响应文件，而响应文件按 ANSI 代码页
+#      读取，UTF-8 编码的中文 -L 路径被解错 → ld: cannot find -lwindows.0.53.0。
+#
+# MSVC 的 rc.exe 是 Unicode 程序，以上三条都不存在。
+# rustup 会自动按本文件切换工具链，不需要手动 `rustup default`，也不会影响其他项目。
+#
+# 注意：这里显式写了目标三元组，所以本文件只适用于 Windows x64。
+# 若将来要支持别的平台，需改成 channel = "stable" 并另行处理。
+[toolchain]
+channel = "stable-x86_64-pc-windows-msvc"

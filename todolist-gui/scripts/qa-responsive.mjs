@@ -10,7 +10,7 @@
 //
 // 用法：
 //   npm run dev                       # 另开一个终端，先把 dev server 起起来
-//                                     # （端口见项目根 .todolist-server.port，默认 15180）
+//                                     # （vite 默认 5173；指定别的地址用 SG_BASE 环境变量）
 //   node scripts/qa-responsive.mjs            # 只出表格
 //   node scripts/qa-responsive.mjs --shots    # 顺便存图到 .tmp-shot/
 //   node scripts/qa-responsive.mjs --json     # 额外吐一份原始 JSON
@@ -30,8 +30,8 @@ const EDGE_CANDIDATES = [
   '/usr/bin/google-chrome',
 ];
 
-// 目标地址：默认读项目根 .todolist-server.port（launch_todolist.py 写入的选定端口），
-// 读不到回落到 15180。SG_BASE 环境变量优先级最高，可用它强制指定别的地址。
+// 目标地址：SG_BASE 环境变量优先；否则读项目根 .todolist-server.port（这是早期 Python
+// 启动器留下的端口文件，现在已没有东西写它，读到就用作兼容）；再读不到回落到 15180。
 function readServerPort() {
   try {
     const raw = readFileSync(path.resolve(import.meta.dirname, '..', '..', '.todolist-server.port'), 'utf8').trim();

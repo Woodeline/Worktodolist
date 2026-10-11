@@ -77,6 +77,8 @@ const NO_TARGET_INTENTS = new Set(['add', 'query', 'undo']);
 // 这里保留同名导出（loadAiConfig / saveAiConfig / clearAiConfig / subscribeAiConfig），
 // 调用方一行不用改 —— 抽的是实现，不是接口。
 import { clampInt as clampIntShared, createConfigStore } from './configStore.js';
+import { isTauri } from './runtime.js';
+import { pickFetch } from './aiTransport.js';
 
 const aiConfig = createConfigStore({
   key: CFG_KEY,
@@ -178,6 +180,10 @@ function buildSystemPrompt(today, tasks) {
 // 日常双击跑的 preview 模式会绕过本地代理直连上游，被 CORS 拦截——
 // 代理在 preview 里配了也白配。判据改为「origin 是本机回环」，
 // 与部署模型一致：这个应用永远由启动器服务在 localhost 上。
+//
+// Tauri 壳里来源是 tauri://localhost，既不是 http 也没有同源服务，
+// 出机一律走壳内的 ai_chat 命令 —— 因此这里也必须判为"要走代理形态"，
+// 好让 resolveEndpoint 产出带 x-ai-target 的请求，交给 aiTransport 换成 IPC。
 export function isLocalOrigin() {
   try {
     if (typeof location === 'undefined') return false;
@@ -191,11 +197,12 @@ export function isLocalOrigin() {
 // dev 环境走 Vite 代理绕开 CORS（第三方 API 一般不返回 Access-Control-Allow-Origin）。
 // 目标源通过自定义请求头传给代理，代理侧在 vite.config.js 里读。
 // 本机来源（preview）同样走代理——见 isLocalOrigin 的注释。
+// Tauri 壳内由 aiTransport 把同一个请求改送到 Rust 命令，URL 形状保持一致。
 function resolveEndpoint(baseUrl) {
   const base = String(baseUrl || '').replace(/\/+$/, '');
   if (!base) return null;
   const dev = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV;
-  if (dev || isLocalOrigin()) {
+  if (dev || isLocalOrigin() || isTauri()) {
     return { url: '/ai-proxy/chat/completions', targetHeader: base };
   }
   return { url: `${base}/chat/completions`, targetHeader: '' };
@@ -291,7 +298,9 @@ export async function callAiFallback(text, opts = {}) {
 
   const tasks = Array.isArray(opts.tasks) ? opts.tasks : [];
   const today = opts.today || '';
-  const doFetch = opts.fetchImpl || fetch;
+  // 出机通道按运行时选：浏览器 = 全局 fetch（行为与迁移前完全一致），
+  // Tauri = 壳里的 ai_chat 命令。测试仍可通过 fetchImpl 注入。
+  const doFetch = opts.fetchImpl || pickFetch();
 
   const endpoint = resolveEndpoint(cfg.baseUrl);
   if (!endpoint) return null;

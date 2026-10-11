@@ -1,7 +1,9 @@
 # ---- 运行状态（机器相关，不入库）----
-.todolist-server.pid
-.todolist-server.port
+# .todolist-launch.log：Tauri 壳的 git 自动提交失败时留痕用（src-tauri/src/git.rs），仍在用。
 .todolist-launch.log
+# Tauri 版启动器（launch_todolist_tauri.py）的 PID 文件与日志。
+.todolist-tauri.pid
+.todolist-tauri-launch.log
 .workbuddy/
 
 # ---- 依赖 / 虚拟环境 ----
@@ -9,7 +11,8 @@ node_modules/
 .venv-topydo/
 
 # ---- 构建与 QA 临时产物 ----
-# dist 不入库：克隆后首次启动时 launch_todolist.py 会自动执行 vite build。
+# dist 不入库：它是前端构建产物，由 tauri build 的 beforeBuildCommand（npm run build）
+# 重新生成，并在打包时内嵌进 Worktodolist.exe（tauri.conf.json 的 frontendDist）。
 todolist-gui/dist/
 todolist-gui/dist-*/
 todolist-gui/.tmp/
@@ -19,10 +22,9 @@ todolist-gui/vite.config.js.timestamp-*.mjs
 .qa-tmp/
 .todo.bak
 
-# ---- 打包（exe / 分发 zip 是构建产物，不进仓库；随 Release 附件分发）----
-.venv-build/
-build_exe/
-release/
+# ---- 打包（Rust 构建产物不进仓库）----
+# src-tauri/target/ 由 todolist-gui/src-tauri/.gitignore 单独忽略（Tauri 脚手架约定），
+# 不需要在这里重复一条。
 
 # ---- 会话转录（WorkBuddy 落盘的历史，不属于项目源码）----
 session-*.ndjson

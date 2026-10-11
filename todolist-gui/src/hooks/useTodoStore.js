@@ -12,6 +12,7 @@ import {
   ensureDailyBackup,
   isFsaSupported,
   loadDirHandle,
+  pickWorkspace,
   readFileText,
   saveDirHandle,
   verifyPermission,
@@ -319,7 +320,9 @@ export function useTodoStore() {
 
   const pickDirectory = useCallback(async () => {
     try {
-      const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      // 浏览器与 Tauri 走不同的选择器；取消时都抛 AbortError，因此下面的
+      // 静默分支对两边都成立。
+      const handle = await pickWorkspace();
       await saveDirHandle(handle);
       dirHandleRef.current = handle;
       setAuthNeeded(false);

@@ -50,43 +50,42 @@
 <div class="wrap">
 
   <h1>待办清单 · 怎么用</h1>
-  <p class="sub">一句话：这是个网页，用大白话打字，它就去改你电脑上的 todo.txt 文件。</p>
+  <p class="sub">一句话：这是个桌面应用，用大白话打字，它就去改你电脑上的 todo.txt 文件。</p>
 
   <div class="card big">
-    你的任务<b>不在网页里，在你自己的文本文件里</b>——位置是
-    <code>C:\Users\王佐成\WorkBuddy\todolist\todo.txt</code>，用记事本就能打开看。
-    网页只是给它套了个好看的壳。所以网页坏了、关了，任务一条都不会丢。
+    你的任务<b>不在应用里，在你自己的文本文件里</b>——位置就是你选定的那个文件夹里的
+    <code>todo.txt</code>，用记事本就能打开看。
+    应用只是给它套了个好看的壳。所以应用坏了、关了，任务一条都不会丢。
   </div>
 
   <h2>一、怎么打开（双击桌面图标就行）</h2>
   <ol>
-    <li>桌面上找一个<b>蓝色对勾</b>的图标，名字叫 <span class="k">TodoList</span>。</li>
+    <li>桌面上找那个<b>橙色对勾</b>的图标，名字叫 <span class="k">待办清单-Tauri</span>。</li>
     <li><b>双击它</b>，然后等着就行 —— 全程<b>不会</b>有黑色窗口冒出来。</li>
-    <li>大概 3～5 秒后（第一次稍慢），自动弹出应用窗口（一个没有地址栏的干净窗口）。</li>
-    <li>页面上有个蓝色按钮，点它 → 在弹窗里选中 <code>todolist</code> 文件夹 → 点「选择文件夹」。</li>
-    <li>浏览器问「是否允许编辑文件」时，点 <b>允许</b>。</li>
+    <li>大概 1～3 秒后，应用窗口直接弹出来（原生窗口，不是浏览器）。</li>
+    <li>页面上有个按钮，点它 → 在弹窗里选中 <code>todolist</code> 文件夹 → 点「选择文件夹」。</li>
+    <li>系统问「是否允许访问文件」时，点 <b>允许</b>。</li>
   </ol>
   <div class="card ok">
-    <b>以后再用：</b>还是双击那个图标，<b>不用再选文件夹</b>，浏览器记得住。
-    而且重复双击也没关系——服务已经在跑，它只会把窗口再叫出来。
+    <b>以后再用：</b>还是双击那个图标，<b>不用再选文件夹</b>，它记得住。
+    重复双击也没关系——它只会把已经开着的窗口再提到前面来，不会开出第二个。
   </div>
   <div class="card warn">
     <b>两个必须知道的点：</b>
     <ul>
-      <li>必须用 <b>Edge 或 Chrome</b>（本机已装）。如果你平时默认用火狐（Firefox），
-          图标会绕开它直接用 Edge 打开——因为火狐不支持本应用需要的文件读写功能。</li>
-      <li>用完直接把窗口关掉就行。<b>后台服务会继续待着</b>（占用内存很小），
-          下次双击图标会立刻打开、更快。想彻底关掉见第五节。</li>
+      <li>不再需要 Edge 或 Chrome —— 窗口由系统自带的 WebView2 渲染，跟浏览器无关。</li>
+      <li>用完直接把窗口关掉就行。关了就是真关了，不会在后台留服务（想确认见第五节）。</li>
     </ul>
   </div>
   <div class="card">
     <b>万一双击没反应？</b>
     <ul>
-      <li>先去 <code>WorkBuddy\todolist</code> 文件夹，双击 <span class="k">启动待办清单.cmd</span>。
+      <li>先去 <code>todolist</code> 文件夹，双击 <span class="k">启动待办清单-Tauri.cmd</span>。
           它会弹出一个黑色窗口，把出错原因<b>写在窗口里</b>，照着看即可。</li>
-      <li>启动过程也会记在 <code>.todolist-launch.log</code> 里，用记事本打开就能看。</li>
-      <li>如果提示服务起不来，多半是 <code>todolist-gui</code> 文件夹里缺 <code>node_modules</code>，
-          在该文件夹里执行一次 <span class="k">npm install</span> 即可。</li>
+      <li>想看完整诊断（程序在哪、缺什么），执行
+          <span class="k">python launch_todolist_tauri.py --status</span>。</li>
+      <li>如果提示找不到程序，说明这个版本还没构建过 —— 在 <code>todolist-gui</code> 文件夹里执行
+          <span class="k">npm run tauri:build</span>（需要 Rust 工具链，只在改代码时才用得到）。</li>
     </ul>
   </div>
 
@@ -127,25 +126,26 @@
   <h2>四、常见问题</h2>
   <table>
     <tr><th>情况</th><th>怎么办</th></tr>
-    <tr><td>浏览器打不开页面</td><td>先点一次桌面 <span class="k">TodoList</span> 图标（它负责把服务叫醒）；还不行就双击 <span class="k">启动待办清单.cmd</span> 看报错。</td></tr>
-    <tr><td>提示"这个浏览器打不开文件读写功能"</td><td>换成 Edge 或 Chrome 打开同一个网址。</td></tr>
-    <tr><td>提示"再点一下就能继续"</td><td>正常，浏览器过一段时间要重新确认权限，点按钮再允许一次，数据不会丢。</td></tr>
+    <tr><td>窗口打不开</td><td>先双击 <span class="k">启动待办清单-Tauri.cmd</span> 看报错；还不行就执行 <span class="k">python launch_todolist_tauri.py --status</span> 看诊断。</td></tr>
+    <tr><td>提示"没有权限访问文件夹"</td><td>重新点一次「选择文件夹」，在系统弹窗里点「允许」即可。</td></tr>
+    <tr><td>提示"再点一下就能继续"</td><td>正常，系统过一段时间要重新确认文件夹权限，点按钮再允许一次，数据不会丢。</td></tr>
     <tr><td>说"没听懂"</td><td>换个说法，或输入 <span class="k">/</span> 看它能听懂哪些词。</td></tr>
-    <tr><td>怕丢数据</td><td>任务在 todo.txt 里，每次打开网页会自动在 <code>backup</code> 文件夹存一份当天副本（留最近 30 天）。</td></tr>
+    <tr><td>怕丢数据</td><td>任务在 todo.txt 里，每次打开应用会自动在 <code>backup</code> 文件夹存一份当天副本（留最近 30 天）。</td></tr>
     <tr><td>想在命令行用</td><td>原来的 topydo 命令照样能用，两边改的是同一个文件。</td></tr>
   </table>
 
-  <h2>五、怎么彻底关掉后台服务</h2>
-  <p>平时不用管，让它待着就行。真想关掉（比如要重启电脑前、或想看它占不占内存）：</p>
+  <h2>五、怎么彻底关掉</h2>
+  <p>平时不用管，直接关窗口就行——关了就是真关了，应用不会驻留后台。想确认确实没在跑：</p>
   <ol>
-    <li>打开 <code>WorkBuddy\todolist</code> 文件夹，双击 <span class="k">停止待办清单.cmd</span>。</li>
-    <li>弹出「已关闭后台服务」就成功了。</li>
+    <li>打开 <code>todolist</code> 文件夹，双击 <span class="k">停止待办清单-Tauri.cmd</span>。</li>
+    <li>看到「已结束 …」或「没有在运行的 Worktodolist.exe」就说明干净了。</li>
   </ol>
   <p class="muted">关了不影响任何数据——你的任务一直在 <code>todo.txt</code> 里躺着，下次双击图标照样全在。</p>
 
   <hr />
   <p class="muted">
-    技术备注（看不懂可跳过）：这是本地网页应用，用浏览器直接读写 todo.txt / done.txt，不联网、不经过任何服务器；
+    技术备注（看不懂可跳过）：这是本地桌面应用（Tauri 壳 + 系统自带的 WebView2 渲染），
+    直接读写 todo.txt / done.txt，不联网、不经过任何服务器；
     对话页是本地规则解析，不是大模型，所以没有网络也能用、也不花钱。
   </p>
 

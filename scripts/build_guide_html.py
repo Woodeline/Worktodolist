@@ -4,8 +4,12 @@ import re
 
 import markdown
 
-MD_PATH = r"C:/Users/王佐成/WorkBuddy/todolist/topydo-安装配置指南.md"
-HTML_PATH = r"C:/Users/王佐成/WorkBuddy/todolist/topydo-安装配置指南.html"
+# 文档统一收在仓库根的 docs/guide/ 下。用脚本自身位置反推，
+# 不写死绝对路径 —— 否则换个 worktree / 克隆到别的机器就失效。
+HERE = os.path.dirname(os.path.abspath(__file__))
+GUIDE_DIR = os.path.normpath(os.path.join(HERE, os.pardir, 'docs', 'guide'))
+MD_PATH = os.path.join(GUIDE_DIR, 'topydo-安装配置指南.md')
+HTML_PATH = os.path.join(GUIDE_DIR, 'topydo-安装配置指南.html')
 
 with open(MD_PATH, encoding="utf-8") as f:
     md_text = f.read()

@@ -13,7 +13,7 @@ v2 变更（首轮运行发现 6 项未过后的修正）：
   3. ramp 相邻步差加宽后重验；
   4. HTML 附录 A/B 数值改由脚本实算结果生成（v1 手誊，作废）。
 """
-import sys, math
+import os, sys, math
 
 # ────────────────────────────── 色彩学基元 ──────────────────────────────
 def h2rgb(h):
@@ -518,7 +518,10 @@ ramp 相邻步差 ΔE：{'；'.join(r[3] for r in RES if r[0]=='ramp')}（阈值
 </footer>
 </div></body></html>''')
 
-out = r'C:\Users\王佐成\WorkBuddy\todolist\令牌差异表-2026-10-07.html'
+# 差异表落进仓库根的 docs/design/；从脚本位置反推，不写死绝对路径。
+_HERE = os.path.dirname(os.path.abspath(__file__))
+out = os.path.normpath(os.path.join(_HERE, os.pardir, 'docs', 'design',
+                                    '2026-10-07-令牌差异表.html'))
 with open(out, 'w', encoding='utf-8') as f:
     f.write('\n'.join(parts))
 print(f'✓ 差异表已生成：{out}')

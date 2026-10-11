@@ -1,0 +1,78 @@
+[package]
+name = "worktodolist"
+version = "1.0.1"
+description = "待办清单 · 纯文本驱动（Tauri 2 桌面壳）"
+authors = ["Woodeline"]
+edition = "2021"
+# Tauri 2 要求；window::Window 的自定义命令与 dialog 插件在此版本后 API 稳定
+rust-version = "1.77"
+
+# 移动端（Tauri 2 的 iOS/Android 目标）需要 lib 形态；桌面端同样走 lib，main.rs 只做转发。
+[lib]
+name = "worktodolist_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+# 与 [dependencies] 末尾那条 indexmap **同名同版本，必须成对存在**，不是啰嗦重复。
+# 原因：Cargo 特性解析器 v2（edition 2021 的默认值）按 **host / target 两种上下文分桶**，
+# 同一份 indexmap 1.9.3 会被编译成两个互不相干的实例 —— 证据在
+# target/release/.fingerprint/indexmap-* 下：一条 features= ["std"]、
+# 一条 features= ["serde", "serde-1"]，两者 target 哈希相同而 profile 哈希不同。
+# schemars 挂在 tauri-build 底下，属于 **host 桶**；只把 std 写在 [dependencies] 里，
+# host 那份拿不到 std，schemars 照样报 E0107。所以这里必须再写一条。
+indexmap = { version = "1.9", features = ["std"] }
+
+[dependencies]
+# 壳本体。tray-icon 预留托盘能力（当前版本未启用托盘，见迁移说明「后续可选项」）
+tauri = { version = "2", features = [] }
+# 目录选择对话框：替代浏览器的 showDirectoryPicker
+tauri-plugin-dialog = "2"
+# 每日提醒通知
+tauri-plugin-notification = "2"
+# 单实例：替代 pid 文件 + 端口探测那一整套
+tauri-plugin-single-instance = "2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# AI 兜底转发。默认特性即 Windows 原生 TLS（schannel），不引入 OpenSSL
+reqwest = { version = "0.12", features = ["json"] }
+
+# 本 crate 的代码并不直接使用 indexmap —— 这一条是为了「打开 indexmap 1.x 的 std 特性」，
+# 属于特性统一（feature unification）用法。原因如下，不要随手删掉：
+#
+#   indexmap 1.9.3 的 IndexMap 有两个定义：
+#       #[cfg(has_std)]      pub struct IndexMap<K, V, S = RandomState>
+#       #[cfg(not(has_std))] pub struct IndexMap<K, V, S>          ← 没有默认值
+#   `has_std` 由 indexmap 的 build.rs 决定：
+#       CARGO_FEATURE_STD 已设 → autocfg::emit("has_std")            （不探测）
+#       否则                   → autocfg::new().emit_sysroot_crate("std")  （要探测）
+#
+#   而 autocfg 的探测是把源码经 **stdin 管道** 喂给 `rustc -`
+#   （autocfg/src/lib.rs 里 `command.arg("-").stdin(Stdio::piped())`）。
+#   本机存在环境缺陷：Rust 无法创建带 stdin 管道的子进程，
+#   CreateProcess 直接返回 ERROR_PIPE_BUSY(231) → 探测必失败 → has_std 不输出。
+#
+#   后果：schemars 0.8.22 在 preserve_order 特性下写的是 `indexmap::IndexMap<K, V>`
+#   （两个泛型参数），落到"没有默认值"的那个分支就会报
+#       error[E0107]: struct takes 3 generic arguments but 2 were supplied
+#   排查证据：target/release/build/indexmap-*/stderr 里有一句
+#       warning: autocfg could not probe for `std`
+#
+#   打开 std 特性即走"不探测"分支，得到与正常机器完全一致的 has_std=true。
+#   因此在没有该缺陷的机器上这一行是空操作，不会有任何行为差异。
+#
+#   ⚠️ 这一条只覆盖 **target 桶**（[dependencies] / 目标平台那条链）。
+#   host 桶（[build-dependencies] / proc-macro 那条链，schemars 就在里面）
+#   还必须另写一条，见上面 [build-dependencies] 里的说明。**两条缺一不可**，
+#   只写这条会出现"cargo tree 明明显示 std 已启用、构建却依旧 E0107"的假象。
+indexmap = { version = "1.9", features = ["std"] }
+
+[profile.release]
+# 体积优先：与「免安装包瘦身」的结论保持一致
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

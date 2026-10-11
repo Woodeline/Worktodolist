@@ -1,11 +1,73 @@
 # 更新日志
 
+## v1.0.1 · 2026-10-11
+
+把「Python 启动器 + Node/vite 服务 + 浏览器 app 模式」三件套换成 **Tauri 2 原生桌面壳**，并从仓库移除整条旧启动与旧打包链路。产物从「154 MB 解压目录 / 56.6 MB zip」变成 **单文件 `Worktodolist.exe` 4.20 MB**（外带 NSIS 安装包 3.30 MB）：分发体积降到 **1/13.5**，解压占地降到 **1/36.6**。
+
+### 下载
+
+| 文件 | 体积 | 说明 |
+|---|---|---|
+| `Worktodolist.exe` | 4 406 784 B (4.20 MB) | 绿色单文件，双击即用；需系统自带 WebView2 |
+| `Worktodolist_1.0.1_x64-setup.exe` | 3 456 702 B (3.30 MB) | NSIS 安装包，装到当前用户，附开始菜单/桌面快捷方式 |
+| `SHA256SUMS.txt` | — | 上方两个文件的 SHA-256 校验和 |
+
+> 本版**覆盖旧的 v1.0.1**（原 v1.0.1 为 PyInstaller 免安装分发包，已随本条链路一并下线）。
+> 两者同名不同物，请以本页附件为准。
+
+### 为什么换（不是"能用不能用"，是三处结构性问题）
+
+- **端口是身份的一部分**：页面来源随端口变化，`localStorage` 与目录授权跟着丢。
+- **进程是一棵树**：启动器 → node → 浏览器窗口，任一层残留都会演出「pid 残留误判」。
+- **目标机要有运行时**：为了「解压即用」，只能在包里塞进 Node 与 Python 运行时。
+
+Tauri 壳一次消掉三条：来源固定为 `tauri://localhost`；单进程单实例（第二个实例只把窗口提到前台）；运行期只依赖系统自带的 WebView2。
+
+### 新增（`todolist-gui/src-tauri/`）
+
+| 模块 | 取代了什么 |
+|---|---|
+| `workspace.rs` | 浏览器的 File System Access API + Python 侧的路径/pid/端口约定。写入改为「临时文件 + `fs::rename`」原子替换，并用进程内 `Mutex` 串行 |
+| `git.rs` | `scripts/git_autocommit.py`（启动时一次自动提交，失败仍写 `.todolist-launch.log`） |
+| `reminder.rs` | `scripts/daily_reminder.py` 的解析与文案。应用在运行 → 前端 `reminder_check`；应用没打开 → 计划任务用 `Worktodolist.exe --reminder` 拉起隐藏实例，**不再需要 Python** |
+| `ai_proxy.rs` | 浏览器侧那条 AI 兜底转发链路（仍拒绝回环/内网目标） |
+
+图标改为**橙色**，且只落在 `src-tauri/icons/`（Tauri 专用）—— 共用的 `<仓库根>/todolist.ico` 与前端 favicon 一字未动，非 Tauri 侧不受影响。
+
+### 移除
+
+- 旧启动器：`launch_todolist.py`、`stop_todolist.py`、`启动待办清单.cmd`、`启动待办清单.vbs`、`停止待办清单.cmd`
+- 旧打包链路：`scripts/build_exe.py`、`scripts/build-requirements.txt`、`scripts/verify_release.py`
+- 已被壳内移植取代：`scripts/git_autocommit.py`
+- `.gitignore` 里对应的运行状态与产物规则（`.todolist-server.pid` / `.todolist-server.port` / `.venv-build/` / `build_exe/` / `release/`）
+
+保留并收敛为纯 Tauri 版：`launch_todolist_tauri.py`（找到 exe 就启动、找不到就说清怎么构建、`--stop` 结束进程，**不再回落打开任何旧版本**）、`启动待办清单-Tauri.cmd/.vbs`、`停止待办清单-Tauri.cmd`。
+
+### 构建注意（踩过的坑，记下来省下一次）
+
+`schemars` 会报 `E0107: struct takes 3 generic arguments but 2 were supplied`。根因不是依赖版本，而是 **Cargo 特性解析器 v2 按 host / target 分桶**：`schemars` 挂在 `tauri-build` 底下属于 host 桶，而 `indexmap 1.9.3` 的 `std` 特性只在 `[dependencies]` 里开过，host 那份拿不到 —— `indexmap` 无 `std` 时 `IndexMap` 退化成只吃 2 个泛型参数。修法是**在两个 section 里各写一条同版本声明**：
+
+```toml
+[build-dependencies]
+indexmap = { version = "1.9", features = ["std"] }
+[dependencies]
+indexmap = { version = "1.9", features = ["std"] }
+```
+
+注意 `cargo tree -e features` 会按 package id 合并、忽略分桶，因此它显示 `std` 已启用是**假象**；判据要看 `target/release/.fingerprint/indexmap-*/lib-indexmap.json` 里两条记录 `target` 哈希相同、`profile` 哈希不同。
+
 ## v0.1.6 · 2026-10-08
 
 工具集从"一个容器"长成"一套骨架"，随后按需求收紧到 4 个工具；收尾时把整站视觉调性换成了「信号仪表」。这一版还第一次产出**免安装的 Windows 分发包**——内置 Node 与前端依赖，解压双击即用。
 
-> 工具集 P1–P3 的完整交付说明见 `工具集P1-P3交付说明-2026-10-07.md`；
-> UI 重定调的设计全文与令牌对账见 `UI重定调设计方案-2026-10-07.html`、`令牌差异表-2026-10-07.html`。
+> ⚠️ 该免安装分发包链路（PyInstaller + 内置 Node）**已于 2026-10-11 随 Tauri 桌面版一并移除**，
+> 本节以下相关内容保留为历史记录；对应的 `scripts/build_exe.py` / `verify_release.py` /
+> `launch_todolist.py` / `stop_todolist.py` 已不在仓库中。
+
+
+> 工具集 P1–P3 的完整交付说明见 `docs/delivery/2026-10-07-工具集P1-P3交付说明.md`；
+> UI 重定调的设计全文见 `docs/design/2026-10-07-UI重定调设计方案.html`。
+> 令牌对账表（`令牌差异表-2026-10-07.html`）属脚本产物、未入库，跑 `python scripts/ui-rebase-token-validate.py` 可复算。
 
 ### 工具集 P1–P3（2026-10-07）
 
@@ -39,7 +101,7 @@
 
 ### UI 重定调「信号仪表」（2026-10-08）
 
-视觉调性整体换血：推翻 2026-10-06「贴近原生桌面工具」的拍板，改走 **候选 C「信号仪表」**（2026-10-07 三选一裁决，设计全文见根目录 `UI重定调设计方案-2026-10-07.html`）。**改动面只有 `index.css` §1 的令牌层**——组件禁裸值的红利兑现，所有组件零改动自动继承。
+视觉调性整体换血：推翻 2026-10-06「贴近原生桌面工具」的拍板，改走 **候选 C「信号仪表」**（2026-10-07 三选一裁决，设计全文见 `docs/design/2026-10-07-UI重定调设计方案.html`）。**改动面只有 `index.css` §1 的令牌层**——组件禁裸值的红利兑现，所有组件零改动自动继承。
 
 #### 变了什么
 
@@ -241,6 +303,7 @@ AI 兜底接入检测工具 + preview 模式下代理缺口的修复。
 - **转后台/关窗前即时刷盘**（评审 P0-1）：监听 `visibilitychange`/`pagehide`，未保存改动立即写入 todo.txt；保存防抖 500ms → 200ms。修掉「点完就关、改动丢失」的主路径缺口。附回归测试 C9/C10。
 - **原子写入口径修正**（评审 P0-2）：方案文档原声称「tmp+rename」与代码不符。实测确认依赖的是 Chromium `createWritable()` 交换文件 + `close()` 原子提交语义（FSA 对用户目录无 rename 原语），文档与代码注释均改为如实描述。
 - **git 版本化落地**（自评补充）：`git init` + 每次启动后台自动提交数据变更（`scripts/git_autocommit.py`，只提交 todo.txt/done.txt/backup，失败静默）。方案 D2 承诺的「git 版本化 = 免费备份+历史」自此生效。
+  <br>（该脚本已于 2026-10-11 被 `src-tauri/src/git.rs` 取代并移除；能力与行为不变。)
 
 ### 架构与运维（P1/P2）
 
