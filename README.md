@@ -65,7 +65,7 @@ npm run build        # 生产构建（launch_todolist.py 缺 dist 时也会自�
 ```
 python scripts/build_exe.py        # 打包：release/Worktodolist-v<ver>-win-x64/ 与同名 .zip
 python scripts/verify_release.py   # 验包：十项（校验值 / CRC / 内容对账 / 冷启动 / HTTP / 内置 Node 与 Python）
-python scripts/release_github.py   # 发布：打包 → 验包 → 打 tag → 建 Release → 上传附件 → 服务端对账
+python scripts/release_github.py   # 发布：打包 → 验包 → 打本地 tag → 建 Release → 上传 → 对账 → 最后推 tag
 ```
 
 日常发版直接双击根目录的「发布新版本.cmd」即可。规则与要点：
@@ -74,7 +74,9 @@ python scripts/release_github.py   # 发布：打包 → 验包 → 打 tag → 
 - **产物形态**：`Worktodolist-v<ver>-win-x64.zip`（内置 Node 与预构建前端，目标机解压双击即用，不需要装 Node/Python）+ `SHA256SUMS.txt`。
 - **幂等**：tag 已存在则复用、Release 已存在则更新、同名附件先删后传；网络中断后直接重跑。
 - **凭据**：优先读 `GH_TOKEN` / `GITHUB_TOKEN` 环境变量，没有才回落 Windows 凭据管理器（`git credential fill`），令牌不落盘。
-- **CI 双轨**：推 `v*` 标签会触发 `.github/workflows/release.yml`，在 `windows-latest` 上重建并发布；若该 tag 的 Release 已有附件（例如本机一键链刚跑完），CI 会自动跳过，不做重复构建。
+- **推 tag 是最后一步**，别改这个顺序：推 tag 会唤醒 CI 的 push 护栏，而护栏靠「该 tag 的 Release 有没有附件」决定跳不跳过构建。推早了 CI 会重建一遍，并把你刚传上去的附件覆盖成 CI 产物（两条链路的产物**不逐字节一致**，见下条）。
+- **CI 双轨**：推 `v*` 标签会触发 `.github/workflows/release.yml`，在 `windows-latest` 上重建并发布（实测 90–120 秒）；若该 tag 的 Release 已有附件，CI 会早退、不做重复构建。
+- **两份产物不一样是正常的**：本机链用 WorkBuddy 随附的 Python，CI 用 `setup-python` 的 3.13，两侧运行时不同，`SOURCE_DATE_EPOCH` 只能保证同一环境内可重复。**同一次发布只由一条链路定稿。**
 
 ## 已知边界
 

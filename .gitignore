@@ -13,6 +13,7 @@ node_modules/
 todolist-gui/dist/
 todolist-gui/dist-*/
 todolist-gui/.tmp/
+todolist-gui/.tmp-*/
 todolist-gui/qa-artifacts/
 todolist-gui/vite.config.js.timestamp-*.mjs
 .qa-backup/

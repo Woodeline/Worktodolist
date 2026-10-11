@@ -1,5 +1,24 @@
 # 更新日志
 
+## 未发布（v1.0.1 之后）
+
+### 修复：推 tag 会唤醒 CI，把本机刚发布的附件覆盖掉
+
+`release_github.py` 原先把「推 tag」排在建 Release **之前**。推 tag 会触发 `release.yml` 的 push 护栏，而护栏是靠「这个 tag 的 Release 有没有附件」判断要不要跳过构建的——推早了 CI 必然读到「没发布」，于是自己重建一遍，并在约 90 秒后把本机刚上传的附件覆盖成 CI 产物。实测同一次发布：zip `59,322,004` 字节 / `349605ec…` → `55,895,633` 字节 / `7d8694dc…`。
+
+- **`scripts/release_github.py`**：推 tag 挪到**最后一步**（附件传完 + 服务端对账通过之后）。`ensure_tag()` 拆成 `ensure_local_tag()`（只打本地 tag）与 `push_tag()`（最后推）；后者发现远端同名 tag 已指向同一提交就直接跳过——不推，也就不唤醒 CI。
+- `ensure_release()` 现在显式传 `target_commitish`。不传的话，GitHub 会拿**默认分支的当前 HEAD** 去建 tag，发布一个非最新提交的版本就会张冠李戴。
+- `push_tag()` 遇到「远端同名 tag 指向别的提交」**报错退出**，不再可能强推覆盖。
+- 结束语里的下载直链不再写死 zip 名（用 `--asset` 覆盖附件时能显示对）。
+
+### 补记：冻结版 stdout 编码导致 `--stop` 在 CI 上误判失败（已含在 v1.0.1 里）
+
+tag `v1.0.1` 指向 `d1032c3`，已包含这几处修复，此处补上说明：
+
+- **`launch_todolist.py`**：加 `_force_utf8_stdio()`。PyInstaller `--windowed` 冻结版的 stdout 编码跟随系统区域（CI 上是 cp1252），`stop_todolist.py` 的中文提示一打印就抛 `UnicodeEncodeError`，被启动器的 `runpy.run_path` 捕获后翻成退出码 1 —— 表现为「端口明明已关，却判失败」。只改冻结版，开发时在 cmd 里跑不受影响（擅自改成 UTF-8 会让用户的 GBK 控制台变乱码）。
+- **`stop_todolist.py`**：加 `_emit()` 兜底（写不出去也不抛异常）；`kill_pid()` 改为二次核实进程是否真没了（`taskkill /T` 会因已退出的子进程返回非零）。
+- **`verify_release.py`**：加 `launch_log_tail()` —— `--stop` 收尾失败时打印启动器日志尾部。正是这段诊断输出把上面这个坑钉死的。
+
 ## v1.0.1 · 2026-10-11
 
 第一次把「打包」和「发布」接成一条链：分发包不再手工用临时脚本上传，而是由两条可复用的流水线接管——本机一键链（日常发版）与 GitHub Actions（推 tag 即发布）。产物形态不变：仍是 `Worktodolist-v<ver>-win-x64.zip`（内置 Node 与前端依赖，解压双击即用）。

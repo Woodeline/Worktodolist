@@ -45,17 +45,19 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
           fetch-depth: 0        # 需要提交时间来计算可重复构建用的 SOURCE_DATE_EPOCH
 
-      # 本机 scripts/release_github.py 先跑完的情况：Release 与附件都在了，
+      # 护栏：本机 scripts/release_github.py 先跑完的情况，Release 与附件都在了，
       # 这里直接早退，省掉一次十几分钟的重复构建。
+      # 成立的前提是本机链**把推 tag 放在最后一步**（附件传完、对完账才推）。
+      # 2026-10-11 实测过反面：那时推 tag 在传附件之前，CI 的 precheck 必然看到
+      # 「没发布」，于是重建一遍并在十几分钟后覆盖掉本机刚传上去的产物。
       - name: 判断是否需要构建
         id: gate
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 手动触发（workflow_dispatch）= 明确要重发，一律重建；
-          # tag 推送才启用护栏：本机 scripts/release_github.py 先跑完的话，
-          # Release 与附件都在了，这里直接早退，省掉一次十几分钟的重复构建。
+          # 手动触发（workflow_dispatch）= 明确要重发，一律重建（重发就是它的用途）；
+          # 只有 tag 推送才启用护栏。
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "手动触发，强制重建"
             echo "run=true" >> "$GITHUB_OUTPUT"

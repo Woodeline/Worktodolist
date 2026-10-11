@@ -1,6 +1,11 @@
 """把发行包发布到 GitHub Releases（幂等，可重复执行）。
 
-一条链走完：读版本 → 打包 → 验包 → 打 tag → 推 tag → 建 Release → 上传附件 → 服务端对账。
+一条链走完：读版本 → 打包 → 验包 → 打本地 tag → 建 Release（GitHub 顺带建远端 tag）
+→ 上传附件 → 服务端对账 → **最后才推 tag**。
+
+最后一步推 tag 是刻意的，不是随手排的：推 tag 会触发 .github/workflows/release.yml
+的 push 护栏，护栏靠「这个 tag 的 Release 有没有附件」决定跳不跳过构建。推早了 CI
+看到的还是「没发布」，它会自己重建一遍，十几分钟后把本机刚传上去的产物覆盖掉。
 
 用法（在项目根目录）：
   python scripts/release_github.py                     # 完整链路（日常发版走这条）
@@ -24,8 +29,13 @@
     会让 api.github.com 返回 502；这里显式清空代理，直连。
   * **上传必须走 Python 的 TLS 栈。** Windows 的 curl 走 schannel 做吊销检查，取不到 CRL
     就中止握手（CRYPT_E_REVOCATION_OFFLINE），传不上去；Python 的 OpenSSL 栈不做吊销检查。
+
+环境变量：
+  GH_TOKEN / GITHUB_TOKEN   令牌（没有则回落 Windows 凭据管理器）
+  TODOLIST_GIT_PROXY        推 tag 用的代理：不设＝不干预；none/off/- ＝强制直连；其它＝该代理
 """
 import argparse
+import base64
 import hashlib
 import http.client
 import json
@@ -55,6 +65,35 @@ os.environ.setdefault('GIT_TERMINAL_PROMPT', '0')
 # git 网络参数：本机 github.com 的写操作会被 TLS 半途掐断，schannel + HTTP/1.1 最耐受
 GIT_NET = ['-c', 'http.sslBackend=schannel', '-c', 'http.version=HTTP/1.1',
            '-c', 'http.postBuffer=524288000']
+
+# 代理不写死。本机没有稳定的 github 通路：直连、环境变量里的代理、本地代理端口，
+# 谁通谁不通每次都不同（同一次会话里也会变）。用 TODOLIST_GIT_PROXY 控制：
+#   未设置            → 不干预，用 git 自己的配置 / http_proxy 环境变量
+#   none / off / -    → 强制直连（-c http.proxy=）
+#   其它（http://…）  → 走该代理
+_GIT_PROXY = os.environ.get('TODOLIST_GIT_PROXY', '').strip()
+
+
+def git_net_args():
+    args = list(GIT_NET)
+    if not _GIT_PROXY:
+        return args
+    proxy = '' if _GIT_PROXY.lower() in ('none', 'off', '-') else _GIT_PROXY
+    return args + ['-c', 'http.proxy=%s' % proxy, '-c', 'https.proxy=%s' % proxy]
+
+
+def git_auth_args(user, token):
+    """git 网络认证：用令牌拼一次性 Basic 头，绕开凭据管理器。
+
+    本机全局配的 helper 是 git-credential-manager；github.com 通路一断，它会
+    卡住不返回（实测 push 静默挂死 150s 以上，且不留任何输出，极易误判成"网络
+    慢"）。这里直接用已经取到的令牌，并把 helper 列表清空，彻底不碰 GCM。
+    """
+    if not token:
+        return []
+    basic = base64.b64encode(('%s:%s' % (user, token)).encode('utf-8')).decode('ascii')
+    return ['-c', 'credential.helper=',
+            '-c', 'http.extraheader=Authorization: Basic %s' % basic]
 
 
 def say(msg):
@@ -132,23 +171,37 @@ def changelog_section(version):
 # --------------------------------------------------------------------------
 # 凭据
 # --------------------------------------------------------------------------
-def get_token():
+def get_credentials():
+    """返回 (用户名, 令牌)。优先环境变量（CI 用），否则回落 git 凭据管理器。
+
+    取 username 是为了拼 git 的 Basic 头；拿不到就用 x-access-token ——
+    GitHub 用令牌做 Basic 认证时不校验用户名。
+    """
     for name in ('GH_TOKEN', 'GITHUB_TOKEN'):
         value = (os.environ.get(name) or '').strip()
         if value:
             say('使用环境变量 %s 里的令牌' % name)
-            return value
+            return os.environ.get('GH_USER', 'x-access-token').strip() or 'x-access-token', value
     say('环境变量里没有令牌，回落 git 凭据管理器（wincred）')
     proc = subprocess.run(
-        ['git', '-c', 'http.proxy=', '-c', 'https.proxy=',
-         '-c', 'credential.helper=wincred', 'credential', 'fill'],
+        ['git', '-c', 'credential.helper=', '-c', 'credential.helper=wincred',
+         'credential', 'fill'],
         input='protocol=https\nhost=github.com\n\n', cwd=ROOT,
         capture_output=True, text=True, encoding='utf-8', errors='replace', check=False)
+    user, token = '', ''
     for line in (proc.stdout or '').splitlines():
-        if line.startswith('password='):
-            return line.split('=', 1)[1].strip()
-    raise SystemExit('取不到 GitHub 令牌。请设 GH_TOKEN 环境变量，'
-                     '或确认 Windows 凭据管理器里有 github.com 的凭据。')
+        if line.startswith('username='):
+            user = line.split('=', 1)[1].strip()
+        elif line.startswith('password='):
+            token = line.split('=', 1)[1].strip()
+    if not token:
+        raise SystemExit('取不到 GitHub 令牌。请设 GH_TOKEN 环境变量，'
+                         '或确认 Windows 凭据管理器里有 github.com 的凭据。')
+    return (user or 'x-access-token'), token
+
+
+def get_token():
+    return get_credentials()[1]
 
 
 # --------------------------------------------------------------------------
@@ -252,41 +305,86 @@ def get_release_by_tag(repo, tag, token):
     raise SystemExit('查询 Release 失败：status=%s body=%s' % (status, str(body)[:200]))
 
 
-def ensure_tag(tag, version, push=True, dry_run=False):
-    """本地打注释 tag 并推远端；已存在则复用。返回远端 sha（推了才有）。"""
-    code, out, _ = git('rev-parse', '--verify', 'refs/tags/%s' % tag)
+def _peel_commit(out):
+    """从 `git ls-remote refs/tags/x` 的输出里取出**提交** sha。
+
+    注释 tag 会返回两行：tag 对象本身 + `<sha>^{}`（解引用后的提交）；轻量 tag
+    只有一行，那行就是提交。要提交是为了和本地 tag 比对——本地是注释 tag、远端
+    可能是 GitHub 自动建的轻量 tag，直接比对象 sha 会永远不相等。
+    """
+    fallback = ''
+    for line in (out or '').splitlines():
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        if parts[1].endswith('^{}'):
+            return parts[0]
+        fallback = fallback or parts[0]
+    return fallback
+
+
+def ensure_local_tag(tag, version, dry_run=False):
+    """只在本地打注释 tag（已存在则复用），返回它指向的提交 sha。
+
+    **不推远端**：推送挪到 push_tag()，必须是整个发布流程的最后一步。
+    """
+    code, out, _ = git('rev-parse', '--verify', 'refs/tags/%s^{commit}' % tag)
     if code == 0:
         say('本地已有 tag %s（%s），复用' % (tag, out[:12]))
+        return out.strip()
+    if dry_run:
+        say('[dry-run] 将执行：git tag -a %s -m "..."' % tag)
     else:
-        if dry_run:
-            say('[dry-run] 将执行：git tag -a %s -m "..."' % tag)
-        else:
-            run(['git', 'tag', '-a', tag, '-m', '%s: %s' % (tag, version)])
+        run(['git', 'tag', '-a', tag, '-m', '%s: %s' % (tag, version)])
+    code, out, _ = git('rev-parse', '--verify', 'refs/tags/%s^{commit}' % tag)
+    if code == 0:
+        return out.strip()
+    code, out, _ = git('rev-parse', 'HEAD')       # dry-run 下 tag 还没建
+    return out.strip() if code == 0 else ''
 
-    if not push:
-        say('--no-push：不推 tag')
-        return None
 
+def push_tag(tag, auth, dry_run=False):
+    """把 tag 推到远端。**必须最后一步调用**，这是有原因的。
+
+    推 tag 会触发 .github/workflows/release.yml 的 push 护栏，而护栏是靠「这个
+    tag 的 Release 有没有附件」判断要不要跳过构建。所以只能在附件传完之后推：
+    否则 CI 看到的还是「没发布」，会重建一遍，十几分钟后把本机刚传上去的产物
+    覆盖成另一份（2026-10-11 实测到过这个覆盖，两条链路的产物并不逐字节一致）。
+
+    另外，创建 Release 时 GitHub 会用 tag_name 自动建一个指向 target_commitish
+    的轻量 tag，所以走到这里远端通常已经有同名 tag 了。只要它指向同一个提交，
+    就直接跳过——不推也就不会触发 CI，连重复构建的机会都没有。
+    """
     ref = 'refs/tags/%s' % tag
+    net = git_net_args() + list(auth)
+    code, out, _ = git('rev-parse', '--verify', '%s^{commit}' % ref)
+    local_commit = out.strip() if code == 0 else ''
+
     for attempt in range(8):
-        code, out, _ = git('-c', 'http.proxy=', 'ls-remote', 'origin', ref)
-        if out:
-            remote_sha = out.split()[0]
-            say('远端已有 %s = %s' % (ref, remote_sha[:12]))
-            return remote_sha
+        code, out, _ = git(*net, 'ls-remote', 'origin', ref)
+        remote_commit = _peel_commit(out)
+        if remote_commit:
+            if local_commit and remote_commit == local_commit:
+                say('远端 %s 已指向同一提交 %s（Release 创建时自动生成），不必再推'
+                    % (ref, remote_commit[:12]))
+                return remote_commit
+            raise SystemExit(
+                '远端 %s 指向 %s，本地指向 %s，两者不一致。'
+                '先人工确认哪一份是对的（`git ls-remote origin %s`），脚本不擅自改写远端 tag。'
+                % (ref, remote_commit[:12], (local_commit or '?')[:12], ref))
         if dry_run:
             say('[dry-run] 将执行：git push origin %s' % ref)
             return None
-        code, out, err = git(*GIT_NET, 'push', '--no-thin', 'origin', ref)
+        code, out, err = git(*net, 'push', '--no-thin', 'origin', ref)
         if code == 0:
             say('已推送 %s' % ref)
         else:
             say('  推 tag 未成功（%s），第 %d/8 次重试' % (err[:120], attempt + 1))
         time.sleep(1)
-    # 以远端读回为准，不看 push 的退出码
-    code, out, _ = git('-c', 'http.proxy=', 'ls-remote', 'origin', ref)
-    if out:
-        return out.split()[0]
+    # 判定成功只看远端读回，不看 push 的退出码或回显——本机多次出现「回显成功但远端没变」
+    code, out, _ = git(*net, 'ls-remote', 'origin', ref)
+    if _peel_commit(out):
+        return _peel_commit(out)
     raise SystemExit('标签 %s 没能推上远端。脚本是幂等的，检查网络后直接重跑。' % tag)
 
 
@@ -303,7 +401,7 @@ def build_release_body(version, assets, trigger):
     return ((section + '\n') if section else '') + tail
 
 
-def ensure_release(repo, tag, version, assets, token, args, trigger):
+def ensure_release(repo, tag, version, assets, token, args, trigger, commit=''):
     release = get_release_by_tag(repo, tag, token)
     payload = {
         'tag_name': tag,
@@ -313,6 +411,10 @@ def ensure_release(repo, tag, version, assets, token, args, trigger):
         'prerelease': bool(args.prerelease),
         'make_latest': 'false' if args.no_latest else 'true',
     }
+    # 显式钉住 tag 落点。不传的话 GitHub 会拿**默认分支的当前 HEAD** 建 tag ——
+    # 发布一个不是最新提交的版本时就会张冠李戴。tag 已存在时该字段被忽略，无害。
+    if commit:
+        payload['target_commitish'] = commit
     if release:
         say('Release %s 已存在（id=%s），更新说明并复用' % (tag, release['id']))
         if args.dry_run:
@@ -453,21 +555,30 @@ def main():
         run([sys.executable, os.path.join(SCRIPTS, 'verify_release.py'),
              '--zip', os.path.join(RELEASE, zip_name)])
 
-    token = get_token()
+    user, token = get_credentials()
 
-    # 3) tag
+    # 3) tag —— 这里只是**本地**打 tag。推远端挪到第 7 步，顺序是这个脚本的关键，
+    #    理由见 push_tag() 的注释（推早了会触发 CI 重建并覆盖本机产物）。
+    auth = git_auth_args(user, token)
+    commit = ''
     if args.skip_tag:
         say('跳过 tag（--skip-tag），假定远端已有 %s' % tag)
     else:
-        ensure_tag(tag, version, push=not args.no_push, dry_run=args.dry_run)
+        commit = ensure_local_tag(tag, version, dry_run=args.dry_run)
 
     # 4) Release（可先建空 Release 再传附件）
     trigger = 'GitHub Actions' if os.environ.get('GITHUB_ACTIONS') == 'true' else '本机 scripts/release_github.py'
-    release = ensure_release(repo, tag, version, assets, token, args, trigger)
+    release = ensure_release(repo, tag, version, assets, token, args, trigger, commit)
 
     # 5) 上传
     if args.dry_run:
         say('[dry-run] 将上传：%s' % '、'.join(os.path.basename(p) for p in assets))
+        if args.skip_tag:
+            say('[dry-run] 跳过 tag 推送')
+        elif args.no_push:
+            say('[dry-run] --no-push：不推 tag')
+        else:
+            say('[dry-run] 最后一步将执行：git push origin refs/tags/%s' % tag)
         return 0
     if release is None:
         raise SystemExit('Release 未能创建，中止。')
@@ -479,10 +590,25 @@ def main():
     if not verify_assets(repo, tag, assets, token):
         raise SystemExit('对账未通过：服务端持有的文件与本地不一致，请重跑（脚本幂等）。')
 
+    # 7) 推 tag —— 必须是最后一步。推 tag 会唤醒 CI 的 push 护栏，而护栏靠
+    #    「Release 里有没有附件」判断跳不跳过构建；到这一步附件已经就位且对过账，
+    #    CI 才会正确地早退。详见 push_tag()。
+    if args.skip_tag:
+        say('--skip-tag：不推 tag')
+    elif args.no_push:
+        say('--no-push：不推 tag')
+    else:
+        pushed = push_tag(tag, auth, dry_run=args.dry_run)
+        if pushed:
+            say('远端 tag：%s' % pushed[:12])
+
     say('')
     say('==== 发布完成（%.1fs）====' % (time.time() - started))
+    # 下载直链指向 zip（拿 --asset 覆盖附件时不能再写死默认名）
+    link_name = next((os.path.basename(p) for p in assets if p.lower().endswith('.zip')),
+                     os.path.basename(assets[0]) if assets else zip_name)
     say('Release 页面：https://github.com/%s/releases/tag/%s' % (repo, tag))
-    say('下载直链　：https://github.com/%s/releases/download/%s/%s' % (repo, tag, zip_name))
+    say('下载直链　：https://github.com/%s/releases/download/%s/%s' % (repo, tag, link_name))
     return 0
 
 
