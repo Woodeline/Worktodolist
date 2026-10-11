@@ -16,6 +16,14 @@ on:
 permissions:
   contents: write
 
+# windows-latest 的默认 stdout 编码是 cp1252，脚本里的中文提示会直接抛
+# UnicodeEncodeError（2026-10-11 首次运行就是死在这里）。用 PYTHONUTF8 统一成
+# UTF-8 —— 比在每个脚本里 reconfigure stdout 干净（后者会让用户本机的 GBK
+# 控制台变乱码）。
+env:
+  PYTHONUTF8: '1'
+  PYTHONIOENCODING: utf-8
+
 concurrency:
   group: release-${{ github.event.inputs.tag || github.ref_name }}
   cancel-in-progress: false

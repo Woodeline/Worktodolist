@@ -432,8 +432,8 @@ def main():
         return 0
 
     # 1) 打包
-    if args.skip_build:
-        say('跳过打包（--skip-build）')
+    if args.skip_build or args.dry_run:
+        say('跳过打包（%s）' % ('--dry-run' if args.dry_run else '--skip-build'))
     else:
         run([sys.executable, os.path.join(SCRIPTS, 'build_exe.py')])
 
