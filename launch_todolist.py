@@ -513,8 +513,30 @@ def open_ui():
         return False
 
 
+def _force_utf8_stdio():
+    """把冻结版的标准流强制成 UTF-8，避免打中文时抛 UnicodeEncodeError。
+
+    冻结版（`--windowed`）的 stdout 编码跟着**系统区域**走：windows-latest 上是
+    cp1252，本项目的中文提示一打就炸。2026-10-11 的真实后果很难看——辅助脚本
+    stop_todolist.py 已经确实把服务停掉了，却因为在 `print('已关闭后台服务…')`
+    上抛异常，被 run_script 捕获后返回 1，于是 `--stop` 退出码是 1，CI 的收尾
+    校验假失败（端口明明已经关了）。
+
+    只在冻结版里改：开发时在 cmd 里跑，stdout 是用户自己的控制台，擅自改成
+    UTF-8 会让 GBK 控制台变乱码；冻结版没有交互控制台，改掉没有副作用。
+    """
+    if not getattr(sys, 'frozen', False):
+        return
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:  # noqa: BLE001  流不存在/不支持 reconfigure 就算了
+            pass
+
+
 def main():
     global PORT, FORCED_PORT
+    _force_utf8_stdio()
     args = sys.argv[1:]
 
     # 子命令先于一切环境检查：--stop 不需要 todolist-gui / node 在场。

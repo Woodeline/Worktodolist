@@ -51,9 +51,34 @@ PS_LIST_CMD = (
 QUIET = '--quiet' in sys.argv or os.environ.get('TODOLIST_NO_DIALOG') == '1'
 
 
+def _emit(message):
+    """把提示写到 stdout，**绝不因为编码问题抛异常**。
+
+    本脚本在冻结版里是「同进程执行」的（launch_todolist.run_script），一旦这里
+    抛异常，run_script 会把它翻成退出码 1 —— 而副作用其实已经做完了（服务已停）。
+    所以这层兜底是必需的：打印失败最多丢一行字，绝不能反过来让操作"看起来失败"。
+    """
+    stream = sys.stdout
+    if stream is None:
+        return
+    try:
+        stream.write(message + '\n')
+        stream.flush()
+        return
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        buffer = getattr(stream, 'buffer', None)
+        if buffer is not None:
+            buffer.write((message + '\n').encode('ascii', 'replace'))
+            buffer.flush()
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def alert(message, title='待办清单'):
     if QUIET:
-        print(message)
+        _emit(message)
         return
     try:
         ctypes.windll.user32.MessageBoxW(None, message, title, 0x40)
@@ -63,7 +88,7 @@ def alert(message, title='待办清单'):
 
 def warn(message, title='待办清单'):
     if QUIET:
-        print(message)
+        _emit(message)
         return
     try:
         ctypes.windll.user32.MessageBoxW(None, message, title, 0x30)
