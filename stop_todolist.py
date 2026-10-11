@@ -197,8 +197,18 @@ def find_orphan_servers(exclude_pids):
 
 
 def kill_pid(pid):
+    """结束进程，返回是否**确实没了**。
+
+    判据刻意不用 taskkill 的退出码：`/T` 会把子进程一起收拾，只要有一个子进程
+    收不掉（典型是已经退出的 esbuild 服务进程），整体就返回非零，而目标进程其实
+    已经死了。2026-10-11 在 GitHub Actions 的 windows-latest 上就撞到这个：
+    端口确实关掉了（服务已停），但 `--stop` 返回 1，验包的收尾项假失败。
+    所以改成二次核实：目标 PID 在 tasklist 里查不到了才算成功。
+    """
     code, _ = _run(['taskkill', '/PID', str(pid), '/T', '/F'])
-    return code == 0
+    if code == 0:
+        return True
+    return process_image_name(pid) == ''
 
 
 def main():

@@ -180,6 +180,22 @@ def read_logged_node(bundle):
     return None
 
 
+def launch_log_tail(bundle, lines=12):
+    """取 .todolist-launch.log 的尾部若干行。
+
+    冻结版的辅助脚本（stop_todolist.py 等）是**同进程**执行的，异常只会被
+    启动器的 run_script 捕获后写进这个日志——不吐出来就没法定位。
+    """
+    log = os.path.join(bundle, '.todolist-launch.log')
+    if not os.path.isfile(log):
+        return ''
+    try:
+        with open(log, 'r', encoding='utf-8', errors='replace') as fh:
+            return '\n'.join(line.rstrip() for line in fh.readlines()[-lines:])
+    except OSError:
+        return ''
+
+
 def functional_checks(bundle, skip_stop=False):
     ok = True
     exe = os.path.join(bundle, APP_NAME + '.exe')
@@ -225,8 +241,16 @@ def functional_checks(bundle, skip_stop=False):
             closed = True
             break
         time.sleep(0.5)
-    ok &= record('--stop 收尾', code == 0 and closed,
-                 'rc=%d 端口已关=%s' % (code, closed))
+    detail = 'rc=%d 端口已关=%s' % (code, closed)
+    if code != 0 or not closed:
+        # 失败时把子进程输出与启动器日志一起吐出来，否则只有一句 rc=1 无从下手
+        tail = (out or '').strip()
+        if tail:
+            detail += '\n      子进程输出：' + tail[-500:].replace('\n', '\n        ')
+        log_tail = launch_log_tail(bundle)
+        if log_tail:
+            detail += '\n      启动器日志尾部：\n        ' + log_tail.replace('\n', '\n        ')
+    ok &= record('--stop 收尾', code == 0 and closed, detail)
     return ok
 
 
