@@ -1,0 +1,118 @@
+name: Release
+
+# 推 v* 标签即自动发布；也可在 Actions 页面手动指定 tag 重发。
+# 与 scripts/release_github.py 共用同一套发布逻辑（幂等），两条路二选一即可。
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要发布的标签（例：v1.0.1）'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: 解析目标标签
+        id: meta
+        shell: bash
+        run: echo "tag=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: 检出仓库
+        uses: actions/checkout@v4
+        with:
+          # 手动触发时按指定标签检出（否则会拿到默认分支的代码，发布张冠李戴）
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          fetch-depth: 0        # 需要提交时间来计算可重复构建用的 SOURCE_DATE_EPOCH
+
+      # 本机 scripts/release_github.py 先跑完的情况：Release 与附件都在了，
+      # 这里直接早退，省掉一次十几分钟的重复构建。
+      - name: 判断是否需要构建
+        id: gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 手动触发（workflow_dispatch）= 明确要重发，一律重建；
+          # tag 推送才启用护栏：本机 scripts/release_github.py 先跑完的话，
+          # Release 与附件都在了，这里直接早退，省掉一次十几分钟的重复构建。
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "手动触发，强制重建"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          set +e
+          out=$(python scripts/release_github.py --precheck --tag "${{ steps.meta.outputs.tag }}")
+          echo "$out"
+          if echo "$out" | grep -q '^STATE=published'; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 安装 Node 22
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: todolist-gui/package-lock.json
+
+      - name: 安装 Python 3.13
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: 安装前端依赖
+        if: steps.gate.outputs.run == 'true'
+        working-directory: todolist-gui
+        run: npm ci
+
+      # 冻结构建时间戳：同一提交重复构建产物逐字节一致（与 build_exe.py 的
+      # SOURCE_DATE_EPOCH 开关配合，PyInstaller 会把它写进 PE 头）。
+      - name: 冻结构建时间戳
+        if: steps.gate.outputs.run == 'true'
+        shell: bash
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+
+      - name: 打包（PyInstaller onedir + 内置 Node + 预构建前端）
+        if: steps.gate.outputs.run == 'true'
+        run: python scripts/build_exe.py
+
+      - name: 验包（十项：校验值 / CRC / 对账 / 冷启动 / HTTP / 内置 Node 与 Python）
+        if: steps.gate.outputs.run == 'true'
+        run: python scripts/verify_release.py
+
+      - name: 建 Release 并上传附件
+        if: steps.gate.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          python scripts/release_github.py
+          --skip-build --skip-verify --skip-tag
+          --tag "${{ steps.meta.outputs.tag }}"
+
+      - name: 汇总
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.gate.outputs.run }}" = "false" ]; then
+            echo "### 已存在完整 Release，本次跳过构建与上传" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### 发布结果" >> "$GITHUB_STEP_SUMMARY"
+            echo "- 标签：\`${{ steps.meta.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- 页面：https://github.com/${{ github.repository }}/releases/tag/${{ steps.meta.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
+          fi

@@ -60,6 +60,22 @@ npm run build        # 生产构建（launch_todolist.py 缺 dist 时也会自�
 
 启动器加 `--dev` 可强制 dev 模式；`--show-window`（或用 .cmd 启动）可看到服务日志。
 
+## 打包与发布
+
+```
+python scripts/build_exe.py        # 打包：release/Worktodolist-v<ver>-win-x64/ 与同名 .zip
+python scripts/verify_release.py   # 验包：十项（校验值 / CRC / 内容对账 / 冷启动 / HTTP / 内置 Node 与 Python）
+python scripts/release_github.py   # 发布：打包 → 验包 → 打 tag → 建 Release → 上传附件 → 服务端对账
+```
+
+日常发版直接双击根目录的「发布新版本.cmd」即可。规则与要点：
+
+- **版本号取自 `todolist-gui/package.json`**（改版本号 = 改这一处 + `package-lock.json` 同步），tag 形如 `v1.0.1`。
+- **产物形态**：`Worktodolist-v<ver>-win-x64.zip`（内置 Node 与预构建前端，目标机解压双击即用，不需要装 Node/Python）+ `SHA256SUMS.txt`。
+- **幂等**：tag 已存在则复用、Release 已存在则更新、同名附件先删后传；网络中断后直接重跑。
+- **凭据**：优先读 `GH_TOKEN` / `GITHUB_TOKEN` 环境变量，没有才回落 Windows 凭据管理器（`git credential fill`），令牌不落盘。
+- **CI 双轨**：推 `v*` 标签会触发 `.github/workflows/release.yml`，在 `windows-latest` 上重建并发布；若该 tag 的 Release 已有附件（例如本机一键链刚跑完），CI 会自动跳过，不做重复构建。
+
 ## 已知边界
 
 - 浏览器限定 Edge/Chrome（File System Access API）；换浏览器需重新授权目录。

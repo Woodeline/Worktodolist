@@ -1,5 +1,25 @@
 # 更新日志
 
+## v1.0.1 · 2026-10-11
+
+第一次把「打包」和「发布」接成一条链：分发包不再手工用临时脚本上传，而是由两条可复用的流水线接管——本机一键链（日常发版）与 GitHub Actions（推 tag 即发布）。产物形态不变：仍是 `Worktodolist-v<ver>-win-x64.zip`（内置 Node 与前端依赖，解压双击即用）。
+
+### 一键发布链（本机）
+
+- **`scripts/release_github.py`**：读 `todolist-gui/package.json` 的版本 → 打包（复用 `build_exe.py`）→ 验包（复用 `verify_release.py` 十项）→ 本地打注释 tag → 推 tag（带重试）→ 建/复用 Release → 上传附件 → **用服务端 `digest` 与本地 sha256 对账**。
+- **幂等**：同名附件先删后传、Release 已存在则复用更新，网络抖动直接重跑；每个写操作后用独立读命令复核。
+- **凭据**：只从 `GH_TOKEN` 或 `git credential fill`（Win 凭据管理器）取，不落盘、不打印。
+- **双击入口**：根目录 `发布新版本.cmd`。
+
+### 自动发布（GitHub Actions）
+
+- **`.github/workflows/release.yml`**：推 `v*` tag 触发，`windows-latest` 上装 Python 3.13 + Node 22 → `npm ci` → `build_exe.py` → `verify_release.py` → 调 `release_github.py --skip-build --skip-verify --skip-tag` 建 Release 并上传附件；同时支持 `workflow_dispatch` 手动指定 tag。
+- **可重复构建**：CI 里把 `SOURCE_DATE_EPOCH` 冻成该提交的 committer time，同一提交重复构建产物逐字节一致。
+
+### 版本
+
+- `todolist-gui/package.json` 0.1.6 → **1.0.1**（与远端分支 `tauri-v1.0.1` 对齐），`package-lock.json` 同步。
+
 ## v0.1.6 · 2026-10-08
 
 工具集从"一个容器"长成"一套骨架"，随后按需求收紧到 4 个工具；收尾时把整站视觉调性换成了「信号仪表」。这一版还第一次产出**免安装的 Windows 分发包**——内置 Node 与前端依赖，解压双击即用。
