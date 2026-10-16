@@ -3,7 +3,7 @@
 // 覆盖本轮新增的三条路由：
 //   ① suggestAdd  → 只反问，不落盘；回「是」才执行
 //   ② needsConfirm（唯一命中但词只是标题片段）→ 先确认目标
-//   ③ unknown     → 未配置 AI 时固定提示且零网络请求；已配置时才联网兜底
+//   ③ unknown     → 固定提示且零网络请求（纯本地规则引擎，绝不联网）
 //
 // 与 useTodoStore.test.js 同一套替身策略：vi.mock('react') 注入极简 hooks
 // 实现（scripts/qa-react-shim.mjs），在 node 环境下直接驱动真实 useChatAgent，
@@ -100,7 +100,6 @@ beforeEach(() => {
 afterEach(() => {
   delete globalThis.window;
   delete globalThis.fetch;
-  delete globalThis.localStorage;
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -286,8 +285,8 @@ describe('needsConfirm：唯一命中但查询词只是标题片段', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('unknown 与 AI 兜底', () => {
-  it('未配置 AI → 固定提示，且一次网络请求都不发', async () => {
+describe('unknown：固定提示且零网络请求', () => {
+  it('本地没认出来的话 → 固定提示，且一次网络请求都不发', async () => {
     const fetchSpy = vi.fn();
     globalThis.fetch = fetchSpy;
 
@@ -302,106 +301,6 @@ describe('unknown 与 AI 兜底', () => {
     expect(agentTexts(agent)).toContain('没听懂');
     const events = readLog({});
     expect(events).toEqual([]);
-  });
-
-  it('已配置 AI → 联网兜底，并当场说明这一句发往了哪里', async () => {
-    globalThis.localStorage = {
-      getItem: () =>
-        JSON.stringify({
-          enabled: true,
-          apiKey: 'sk-test',
-          baseUrl: 'https://api.example.com/v1',
-          model: 'gpt-test',
-        }),
-      setItem() {},
-      removeItem() {},
-    };
-    globalThis.fetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      async json() {
-        return { choices: [{ message: { content: '{"intent":"complete","targetIndex":1}' } }] };
-      },
-    }));
-
-    const { store } = makeStore(SEED_TASKS);
-    const render = makeRenderer(store);
-    let agent = render();
-
-    // 这句本地完全认不出来（无动作词、无时间、非疑问）→ 才会走 AI 兜底
-    await agent.send('随便说一句没头没脑的话');
-    agent = render();
-
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-    // 请求确实带上了清单里的任务（AI 只能从里面挑序号）
-    const body = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
-    expect(body.messages[0].content).toContain('周线复盘');
-
-    // 透明度：用户能看到"这一句被发到哪去了"
-    expect(agentTexts(agent)).toContain('api.example.com');
-
-    // AI 挑的第 1 条 → 映射回我们自己的 id
-    expect(store.toggleComplete).toHaveBeenCalledTimes(1);
-    expect(store.toggleComplete.mock.calls[0][0].id).toBe('k1');
-  });
-
-  it('AI 请求失败 → 静默退回固定提示，不把网络错误甩给用户', async () => {
-    globalThis.localStorage = {
-      getItem: () =>
-        JSON.stringify({
-          enabled: true,
-          apiKey: 'sk-test',
-          baseUrl: 'https://api.example.com/v1',
-          model: 'gpt-test',
-        }),
-      setItem() {},
-      removeItem() {},
-    };
-    globalThis.fetch = vi.fn(async () => {
-      throw new Error('network down');
-    });
-
-    const { store } = makeStore();
-    const render = makeRenderer(store);
-    let agent = render();
-
-    await agent.send('今天天气怎么样');
-    agent = render();
-
-    expect(agentTexts(agent)).toContain('没听懂');
-    expect(store.addTask).not.toHaveBeenCalled();
-    expect(agent.pending).toBeFalsy();
-  });
-
-  it('AI 返回越界序号 → 不执行，退回固定提示', async () => {
-    globalThis.localStorage = {
-      getItem: () =>
-        JSON.stringify({
-          enabled: true,
-          apiKey: 'sk-test',
-          baseUrl: 'https://api.example.com/v1',
-          model: 'gpt-test',
-        }),
-      setItem() {},
-      removeItem() {},
-    };
-    globalThis.fetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      async json() {
-        return { choices: [{ message: { content: '{"intent":"complete","targetIndex":99}' } }] };
-      },
-    }));
-
-    const { store } = makeStore(SEED_TASKS);
-    const render = makeRenderer(store);
-    let agent = render();
-
-    await agent.send('随便一句话');
-    agent = render();
-
-    expect(store.toggleComplete).not.toHaveBeenCalled();
-    expect(agentTexts(agent)).toContain('没听懂');
   });
 });
 

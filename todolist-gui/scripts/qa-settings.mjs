@@ -1,12 +1,11 @@
 #!/usr/bin/env node
-// 设置页 UI 级回归 + 结构核对（不需要真实 API Key，用独立浏览器 profile）。
+// 设置页（快捷键速查）UI 级回归（独立浏览器 profile）。
 //
-// 为什么单测不够：单测能证明 saveAiConfig → loadAiConfig 通了，但证明不了
-// 「在界面上改完 → 点保存 → 别处跟着变」这条真实链路 —— 受控输入没绑上、
-// 保存按钮点不动、状态行读了另一份 state，这些在逻辑层全绿的情况下照样能坏。
-// 这里用真实浏览器点真按钮，读 localStorage 与页面上真实文案。
+// 为什么单测不够：单测能证明组件函数返回了 JSX，但证明不了「在真实浏览器里渲染出来
+// 的页面结构正确、旧功能入口一个都不剩」这条链路 —— 类名写错、入口漏删，在逻辑层
+// 全绿的情况下照样能坏。这里用真实浏览器读页面上真实结构。
 //
-// 顺带核对「旧入口已经消失」：对话页不应再有 .ai-cfg 面板与 .chat-status-btn。
+// 顺带核对「不再有任何配置类入口」：设置页只读、无输入控件，对话页状态行固定本地规则引擎。
 //
 // 用法：npm run test:settings   （需要先起 dev：npm run dev -- --port 15181 --strictPort）
 //      SG_BASE=http://localhost:15181 npm run test:settings
@@ -205,159 +204,62 @@ async function main() {
 
   mkdirSync(OUT, { recursive: true });
 
-  // ── 1. 结构：设置页该有的都在，旧入口一个都不剩 ──────────────────────────
+  // ── 1. 结构：快捷键速查该有的都在，配置类旧入口一个都不剩 ────────────────
   await goto('settings', 1280, 820);
   const shape = await evalJs(`(() => {
     const q = (s) => document.querySelector(s);
+    const rows = Array.from(document.querySelectorAll('.settings-row'));
     return {
       head: !!q('.settings-head'),
       back: !!q('.settings-back'),
       foot: !!q('.settings-foot'),
-      title: q('.settings-title') ? q('.settings-title').textContent : '',
+      title: q('.settings-title') ? q('.settings-title').textContent.trim() : '',
+      note: q('.settings-head-note') ? q('.settings-head-note').textContent.trim() : '',
       groups: document.querySelectorAll('.settings-group').length,
-      rows: document.querySelectorAll('.settings-row').length,
       groupTitles: Array.from(document.querySelectorAll('.settings-group-title')).map((e) => e.textContent.trim()),
-      netHosts: !!q('#set-net-hosts'),
-      netTimeout: !!q('#set-net-timeout'),
-      netMaxBytes: !!q('#set-net-maxbytes'),
-      badge: !!q('.settings-badge'),
-      where: q('.settings-where') ? q('.settings-where').textContent : '',
-      oldPanel: !!q('.ai-cfg'),
+      rows: rows.length,
+      rowsComplete: rows.every((r) => {
+        const k = r.querySelector('.settings-label');
+        const d = r.querySelector('.settings-range');
+        return k && k.textContent.trim() && d && d.textContent.trim();
+      }),
+      hasInput: !!q('.settings input, .settings textarea, .settings input[type=checkbox]'),
+      footButtons: document.querySelectorAll('.settings-foot button').length,
+      oldNet: !!q('#set-net-hosts') || !!q('#set-net-timeout') || !!q('#set-net-maxbytes'),
       gearOn: !!q('.appmenu-btn.is-on'),
       overflow: document.documentElement.scrollWidth - window.innerWidth,
     };
   })()`);
-  check('设置页结构完整（页头 / 返回 / 分组 / 动作栏）', shape.head && shape.back && shape.foot, JSON.stringify(shape));
-  check('标题为「设置」，且只有一组配置（AI 兜底）', shape.title === '设置' && shape.groups === 1, `title=${shape.title} groups=${shape.groups}`);
+  check('设置页结构完整（页头 / 返回 / 分组 / 底栏）', shape.head && shape.back && shape.foot, JSON.stringify(shape));
+  check('标题为「设置」', shape.title === '设置', `title=${shape.title}`);
   check(
-    '分组标题只剩「AI 兜底解析」',
-    JSON.stringify(shape.groupTitles) === JSON.stringify(['AI 兜底解析']),
+    '分组为「全局 / 列表页 / 对话页」',
+    JSON.stringify(shape.groupTitles) === JSON.stringify(['全局', '列表页', '对话页']),
     JSON.stringify(shape.groupTitles)
   );
-  check(
-    '字段齐全：6 行（启用 / 地址 / 模型 / Key / 超时 / 重试）',
-    shape.rows === 6,
-    `rows=${shape.rows}`
-  );
-  // 「联网工具」分组已随 T4 工具一并移除。这条断言的作用是**防止它被顺手加回来**
-  // —— 一个没有消费者的联网开关，比没有这个开关更糟（会让人以为数据可能出机）。
-  check(
-    '联网工具分组已整体移除（白名单 / 超时 / 响应上限控件都不在）',
-    !shape.netHosts && !shape.netTimeout && !shape.netMaxBytes,
-    JSON.stringify({ hosts: shape.netHosts, timeout: shape.netTimeout, maxBytes: shape.netMaxBytes })
-  );
-  check('未改动时不显示「未保存」标记', shape.badge === false);
-  check('初始明示「当前不会发出任何网络请求」', shape.where.includes('不会发出任何网络请求'), shape.where);
-  check('旧 AI 兜底面板已移除（.ai-cfg 不存在）', shape.oldPanel === false);
+  check('每组至少一条、且每条快捷键都有键名与说明', shape.rows >= 12 && shape.rowsComplete, `rows=${shape.rows} complete=${shape.rowsComplete}`);
+  check('页头注明本页只读', shape.note.includes('只读'), shape.note);
+  check('没有任何输入控件（只读页，不需要保存）', shape.hasInput === false);
+  check('底栏没有按钮（旧「保存 / 清除」入口已移除）', shape.footButtons === 0, `buttons=${shape.footButtons}`);
+  check('旧「联网工具」控件不存在（白名单 / 超时 / 响应上限）', shape.oldNet === false);
   check('顶栏齿轮处于打开态（设置入口有归属）', shape.gearOn === true);
   check('1280 宽下无横向溢出', shape.overflow <= 0, `overflow=${shape.overflow}`);
 
   if (WANT_SHOTS) await shot('settings-1280.png');
 
-  // ── 2. 改参数 → 保存 → 真的落盘 ─────────────────────────────────────────
-  const saveRes = await evalJs(`(async () => {
-    const setVal = (el, v) => {
-      const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-      Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v);
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-    };
-    const q = (s) => document.querySelector(s);
-    const enable = q('.settings-check input[type=checkbox]');
-    if (!enable.checked) enable.click();
-    setVal(q('#set-baseurl'), 'https://api.example.org/v1');
-    setVal(q('#set-model'), 'demo-model');
-    setVal(q('#set-key'), 'sk-unit-test');
-    setVal(q('#set-timeout'), '6000');
-    setVal(q('#set-retries'), '2');
-    await new Promise((r) => setTimeout(r, 80));
-    const dirty = !!q('.settings-badge');
-    const whereDraft = q('.settings-where').textContent;
-    q('.settings-foot .btn-primary').click();
-    await new Promise((r) => setTimeout(r, 80));
-    const raw = localStorage.getItem('todogui.aiFallback');
-    return {
-      dirty,
-      whereDraft,
-      saved: raw ? JSON.parse(raw) : null,
-      badgeAfter: !!q('.settings-badge'),
-      whereAfter: q('.settings-where').textContent,
-      saveDisabled: q('.settings-foot .btn-primary').disabled,
-    };
-  })()`);
-  const saved = saveRes.saved || {};
-  check('改动后出现「未保存」标记', saveRes.dirty === true);
-  check('保存前就预告「保存后会发往哪」', saveRes.whereDraft.includes('保存后发往：api.example.org'), saveRes.whereDraft);
-  check('保存后 localStorage 落盘（地址 / 模型 / Key）',
-    saved.baseUrl === 'https://api.example.org/v1' && saved.model === 'demo-model' && saved.apiKey === 'sk-unit-test',
-    JSON.stringify(saved));
-  check('保存后超时与重试按填写值落盘（6000ms / 2 次）',
-    saved.timeoutMs === 6000 && saved.maxRetries === 2, `timeout=${saved.timeoutMs} retries=${saved.maxRetries}`);
-  check('保存后「未保存」标记消失，保存按钮回到禁用', saveRes.badgeAfter === false && saveRes.saveDisabled === true);
-  check('保存后明示「当前会发往：api.example.org」', saveRes.whereAfter.includes('api.example.org'), saveRes.whereAfter);
-
-  // ── 3. 换到对话页：别处也跟着变（不是各存一份 state） ────────────────────
+  // ── 2. 对话页：诊断状态条已下线，只留本地规则引擎 ────────────────────────
   await goto('chat', 1280, 820);
   const chatStatus = await evalJs(`(() => {
-    const el = document.querySelector('.chat-status');
+    const body = document.body.textContent || '';
     return {
-      text: el ? el.textContent : '',
-      hasOldBtn: !!document.querySelector('.chat-status-btn'),
-      hasOldPanel: !!document.querySelector('.ai-cfg'),
+      hasStatusBar: !!document.querySelector('.chat-status'),
+      mentionsEngine: /本地规则引擎|无网络请求/.test(body),
     };
   })()`);
-  check('对话页状态行同步显示新的发往域', chatStatus.text.includes('api.example.org'), chatStatus.text);
-  check('对话页不再有「AI 兜底」按钮与面板', chatStatus.hasOldBtn === false && chatStatus.hasOldPanel === false);
+  check('对话页已移除诊断状态条（.chat-status 不存在）', chatStatus.hasStatusBar === false);
+  check('页面不再出现「本地规则引擎 / 无网络请求」提示词', chatStatus.mentionsEngine === false);
 
-  // ── 4. 清除配置 → 回到「不发请求」 ───────────────────────────────────────
-  await goto('settings', 1280, 820);
-  const cleared = await evalJs(`(async () => {
-    const q = (s) => document.querySelector(s);
-    const hadConfig = localStorage.getItem('todogui.aiFallback') !== null;
-    q('.settings-foot .btn-danger').click();
-    await new Promise((r) => setTimeout(r, 90));
-    return {
-      hadConfig,
-      raw: localStorage.getItem('todogui.aiFallback'),
-      where: q('.settings-where').textContent,
-      clearDisabled: q('.settings-foot .btn-danger').disabled,
-    };
-  })()`);
-  check('清除前确实存在落盘配置（前置条件成立）', cleared.hadConfig === true);
-  check('清除后 localStorage 里没有配置', cleared.raw === null, String(cleared.raw));
-  check('清除后回到「当前不会发出任何网络请求」', cleared.where.includes('不会发出任何网络请求'), cleared.where);
-  check('清除后「清除配置」按钮禁用（没有配置可清）', cleared.clearDisabled === true);
-
-  // ── 4b. 边界：填了地址与 Key 但没启用，也必须能清掉 ──────────────────────
-  // 这条曾经是坏的：清除按钮用「是否启用」当判据，导致一份含明文 Key 的
-  // 落盘配置因为没勾开关而永远删不掉。判据必须是「本机是否存有配置」。
-  const partial = await evalJs(`(async () => {
-    const setVal = (el, v) => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v);
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-    };
-    const q = (s) => document.querySelector(s);
-    const enable = q('.settings-check input[type=checkbox]');
-    if (enable.checked) enable.click(); // 保持未启用
-    setVal(q('#set-baseurl'), 'https://api.example.org/v1');
-    setVal(q('#set-key'), 'sk-left-behind');
-    await new Promise((r) => setTimeout(r, 80));
-    q('.settings-foot .btn-primary').click();
-    await new Promise((r) => setTimeout(r, 90));
-    const disabledWhileOff = q('.settings-foot .btn-danger').disabled;
-    q('.settings-foot .btn-danger').click();
-    await new Promise((r) => setTimeout(r, 90));
-    return { disabledWhileOff, raw: localStorage.getItem('todogui.aiFallback') };
-  })()`);
-  check('未启用但已落盘时，「清除配置」仍可点', partial.disabledWhileOff === false);
-  check('未启用也能真的清干净（明文 Key 不留残留）', partial.raw === null, String(partial.raw));
-
-  // ── 4c 段落已随 T4 联网工具移除 ─────────────────────────────────────────
-  // 原先这里校验「总闸 + 主机白名单」双门槛、白名单落盘归一化、以及 todogui.net
-  // 键能被「清除全部配置」清掉。工具与 lib/net/ 一并删除后，这些断言失去了被测对象。
-  // 「不能被悄悄加回来」这件事改由 §1 的「联网工具分组已整体移除」那条断言承担。
-
-
-  // ── 5. 窄屏几何：设置页在 390 宽下不横向溢出 ────────────────────────────
+  // ── 3. 窄屏几何：设置页在 390 宽下不横向溢出 ────────────────────────────
   await goto('settings', 390, 844);
   const narrow = await evalJs(`(() => {
     const q = (s) => document.querySelector(s);
@@ -369,15 +271,14 @@ async function main() {
     };
   })()`);
   check('390 宽下无横向溢出', narrow.overflow <= 0, `overflow=${narrow.overflow}`);
-  check('390 宽下字段改为单列堆叠', narrow.singleColumn === true);
-  check('390 宽下动作栏仍在（保存 / 清除可触达）', narrow.footVisible === true);
+  check('390 宽下快捷键改为上下堆叠（单列）', narrow.singleColumn === true);
+  check('390 宽下底栏仍在（布局不塌）', narrow.footVisible === true);
   if (WANT_SHOTS) await shot('settings-390.png');
 
-  // ── 6. 暗色 ────────────────────────────────────────────────────────────
+  // ── 4. 暗色 ────────────────────────────────────────────────────────────
   await goto('settings', 1280, 820, true);
   if (WANT_SHOTS) await shot('settings-dark-1280.png');
 
-  await evalJs(`(() => { try { localStorage.removeItem('todogui.aiFallback'); } catch (e) {} return true; })()`);
   cdp.ws.close();
   proc.kill();
   await sleep(200);

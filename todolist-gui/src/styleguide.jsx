@@ -275,7 +275,7 @@ const PROBES = {
   snapshot: '.snapshot',
   msg: '.msg:not(.msg-tool)',
   toolcard: '.tool-card',
-  drawer: '.drawer',
+  editwin: '.edit-window',
 };
 
 // 用 useLayoutEffect 同步写，不用 requestAnimationFrame ——
@@ -497,8 +497,11 @@ function IconsDoc() {
       <section>
         <h2>图标集</h2>
         <p className="sg-note">
-          内联 SVG，零依赖。全组统一画布 24×24、描边 1.75、圆头圆角、使用 currentColor。
-          统一的是<b>网格与线宽</b>，不是"装了哪个图标库"。
+          几何取自 <b>Lucide</b>（lucide-icons v1.57.0，ISC 许可），路径数据内联在
+          <code> components/Icon.jsx</code>，因此仍是零依赖、完全离线。
+          名字沿用项目原有命名，<b>到 Lucide 的对应关系</b>写在 Icon.jsx 每个条目后的注释里。
+          全组统一画布 24×24、描边 1.75、圆头圆角、使用 currentColor。
+          另有 <code>dot</code> / <code>circle-half</code> 两个语义状态图形为自绘（Lucide 无等价填充形）。
           默认 <code>aria-hidden</code>（纯装饰）；传 <code>title</code> 时自动升级为
           <code> role="img" + aria-label</code>。
         </p>
@@ -595,16 +598,6 @@ function ChatFlowStage() {
       <Tabs tab="chat" onChange={() => {}} store={store} onOpenSettings={() => {}} />
       <div className="chat-panel">
         <div className="chat-main">
-          <div className="chat-status">
-            {/* 状态点用 Icon（不是 ● 字符），与产品代码一致 */}
-            <span className="dot dot-warn">
-              <Icon name="dot" size={13} />
-            </span>
-            <span>本地规则引擎优先 · 仅在听不懂时发往 api.openai.com</span>
-            <span className="spacer" />
-            <span>事件日志 12 条 · 最后 seq 12</span>
-          </div>
-
           <div className="chat-stream">
             <MessageFlow />
           </div>
@@ -613,7 +606,7 @@ function ChatFlowStage() {
               <textarea
                 rows={1}
                 defaultValue=""
-                placeholder="用大白话就行，例如：后天上午9点有月报会议要开（Enter 发送）"
+                placeholder="说一句待办就行，例如：明天交周报（Enter 发送）"
               />
               <button className="btn btn-primary" type="submit">
                 发送
@@ -648,7 +641,7 @@ function ChatFlowStage() {
 }
 
 // 设置页：与产品同构（顶栏齿轮处于打开态 + 独立页面 + 底部状态栏）。
-// 渲染的是真实组件，所以这里也走真实配置读写（本机没配过就显示默认值）。
+// 渲染的是真实组件（当前内容是只读的快捷键速查）。
 function SettingsStage() {
   const store = makeStore({ dirReady: false });
   return (

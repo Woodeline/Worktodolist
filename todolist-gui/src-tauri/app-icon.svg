@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>待办清单 应用图标</title>
+  <desc>与旧图标同一语言：近似满铺圆角方块 + 竖向蓝色渐变 + 白色线性图标。图形取自 Lucide 1.57.0 的 list-todo（stroke-width 2，24×24 画板）。生成全套图标命令见仓库说明。</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2E6EEA" />
+      <stop offset="1" stop-color="#2257C7" />
+    </linearGradient>
+  </defs>
+
+  <!-- 底板：圆角半径约 20%，四周留极小透明边 -->
+  <rect x="8" y="8" width="1008" height="1008" rx="206" ry="206" fill="url(#bg)" />
+
+  <!-- Lucide list-todo，24 画板放大 28 倍（672px）后居中 -->
+  <g transform="translate(176,180) scale(28)"
+     fill="none" stroke="#FFFFFF" stroke-width="2"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path d="M13 5h8" />
+    <path d="M13 12h8" />
+    <path d="M13 19h8" />
+    <path d="m3 17 2 2 4-4" />
+    <rect x="3" y="4" width="6" height="6" rx="1" />
+  </g>
+</svg>

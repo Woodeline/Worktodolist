@@ -3,6 +3,7 @@ dist
 dist-*
 .qa-*
 .tmp
+.tmp-*
 qa-artifacts
 vite.config.js.timestamp-*.mjs
 *.local

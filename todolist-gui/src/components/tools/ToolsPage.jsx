@@ -292,12 +292,6 @@ export default function ToolsPage({ snapshot, store, request }) {
           })}
           {q && matched.length === 0 && <div className="tools-none">没有匹配「{query.trim()}」的工具</div>}
         </div>
-        <div className="tools-nav-foot">
-          <p className="tools-note">
-            新增工具：放一个组件到 <code>components/tools/</code>，再到 <code>tools/registry.js</code>{' '}
-            里加一条即可。右键条目可收藏置顶。
-          </p>
-        </div>
       </nav>
 
       <section className="tool-pane" ref={paneRef}>
@@ -307,7 +301,9 @@ export default function ToolsPage({ snapshot, store, request }) {
               <span className="tool-head-icon">
                 <Icon name={active.icon} size={17} />
               </span>
-              <h2 className="tool-title">{active.name}</h2>
+              <h2 className="tool-title" title={active.detail}>
+                {active.name}
+              </h2>
               <span className="spacer" />
               <span className="tool-status">
                 {riskBadges(active).map((b) => (
@@ -316,17 +312,7 @@ export default function ToolsPage({ snapshot, store, request }) {
                   </span>
                 ))}
               </span>
-              {active.tags && active.tags.length > 0 && (
-                <span className="tool-tags">
-                  {active.tags.map((tag) => (
-                    <span key={tag} className="tool-tag">
-                      {tag}
-                    </span>
-                  ))}
-                </span>
-              )}
             </div>
-            <p className="tool-head-sub">{active.detail}</p>
           </header>
         )}
         <ToolBoundary toolId={activeId}>

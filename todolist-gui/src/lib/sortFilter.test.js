@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   compareAuto,
+  displayOrder,
   isOverdue,
   isVisibleToday,
   searchMatch,
@@ -8,6 +9,7 @@ import {
   sortTasks,
   tasksForView,
   todayGroups,
+  viewTasks,
 } from './sortFilter';
 import { parseFile } from './todoParser';
 
@@ -139,5 +141,33 @@ describe('todayGroups / search / sidebarStats', () => {
     expect(stats.inbox).toBe(1);
     expect(stats.contexts).toEqual([{ name: '工作', count: 2 }]);
     expect(stats.projects).toEqual([{ name: '周报', count: 1 }]);
+  });
+});
+
+describe('列表显示顺序（键盘上下移动的口径）', () => {
+  const entries = [
+    task({ title: '逾期', dueDate: '2026-09-25' }),
+    task({ title: '今日', dueDate: '2026-09-30' }),
+    task({ title: '无日期' }),
+    task({ title: '未来', dueDate: '2026-10-10' }),
+  ];
+
+  it('today 视图：逾期 → 今日到期 → 无日期', () => {
+    const titles = displayOrder(entries, 'today', 'manual', '', TODAY).map((t) => t.title);
+    // 未来任务不在 today 视图内
+    expect(titles).toEqual(['逾期', '今日', '无日期']);
+  });
+
+  it('all 视图 = viewTasks 的排序结果', () => {
+    const ordered = displayOrder(entries, 'all', 'auto', '', TODAY).map((t) => t.title);
+    const same = viewTasks(entries, 'all', 'auto', '', TODAY).map((t) => t.title);
+    expect(ordered).toEqual(same);
+  });
+
+  it('搜索过滤后顺序随之收窄', () => {
+    const titles = displayOrder(entries, 'all', 'manual', '任务', TODAY).map((t) => t.title);
+    expect(titles).toEqual([]); // 这批任务的标题都不含“任务”
+    const hit = displayOrder(entries, 'all', 'manual', '日期', TODAY).map((t) => t.title);
+    expect(hit).toEqual(['无日期']);
   });
 });

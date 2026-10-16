@@ -147,13 +147,14 @@ describe('风险徽标与写授权', () => {
     }
   });
 
-  it('联网与可读本地文件必须显式标红/标黄（数据出机与读盘都要看得见）', () => {
+  it('联网与可读本地文件必须显式标红/标黄；离线工具不再罗列"不联网"', () => {
     for (const t of TOOLS) {
       const badges = riskBadges(t);
       if (t.capabilities.net) {
         expect(badges.find((b) => b.label === '会联网').tone).toBe('danger');
       } else {
-        expect(badges.some((b) => b.label === '不联网')).toBe(true);
+        // 整个应用已离线：逐个工具再挂一枚"不联网"是视觉噪音，不该出现
+        expect(badges.some((b) => b.label.includes('联网'))).toBe(false);
       }
       if (t.capabilities.files) {
         expect(badges.find((b) => b.label === '可读本地文件').tone).toBe('warn');

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import dayjs from 'dayjs';
 import { isOverdue, PRIORITY_LABELS } from '../lib/sortFilter';
 import { useContextMenu } from '../hooks/useContextMenu.jsx';
@@ -48,10 +49,32 @@ export default function TaskRow({ task, store, query = '', readonly = false }) {
     !readonly && store.sortMode === 'manual' && store.view !== 'today' && !task.completed;
 
   const { openMenu } = useContextMenu();
+  const rowRef = useRef(null);
 
+  const selected = !readonly && store.focusedId === task.id;
+
+  // 选中态的"反馈"：键盘上下移动（或单击选中）后，把该行滚进可视区并接管焦点，
+  // 让光标跟着选中块走 —— 否则焦点会留在旧行上，选中块与光标各指一处。
+  useEffect(() => {
+    if (!selected) return;
+    const el = rowRef.current;
+    if (!el) return;
+    el.scrollIntoView({ block: 'nearest' });
+    if (document.activeElement !== el) el.focus({ preventScroll: true });
+  }, [selected]);
+
+  // 单击 = 选中（沿用 focusedId，供空格/ e / 右键等键盘与菜单操作定位）；
+  // 双击才进入编辑 —— 避免误点一下就弹出编辑浮窗。
   const handleRowClick = (e) => {
     if (readonly) return;
     if (e.target.closest('button')) return;
+    store.setFocusedId(task.id);
+  };
+
+  const handleRowDoubleClick = (e) => {
+    if (readonly) return;
+    if (e.target.closest('button')) return;
+    store.setFocusedId(task.id);
     store.openEditor(task.id);
   };
 
@@ -146,12 +169,15 @@ export default function TaskRow({ task, store, query = '', readonly = false }) {
         overdue ? 'row-overdue' : '',
         fading ? 'fading' : '',
         store.dragId === task.id ? 'dragging' : '',
+        selected ? 'selected' : '',
         readonly ? 'row-readonly' : '',
       ]
         .filter(Boolean)
         .join(' ')}
+      ref={rowRef}
       tabIndex={readonly ? -1 : 0}
       onClick={handleRowClick}
+      onDoubleClick={handleRowDoubleClick}
       onContextMenu={handleContextMenu}
       onFocus={() => {
         if (!readonly) store.setFocusedId(task.id);

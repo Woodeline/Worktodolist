@@ -120,8 +120,8 @@ export function visibleTools() {
 /**
  * 风险徽标：由 capabilities 驱动，把"危险度"做成界面上看得见的事实。
  *
- * 这让"数据主权优先于查询能力"从一句口号变成用户每打开一个工具都能确认的事实 ——
- * 也是这套工具集区别于"AI 工具箱"的地方。
+ * 只标需要留意的：会联网（红）、会写 todo.txt（黄）、可读本地文件（黄）。
+ * 没联网的工具不再单挂一枚"不联网"—— 整个应用已离线，逐项重复只是噪音。
  * @returns {Array<{label:string, tone:'quiet'|'warn'|'danger'}>}
  */
 export function riskBadges(tool) {
@@ -131,7 +131,6 @@ export function riskBadges(tool) {
   if (c.writes) out.push({ label: '会写入 todo.txt', tone: 'warn' });
   else out.push({ label: '只读', tone: 'quiet' });
   if (c.files) out.push({ label: '可读本地文件', tone: 'warn' });
-  if (!c.net) out.push({ label: '不联网', tone: 'quiet' });
   return out;
 }
 

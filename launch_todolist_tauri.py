@@ -2,22 +2,31 @@ r"""待办清单 · Tauri 版启动器
 
 双击桌面「待办清单-Tauri」图标走的就是这个（由 pythonw.exe 静默运行，无黑窗口）。
 
-它做三件事：
-  1. 找到 Tauri 版的构建产物并启动它；
-  2. 找不到时弹窗说清「还没构建」以及构建命令 —— 不再回落去开任何别的版本；
-  3. `--stop` 结束 Tauri 版进程。
+它做四件事：
+  1. 找到 Tauri 版的构建产物，**并判断它是否比源码旧**；
+  2. 过期（或缺失）就先停掉正在运行的旧实例、重新构建，再启动 —— 保证双击图标
+     拿到的永远是当前代码的版本（前端在构建时被内嵌进 exe，改完不重建看到的就是旧版）；
+  3. 找不到且没构建条件时弹窗说清缺什么 —— 不回落去开任何别的版本；
+  4. `--stop` 结束 Tauri 版进程。
 
 定位顺序（本脚本所在目录为基准，--app-root 可覆盖）：
   1. todolist-gui/src-tauri/target/release/Worktodolist.exe   ← 正式产物
   2. todolist-gui/src-tauri/target/debug/Worktodolist.exe     ← dev 构建产物
 
-注意：Tauri 版是自包含的原生 exe（前端已内嵌进 exe，没有 Node 服务、没有端口），
-所以本脚本**不需要**任何运行时依赖；它只是「找文件 + 拉起进程 + 出错时告诉你」。
-想绕过它也可以，直接双击上面那个 exe 即可。
+关于「自动重建」：
+  只要 todolist-gui 下被内嵌进 exe 的文件（src/、src-tauri/src/、tauri.conf.json …）里有
+  任何一个比 exe 新，就判定过期。重建前**必须先停掉正在运行的实例** —— 那个进程锁着
+  exe，不停就没法覆盖（这正是「明明重建了却还是老版本」的根因之一）。
+  重建会弹出一个可见的构建窗口（关掉它 = 中断构建）。想跳过重建直接开旧版：--no-build。
+
+注意：构建出来的 exe 是自包含的原生 exe（没有 Node 服务、没有端口），运行期不需要任何
+依赖；构建**期**才需要 Rust 工具链 + Node（见 --status 的探测）。
 
 用法：
-  pythonw.exe launch_todolist_tauri.py                # 双击图标做的就是这个
-  python.exe  launch_todolist_tauri.py --status       # 只诊断，不启动任何东西
+  pythonw.exe launch_todolist_tauri.py                # 双击图标做的就是这个（会自动重建）
+  python.exe  launch_todolist_tauri.py --status       # 只诊断：产物位置 / 是否过期 / 前置条件
+  python.exe  launch_todolist_tauri.py --rebuild      # 强制重建后再启动
+  python.exe  launch_todolist_tauri.py --no-build     # 跳过重建，直接启动现有产物
   python.exe  launch_todolist_tauri.py --show-window  # 显示控制台，看得到输出
   python.exe  launch_todolist_tauri.py --quiet        # 不弹窗，只打印（脚本化验证用）
   python.exe  launch_todolist_tauri.py --app-root D:\some\repo
@@ -44,6 +53,27 @@ GUI_DIR = os.path.join(HERE, 'todolist-gui')
 
 PID_FILE = os.path.join(HERE, '.todolist-tauri.pid')
 LOG_FILE = os.path.join(HERE, '.todolist-tauri-launch.log')
+BUILD_LOG = os.path.join(HERE, '.todolist-build.log')
+BUILD_CMD = os.path.join(HERE, 'build_todolist_tauri.cmd')
+
+# 会被内嵌进 exe 的源码：改其中任何一个，产物即视为过期。
+# 刻意不扫 dist/（它是构建产物）、node_modules/、target/（缓存）。
+SOURCE_DIRS = [
+    'src',
+    'public',
+    os.path.join('src-tauri', 'src'),
+    os.path.join('src-tauri', 'icons'),
+    os.path.join('src-tauri', 'capabilities'),
+]
+SOURCE_FILES = [
+    'index.html',
+    'package.json',
+    'vite.config.js',
+    os.path.join('src-tauri', 'Cargo.toml'),
+    os.path.join('src-tauri', 'tauri.conf.json'),
+    os.path.join('src-tauri', 'build.rs'),
+]
+SKIP_DIRS = {'node_modules', 'target', '.git', 'dist', '.tmp'}
 
 # 构建前置条件的探测路径（glob 的 * 不跨路径分隔符，可以安全地当通配层级用）。
 # 只在 --status / 缺失提示里用，运行期不需要它们。
@@ -68,6 +98,7 @@ WEBVIEW_DIRS = [
 ]
 
 CREATE_NO_WINDOW = 0x08000000
+CREATE_NEW_CONSOLE = 0x00000010
 DETACHED_PROCESS = 0x00000008
 CREATE_BREAKAWAY_FROM_JOB = 0x01000000
 
@@ -131,6 +162,88 @@ def find_exe(root):
     return None, None
 
 
+# ---------------------------------------------------------------- 产物新鲜度
+
+def newest_source_mtime(root):
+    """被内嵌进 exe 的源码里最新的一个修改时间（0 表示一个都没扫到）。"""
+    gui = os.path.join(root, 'todolist-gui')
+    newest = [0.0]
+
+    def bump(path):
+        try:
+            m = os.path.getmtime(path)
+        except OSError:
+            return
+        if m > newest[0]:
+            newest[0] = m
+
+    for rel in SOURCE_DIRS:
+        for dirpath, dirnames, filenames in os.walk(os.path.join(gui, rel)):
+            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+            for fn in filenames:
+                bump(os.path.join(dirpath, fn))
+    for rel in SOURCE_FILES:
+        bump(os.path.join(gui, rel))
+    return newest[0]
+
+
+def is_stale(root, exe):
+    """产物是否落后于源码。exe 不存在也算「需要构建」。
+
+    留 1 秒容差：构建会同时刷新 exe 与部分源文件的 mtime，边界上不该判定为过期。
+    """
+    try:
+        exe_m = os.path.getmtime(exe)
+    except OSError:
+        return True
+    return newest_source_mtime(root) > exe_m + 1.0
+
+
+# ---------------------------------------------------------------- 构建
+
+def build_app(root):
+    """调用 build_todolist_tauri.cmd 重建产物。返回 True/False。
+
+    默认弹一个可见的构建控制台（否则 pythonw 下全程静默，用户会以为卡死）；
+    QUIET（脚本化验证）时不弹窗，输出追加到 BUILD_LOG。
+    """
+    if not os.path.isfile(BUILD_CMD):
+        alert('找不到构建脚本：\n%s\n\n请确认这个文件还在 todolist 文件夹里。' % BUILD_CMD)
+        return False
+
+    log('building: %s' % BUILD_CMD)
+    comspec = os.environ.get('ComSpec') or 'cmd.exe'
+    argv = [comspec, '/c', BUILD_CMD]
+    kwargs = {'cwd': root, 'stdin': subprocess.DEVNULL}
+    handle = None
+    if QUIET:
+        kwargs['creationflags'] = CREATE_NO_WINDOW
+        try:
+            handle = open(BUILD_LOG, 'a', encoding='utf-8')
+            handle.write('\n==== build %s ====\n' % time.strftime('%Y-%m-%d %H:%M:%S'))
+            kwargs['stdout'] = handle
+            kwargs['stderr'] = subprocess.STDOUT
+        except OSError:
+            handle = None
+    else:
+        kwargs['creationflags'] = CREATE_NEW_CONSOLE
+
+    try:
+        proc = subprocess.Popen(argv, **kwargs)
+    except OSError as exc:  # noqa: BLE001
+        log('build spawn failed: %s' % exc)
+        if handle:
+            handle.close()
+        alert('无法启动构建进程：\n%s\n\n日志：\n%s' % (exc, LOG_FILE))
+        return False
+
+    code = proc.wait()
+    if handle:
+        handle.close()
+    log('build finished rc=%s' % code)
+    return code == 0
+
+
 # ---------------------------------------------------------------- 前置条件探测
 
 def probe_prereqs(root):
@@ -169,6 +282,8 @@ def print_status(root):
                               else '未找到 —— 还没有构建过'))
     for label, path in exe_candidates(root):
         out('   %-11s: %s  [%s]' % (label, path, '存在' if os.path.isfile(path) else '缺失'))
+    if exe:
+        out('产物新鲜度    : %s' % ('源码比产物新，下次启动会自动重建' if is_stale(root, exe) else '与源码同步'))
     out('构建前置条件  :')
     for name, ok, detail in probe_prereqs(root):
         out('   [%s] %s' % ('就绪' if ok else '缺失', name))
@@ -256,8 +371,12 @@ def popen_detached(argv, cwd, show_window=False):
 def launch_exe(exe, show_window=False):
     """启动 Tauri 版 exe。返回 True/False。
 
-    启动后短暂观察一下进程是否立刻退出：进程瞬间死掉通常意味着运行期依赖缺失
-    （典型是没装 WebView2），这时给出提示比让你对着什么都没发生的桌面强。
+    启动后短暂观察一下进程是否立刻退出，分三种情况处理：
+      * 进程仍在跑        → 它就是主实例，成功；
+      * 秒退、退出码 0    → 单实例插件判定已有实例在跑，把它唤到前台后自行退出。
+                            托盘版「关窗不退出」会让这种情况很常见，这是**成功**，
+                            绝不能弹「缺少 WebView2」去误导用户；
+      * 秒退、退出码非 0  → 才是真的启动失败（典型是没装 WebView2），才提示。
     """
     try:
         proc = popen_detached([exe], cwd=os.path.dirname(exe), show_window=show_window)
@@ -266,22 +385,29 @@ def launch_exe(exe, show_window=False):
         return False
 
     log('launched pid=%d exe=%s' % (proc.pid, exe))
-    try:
-        with open(PID_FILE, 'w', encoding='utf-8') as fh:
-            fh.write(str(proc.pid))
-    except OSError:
-        pass
 
     if show_window:
         return True
+
     time.sleep(1.0)
     code = proc.poll()
-    if code is not None:
-        alert('启动后立刻退出了（退出码 %s）。\n\n'
-              '最常见的原因是缺少 WebView2 运行时。\n'
-              '手动双击这个文件试一次会更直观：\n%s\n\n日志：\n%s' % (code, exe, LOG_FILE))
-        return False
-    return True
+    if code is None:
+        # 仍在跑 = 主实例：记下 PID 供 --stop 使用（只记活着的，避免 PID 文件指向已退进程）
+        try:
+            with open(PID_FILE, 'w', encoding='utf-8') as fh:
+                fh.write(str(proc.pid))
+        except OSError:
+            pass
+        return True
+
+    if code == 0:
+        log('exit 0 right after launch: another instance already running, window focused')
+        return True
+
+    alert('启动后立刻退出了（退出码 %s）。\n\n'
+          '最常见的原因是缺少 WebView2 运行时。\n'
+          '手动双击这个文件试一次会更直观：\n%s\n\n日志：\n%s' % (code, exe, LOG_FILE))
+    return False
 
 
 def tasklist_pids(image):
@@ -330,11 +456,12 @@ def kill_pid(pid):
         return False
 
 
-def do_stop():
-    """结束 Tauri 版进程。
+def stop_running(quiet=False):
+    """结束 Tauri 版进程，返回被杀掉的 PID 列表。
 
     两条入口都做：先信 PID 文件（但要核对映像名，防误杀），
     再用映像名兜底扫一遍（进程可能是别的方式起的，PID 文件可能被删）。
+    重建前必须先调用它 —— 否则 exe 被运行中的进程锁着，覆盖会失败。
     """
     killed = []
 
@@ -357,15 +484,21 @@ def do_stop():
         if pid not in killed and kill_pid(pid):
             killed.append(pid)
 
-    if killed:
-        out('已结束 %s：%s' % (EXE_NAME, ', '.join('PID %d' % p for p in killed)))
-    else:
-        out('没有在运行的 %s。' % EXE_NAME)
-
     try:
         os.remove(PID_FILE)
     except OSError:
         pass
+
+    if not quiet:
+        if killed:
+            out('已结束 %s：%s' % (EXE_NAME, ', '.join('PID %d' % p for p in killed)))
+        else:
+            out('没有在运行的 %s。' % EXE_NAME)
+    return killed
+
+
+def do_stop():
+    stop_running(quiet=False)
     return 0
 
 
@@ -384,15 +517,51 @@ def main():
         return print_status(root)
 
     show_window = '--show-window' in args
+    force = '--rebuild' in args
+    no_build = '--no-build' in args
 
     kind, exe = find_exe(root)
-    if exe:
-        log('found %s at %s' % (kind, exe))
-        return 0 if launch_exe(exe, show_window) else 1
 
-    log('no tauri build found under %s' % root)
-    alert(missing_text(root))  # 0x10 = 错误图标：这是真缺东西，需要你动手构建
-    return 1
+    if force:
+        must_build, reason = True, '强制重建（--rebuild）'
+    elif exe is None:
+        must_build, reason = (not no_build), '产物缺失'
+    elif is_stale(root, exe) and not no_build:
+        must_build, reason = True, '源码比产物新'
+    else:
+        must_build, reason = False, ''
+
+    if must_build:
+        log('%s -> rebuild' % reason)
+        if not QUIET:
+            out('检测到需要重建（%s），正在构建…' % reason)
+        # 运行中的实例锁着 exe，必须先停掉才能覆盖 —— 否则「重建」是假动作。
+        stop_running(quiet=True)
+        built = build_app(root)
+        kind, exe = find_exe(root)
+        if not built or exe is None:
+            log('build failed or exe still missing (built=%s exe=%s)' % (built, exe))
+            if exe is None:
+                alert(missing_text(root))
+                return 1
+            # 还有旧产物可用：征询是否照旧启动（脚本化验证时直接失败，不弹窗）
+            if QUIET:
+                return 1
+            code = ctypes.windll.user32.MessageBoxW(
+                None,
+                '重建新版本失败，当前仍是旧版本。\n\n是否仍然启动现有版本？',
+                '待办清单 · 构建失败', 0x04 | 0x30)  # MB_YESNO | MB_ICONWARNING
+            if code != 6:  # IDYES
+                return 1
+
+    if exe is None:
+        # 走到这里说明：产物缺失且 --no-build（不构建），或构建后仍然找不到。
+        log('no tauri build found under %s' % root)
+        alert(missing_text(root))
+        return 1
+
+    log('found %s at %s' % (kind, exe))
+    return 0 if launch_exe(exe, show_window) else 1
 
 
 if __name__ == '__main__':

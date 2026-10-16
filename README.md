@@ -9,31 +9,41 @@
 2. 第一次使用：在页面里选择本文件夹（授权读写 todo.txt），之后授权会被记住。
 3. 不用了点「停止待办清单-Tauri.cmd」，或执行 `python launch_todolist_tauri.py --stop`。
 
+> **改过代码后，双击图标会自动重建再启动**：启动器发现源码比现有 exe 新时，会先停掉
+> 正在运行的旧实例（否则 exe 被锁住、覆盖会失败），弹出构建窗口重新编译，成功后启动新版。
+> 所以只要双击图标，拿到的永远是当前代码的版本，不必再手动 `npm run tauri:build`。
+> （想跳过重建直接开现有产物：`python launch_todolist_tauri.py --no-build`。）
+
 > 运行期依赖：Windows 10/11 + WebView2 运行时（Windows 11 与较新的 Windows 10 已内置）。
 > **不需要装 Node，也不需要装 Python** —— 那两个只在**构建**这个 exe 时才用到。
 
-## 构建（仅首次、或改过代码后）
+## 构建
+
+**平时不需要手动构建** —— 双击桌面图标时，启动器自己判断源码是否比 exe 新，过期就自动
+重建（见上文「快速开始」）。下面是手动构建与产物说明。
 
 ```
 cd todolist-gui
 npm install
-npm run tauri:build
+npm run tauri:build        # 完整构建：exe + NSIS 安装包
+npm run build:app          # 只构建 exe（等价于 tauri build --no-bundle，启动器用的就是它）
 ```
 
 产物：
 
 | 文件 | 说明 |
 |---|---|
-| `src-tauri/target/release/Worktodolist.exe` | 绿色单文件，约 4.2 MB，可直接双击运行 |
-| `src-tauri/target/release/bundle/nsis/Worktodolist_<版本>_x64-setup.exe` | NSIS 安装包，约 3.3 MB |
+| `src-tauri/target/release/Worktodolist.exe` | 绿色单文件，约 3.5 MB，可直接双击运行 |
+| `src-tauri/target/release/bundle/nsis/Worktodolist_<版本>_x64-setup.exe` | NSIS 安装包（仅 `tauri:build` 产出） |
 
-想绕过启动器直接用，双击上面那个 exe 即可 —— `launch_todolist_tauri.py` 只负责
-「定位产物 + 拉起进程 + 没构建过时说清怎么构建」。
+想绕过启动器直接用，双击上面那个 exe 即可 —— `launch_todolist_tauri.py` 负责
+「判断产物是否过期 → 过期就重建 → 拉起进程 → 出问题时说清怎么修」。
+根目录的 `build_todolist_tauri.cmd` 是启动器调用的构建入口（带可见的构建窗口）。
 
 ## 功能
 
 - **列表页**：今天/全部视图、逾期置顶、搜索（`/`）、快录（`n`）、拖拽排序、点选式优先级/截止日、完成撤销（Ctrl+Z）、外部修改检测（与 topydo/编辑器双轨互通）。
-- **对话页**：用大白话指挥——「加一条 明天 交周报」「完成 回测报告」「把 回测报告 延到下周三」。本地规则引擎优先，绝不联网；听不懂时可选 AI 兜底（默认关闭，需自行配置）。
+- **对话页**：用大白话指挥——「加一条 明天 交周报」「完成 回测报告」「把 回测报告 延到下周三」。本地规则引擎解析，绝不联网；听不懂时会给出示例指令。
 - **数据安全**：todo.txt 纯文本可随时用记事本/topydo 救援；每日自动备份到 `backup/`（保留 30 份）；关窗握手保证最后一次改动落盘；每次启动自动 git 提交数据变更（`auto:` 前缀），误操作有历史可回溯。
 
 ## 目录结构
@@ -47,14 +57,15 @@ npm run tauri:build
 │   └── plan/                       方案与规划
 ├── 启动待办清单-Tauri.cmd / .vbs   启动入口（薄壳，仅调下面的启动器）
 ├── 停止待办清单-Tauri.cmd          停止入口
-├── launch_todolist_tauri.py        纯 Tauri 启动器：定位产物 / 启动 / --status / --stop
+├── launch_todolist_tauri.py        纯 Tauri 启动器：判断产物新鲜度 / 自动重建 / 启动 / --status / --stop
+├── build_todolist_tauri.cmd        启动器调用的构建入口（可见构建窗口）
 ├── todo.txt / done.txt             数据（唯一真源）
 ├── backup/                         每日自动备份（保留 30 份）
 ├── scripts/                        工具脚本（每日提醒、提醒任务注册、环境辅助）
 └── todolist-gui/
     ├── src/                        React 前端（src/lib 纯函数 / src/hooks 状态 / src/components 展示）
     └── src-tauri/                  Tauri 2 桌面壳（Rust）
-        ├── src/                    workspace / git / reminder / ai_proxy / lib
+        ├── src/                    workspace / git / reminder / lib
         ├── icons/                  Tauri 版专属图标（橙色）
         └── target/release/         构建产物（git 忽略）
 ```
@@ -72,7 +83,7 @@ npm run tauri:build
 
 命名规范、新增文档的放置规则、以及已移除文档的清单，都写在 [`docs/README.md`](docs/README.md) 里。
 
-前端保留「浏览器双模式」（`isTauri()` 为假时走 File System Access + 本地代理），
+前端保留「浏览器双模式」（`isTauri()` 为假时走 File System Access），
 理由只有一个：`npm run dev` 与 vitest 需要一个浏览器环境。仓库**不**再分发浏览器版。
 
 ## 每日提醒（可选）
@@ -88,16 +99,6 @@ python scripts/register_reminder_task.py
 > 应用**正在运行**时，提醒由壳自己弹（`src-tauri/src/reminder.rs`），不需要计划任务；
 > 计划任务这条只为「应用没打开」的场景兜底。
 
-## AI 兜底（可选，默认关闭）
-
-对话页右上「AI 兜底」里配置 baseUrl / 模型 / API Key。仅当本地规则引擎没听懂时，那一句话才会发往你配置的服务（界面上会明示发往哪个域）。
-
-- **配置完点「测试连接」**：端到端自检真实链路（配置 → 转发层 → 认证 → 模型 → JSON 解析），分档报告问题所在——未配置 / 转发层拒绝 / Key 失效 / 模型名错误 / 超时 / 返回格式异常 / 正常。
-- 桌面版里这段转发由壳内的 `src-tauri/src/ai_proxy.rs` 承担；浏览器里走 vite 的本地转发。
-- 不想配真实 Key、只想验证转发层：`npm run test:ai`（在 `todolist-gui/` 下，自动起 mock 上游 + 生产 preview，六项断言）。
-- API Key 只存本机。
-- 转发层会**拒绝回环/内网网段目标**（防跳板）。若要用本地大模型（如 Ollama），启动前设环境变量：`TODOLIST_AI_ALLOW_HOSTS=localhost,127.0.0.1`（逗号分隔，精确匹配主机名）。
-
 ## 开发
 
 ```
@@ -112,7 +113,9 @@ npm run build        # 只构建前端（产物 dist/，会被 tauri build 内�
 根目录的启动器（适合排查启动问题）：
 
 ```
-python launch_todolist_tauri.py --status    # 只诊断：产物在哪、构建前置条件齐不齐
+python launch_todolist_tauri.py --status    # 只诊断：产物在哪、是否过期、构建前置条件齐不齐
+python launch_todolist_tauri.py --rebuild   # 强制重建后再启动
+python launch_todolist_tauri.py --no-build  # 跳过重建，直接启动现有产物
 python launch_todolist_tauri.py --stop      # 结束桌面版进程
 ```
 

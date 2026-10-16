@@ -174,7 +174,7 @@ svg text{font-family:var(--font-mono)}
 <tr><td class="name">被推翻的旧口径</td>
 <td>2026-10-06 拍板的「贴近原生桌面工具」（跟随系统灰 + 系统蓝）—— 本次推翻其<b>视觉部分</b>：面板层级改为 bg 暗 / surface 亮的反转关系，强调色由系统蓝 <code>#0f5fbf</code> 改为示波器青 <code>#0e7490</code>。结构、交互、令牌架构<b>全部保留</b>。新拍板将写入 MEMORY.md（见 §6 备案）。</td></tr>
 <tr><td class="name">不变的纪律红线</td>
-<td>① 数据源唯一（<code>todo.txt / done.txt</code>）；② 间距只有一套，改密度不动卡片留白；③ 组件禁裸值、令牌唯一入口 <code>index.css §1</code>（本次换调零组件改动的前提）；④ AI 兜底四约束；⑤ 明暗同语义等价、语义色冻结。</td></tr>
+<td>① 数据源唯一（<code>todo.txt / done.txt</code>）；② 间距只有一套，改密度不动卡片留白；③ 组件禁裸值、令牌唯一入口 <code>index.css §1</code>（本次换调零组件改动的前提）；④ 联网解析四约束；⑤ 明暗同语义等价、语义色冻结。</td></tr>
 </table>
 </section>
 
@@ -386,8 +386,8 @@ svg text{font-family:var(--font-mono)}
       <div class="cf"><span class="fl">主题</span><span class="fv"><span class="mk-tag on">跟随系统</span><span class="mk-tag">浅色</span><span class="mk-tag">暗色</span></span></div>
       <div class="cf"><span class="fl">强调色预览</span><span class="fv"><span class="mk-tag on mono">accent #0e7490</span><span class="mk-tag mono">accent-fg 对比 4.5:1 ✓</span></span></div>
     </div>
-    <div class="mk-card"><div class="ch">AI 兜底 <span class="hint">默认关闭 · 一行请求都不发</span></div>
-      <div class="cf"><span class="fl">启用 AI 兜底</span><span class="fv"><span class="mk-toggle on"><i></i></span><span class="mk-tag mono">本地 unknown 才触发</span></span><span class="hint">AI 不自造 id；只从给定清单挑 targetIndex，序号→id 本地映射</span></div>
+    <div class="mk-card"><div class="ch">联网解析 <span class="hint">默认关闭 · 一行请求都不发</span></div>
+      <div class="cf"><span class="fl">启用联网解析</span><span class="fv"><span class="mk-toggle on"><i></i></span><span class="mk-tag mono">本地 unknown 才触发</span></span><span class="hint">解析不自造 id；只从给定清单挑 targetIndex，序号→id 本地映射</span></div>
     </div>
     <div class="mk-card"><div class="ch">数据 <span class="hint">todo.txt / done.txt 唯一数据源</span></div>
       <div class="cf"><span class="fl">写白名单</span><span class="fv"><span class="mk-tag on">bulkprio</span><span class="mk-tag">其余工具只读</span></span></div>

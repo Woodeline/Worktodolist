@@ -1,6 +1,6 @@
 [package]
 name = "worktodolist"
-version = "1.0.1"
+version = "1.0.2"
 description = "待办清单 · 纯文本驱动（Tauri 2 桌面壳）"
 authors = ["Woodeline"]
 edition = "2021"
@@ -25,8 +25,9 @@ tauri-build = { version = "2", features = [] }
 indexmap = { version = "1.9", features = ["std"] }
 
 [dependencies]
-# 壳本体。tray-icon 预留托盘能力（当前版本未启用托盘，见迁移说明「后续可选项」）
-tauri = { version = "2", features = [] }
+# 壳本体。tray-icon 提供系统托盘能力（关窗隐藏到托盘、右键菜单退出）。
+# 只在桌面端生效（tauri 内部用 cfg(desktop) 门控），移动端编译时该特性无副作用。
+tauri = { version = "2", features = ["tray-icon"] }
 # 目录选择对话框：替代浏览器的 showDirectoryPicker
 tauri-plugin-dialog = "2"
 # 每日提醒通知
@@ -36,8 +37,6 @@ tauri-plugin-single-instance = "2"
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# AI 兜底转发。默认特性即 Windows 原生 TLS（schannel），不引入 OpenSSL
-reqwest = { version = "0.12", features = ["json"] }
 
 # 本 crate 的代码并不直接使用 indexmap —— 这一条是为了「打开 indexmap 1.x 的 std 特性」，
 # 属于特性统一（feature unification）用法。原因如下，不要随手删掉：

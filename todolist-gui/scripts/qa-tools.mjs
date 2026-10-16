@@ -310,7 +310,7 @@ async function main() {
   // 分组折叠头：registry 的 GROUPS 收紧到 2 组（工程计算 / 待办数据）后，
   // 下限随之从 3 改为 2。收藏组存在时会更多，所以用 ≥ 而不是等号。
   check('左栏有搜索框与分组折叠头（条目 14）', shell.search === true && shell.groupHeads.length >= 2, JSON.stringify(shell.groupHeads));
-  check('清单底部写明"怎么加新工具"', shell.navFoot && shell.navFootText.includes('registry.js'), shell.navFootText);
+  check('左栏底部不再有开发者说明（界面以清晰为先，已移除）', shell.navFoot === false, shell.navFootText);
   check('左栏与工作区左右并排', shell.sideBySide === true);
   check('1280 宽下无横向溢出', shell.overflow <= 0, `overflow=${shell.overflow}`);
 
@@ -349,7 +349,8 @@ async function main() {
       item.click();
       for (let i = 0; i < 80; i += 1) {
         const r = read();
-        if (!r.loading && r.layout) break;
+        // 等到工作区真的换成了刚点的那一个再读 —— 否则会读到上一个工具残留的 DOM
+        if (!r.loading && r.layout && r.title === name) break;
         await new Promise((res) => setTimeout(res, 80));
       }
       await new Promise((res) => setTimeout(res, 60));
@@ -362,8 +363,9 @@ async function main() {
     const got = contract[tool.name] || {};
     const want = {
       title: tool.name,
-      sub: tool.detail,
-      tags: tool.tags,
+      // 页头已精简：说明段与分类标签不再平铺（说明改挂到标题的 title 提示上）
+      sub: '',
+      tags: [],
       risks: riskBadges(tool).map((b) => b.label),
       layout: tool.layout,
       crashed: false,
@@ -372,7 +374,7 @@ async function main() {
     };
     const bad = Object.keys(want).filter((k) => JSON.stringify(got[k]) !== JSON.stringify(want[k]));
     check(
-      `[${tool.id}] 页头 / 标签 / 徽标 / 版式 / 不崩 / 有内容 / 无旧类名`,
+      `[${tool.id}] 页头精简 / 徽标 / 版式 / 不崩 / 有内容 / 无旧类名`,
       bad.length === 0,
       [bad.map((k) => `${k}: 得到 ${JSON.stringify(got[k])} 期望 ${JSON.stringify(want[k])}`).join('; '), got.crashMsg, got.crashWhere]
         .filter(Boolean)
@@ -720,7 +722,7 @@ async function main() {
     JSON.stringify(narrow)
   );
   check(
-    '390 宽下收起说明性文案（段控条 / 描述 / 页脚），保留工具本体',
+    '390 宽下收起说明性文案（段控条 / 描述），保留工具本体',
     narrow.navHeadHidden === true && narrow.descHidden === true && narrow.pane === true
   );
   check(

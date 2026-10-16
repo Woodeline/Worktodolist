@@ -7,10 +7,17 @@
 //   C. 通过极简 React hooks 替身驱动【真实未改动的 useTodoStore.js】，攻击撤销链路
 
 import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { parseFile, serializeEntries, serializeTask, parseSingleLine } from '../src/lib/todoParser.js';
 import { compareAuto, searchMatch, sortTasks, todayGroups } from '../src/lib/sortFilter.js';
 
-const DIR = 'C:/Users/王佐成/WorkBuddy/todolist';
+// 真实数据目录：历史开发机在 WorkBuddy/todolist；数据随仓库整理已搬进仓库根目录。
+// 解析顺序：QA_DATA_DIR 环境变量 → 历史路径（存在才用）→ 仓库根目录（现有真源）。
+const HISTORIC_DIR = 'C:/Users/王佐成/WorkBuddy/todolist';
+const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..');
+const DIR =
+  process.env.QA_DATA_DIR ||
+  (existsSync(`${HISTORIC_DIR}/todo.txt`) ? HISTORIC_DIR : REPO_ROOT);
 const results = [];
 let failures = 0;
 function check(name, pass, detail = '') {

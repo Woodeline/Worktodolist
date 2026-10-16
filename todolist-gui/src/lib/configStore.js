@@ -1,18 +1,18 @@
 // 通用「本机配置」存储 —— localStorage 里的配置只该有一种读法。
 //
-// 从 aiFallback.js 里那套（load / normalize / save / clear / subscribe）提出来。
-// 理由：**每个联网能力都要同样的三件事** ——
-//   ① 默认关闭（没配置 = 一行请求都不发）
-//   ② 明文存在本机 localStorage（所以必须能"清除"而不只是"关闭"）
+// 提供一套统一的 load / normalize / save / clear / subscribe。
+// 理由：**每个需要落盘的配置都要同样的三件事** ——
+//   ① 默认值明确（没配置 = 用默认，不产生副作用）
+//   ② 存在本机 localStorage（所以必须能"清除"而不只是"关闭"）
 //   ③ 改完立刻生效（唯一真相是 localStorage，界面状态只是投影）
-// 每加一个能力就抄一遍这三点，迟早有一份抄漏其中一条 —— 而漏掉的那条通常是①。
+// 每加一个配置就抄一遍这三点，迟早有一份抄漏其中一条。
 //
-// 刻意保持"一个 store 一个键、各自广播"：AI 兜底的配置与联网工具的配置互不影响，
+// 刻意保持"一个 store 一个键、各自广播"：不同能力的配置互不影响，
 // 清除一个不会顺手把另一个也抹掉。
 //
 // 另一个刻意的取舍：**存储层不认识"启用"的语义**。
-// 「已落盘」与「已启用」必须分开 —— 用户可能填了地址和 Key 却没打开开关，
-// 那仍然是一份含明文 Key 的落盘数据，必须允许清除，否则那份 Key 永远删不掉。
+// 「已落盘」与「已启用」必须分开 —— 用户可能填了内容却没打开开关，
+// 那仍然是一份落盘数据，必须允许清除，否则那份数据永远删不掉。
 // 所以这里只提供 hasStored()，至于"算不算开启"由各自的 isXxxEnabled 判断。
 export function createConfigStore({ key, defaults, normalize }) {
   if (!key) throw new Error('createConfigStore 需要一个 key');
@@ -102,8 +102,8 @@ export function createConfigStore({ key, defaults, normalize }) {
   return { key, defaults, normalize: norm, load, loadOr, save, clear, hasStored, subscribe };
 }
 
-// —— 设置页共用的小工具 ——
-// 设置页的"数值型字段"都有一组相同的取值范围约束，写在这里避免每个字段各写一遍。
+// —— 表单字段共用的小工具 ——
+// 数值型字段都有一组相同的取值范围约束，写在这里避免每个字段各写一遍。
 
 /**
  * 把输入夹到 [min, max] 的整数。非数字回落到 fallback。
@@ -117,7 +117,7 @@ export function clampInt(value, { min, max }, fallback) {
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
-/** 多行文本 → 去重、去空白、小写化的字符串数组（主机白名单这类字段用）。 */
+/** 多行文本 → 去重、去空白、小写化的字符串数组（列表类字段用）。 */
 export function parseList(text) {
   const out = [];
   const seen = new Set();

@@ -8,7 +8,6 @@ import { ACTIONS, dispatch, pickByReply } from '../lib/actions';
 import { activeTasks, sortTasks } from '../lib/sortFilter';
 import { appendEvent, loadEvents, makeEvent, replay } from '../lib/eventLog';
 import { drainLastToolSeq } from '../lib/toolEvents.js';
-import { aiHost, callAiFallback, isAiConfigured, loadAiConfig } from '../lib/aiFallback';
 
 // 需要明确目标才能执行的意图（与 nlRules.NEEDS_TARGET 对应）。
 const NEEDS_TARGET = new Set([
@@ -82,8 +81,6 @@ export function useChatAgent(store, opts = {}) {
   const [messages, setMessages] = useState([]);
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState(null);
-  const [logCount, setLogCount] = useState(0);
-  const [lastSeq, setLastSeq] = useState(0);
   const [restored, setRestored] = useState(false);
 
   const seqRef = useRef(0);
@@ -116,8 +113,6 @@ export function useChatAgent(store, opts = {}) {
       if (toolSeq) seqRef.current = Math.max(seqRef.current, toolSeq);
       seqRef.current += 1;
       const event = makeEvent(seqRef.current, type, payload);
-      setLastSeq(event.seq);
-      setLogCount((c) => c + 1);
       try {
         const handle = store.dirHandleRef && store.dirHandleRef.current;
         await appendEvent(handle, event);
@@ -318,22 +313,6 @@ export function useChatAgent(store, opts = {}) {
     [respond]
   );
 
-  // 可选 AI 兜底 —— 只在本地返回 unknown 时才会被调用。
-  // 未配置时立刻返回 null，一行网络请求都不发；调用失败也静默退回"没听懂"，
-  // 绝不因为网络的锅让用户看到报错。
-  const tryFallback = useCallback(
-    async (text) => {
-      const cfg = loadAiConfig();
-      if (!isAiConfigured(cfg)) return null;
-      try {
-        return await callAiFallback(text, { tasks: tasksRef.current, today, config: cfg });
-      } catch {
-        return null;
-      }
-    },
-    [today]
-  );
-
   // 解析一条文本并分发到对应动作 —— 正常路径与「澄清态里用户又说了新命令」共用同一份。
   //
   // 抽成一个内部函数是为了不再复制第二份解析逻辑：当处于 create 澄清态、用户却改主意
@@ -343,8 +322,8 @@ export function useChatAgent(store, opts = {}) {
   //
   // 返回值是结果标识，供调用方决定后续收尾：
   //   'suggestAdd' 已反问是否新建 | 'confirm' 已请求确认目标
-  //   'clarify'    已给出候选列表 | 'done' 已执行或已由 AI 兜底
-  //   'unknown'    本地无意图（AI 也没兜住）—— 是否打印通用提示由 fallbackHint 决定
+  //   'clarify'    已给出候选列表 | 'done' 已执行
+  //   'unknown'    本地无意图 —— 是否打印通用提示由 fallbackHint 决定
   const route = useCallback(
     async (text, opts = {}) => {
       const { fallbackHint = true } = opts;
@@ -372,13 +351,6 @@ export function useChatAgent(store, opts = {}) {
       }
 
       if (intent.intent === 'unknown') {
-        const ai = await tryFallback(text);
-        if (ai) {
-          // 联网这件事必须当场说清楚：哪一句、发到哪个域。
-          await respond(`本地没认出来，改用 AI 兜底解析（这一句已发往 ${aiHost()}）`, 'hint');
-          await executeIntent(ai);
-          return 'done';
-        }
         // 正常路径给通用的"没听懂"指令清单；但从澄清态重入时（fallbackHint:false）不打印它，
         // 改由调用方补一句"带上被打断的那条待建议"的收尾 —— 否则用户读完整条消息，
         // 仍不知道刚才那条待建议到底建没建（第三态必须明确收尾，不能静默丢弃）。
@@ -414,7 +386,7 @@ export function useChatAgent(store, opts = {}) {
       }
       return 'done';
     },
-    [today, tools, onOpenTool, askCreate, askClarify, tryFallback, respond, executeIntent]
+    [today, tools, onOpenTool, askCreate, askClarify, respond, executeIntent]
   );
 
   // 发送一条用户消息。
@@ -613,8 +585,6 @@ export function useChatAgent(store, opts = {}) {
         if (events.length) {
           setMessages(replay(events));
           seqRef.current = events[events.length - 1].seq;
-          setLastSeq(seqRef.current);
-          setLogCount(events.length);
         }
       } catch {
         // 回放失败时保持空会话
@@ -643,8 +613,6 @@ export function useChatAgent(store, opts = {}) {
     confirmCreate,
     undo,
     snapshotTasks,
-    logCount,
-    lastSeq,
     today,
     restored,
   };

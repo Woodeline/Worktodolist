@@ -4,6 +4,8 @@
 # Tauri 版启动器（launch_todolist_tauri.py）的 PID 文件与日志。
 .todolist-tauri.pid
 .todolist-tauri-launch.log
+# 启动器自动重建时的构建输出（build_todolist_tauri.cmd，仅 QUIET 模式落此文件）。
+.todolist-build.log
 .workbuddy/
 
 # ---- 依赖 / 虚拟环境 ----

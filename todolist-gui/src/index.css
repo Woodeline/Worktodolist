@@ -372,14 +372,12 @@ code {
 /* 数据一律等宽对齐，避免数字跳动 */
 .count,
 .statusbar,
-.chat-status,
 .snapshot-num,
 .snapshot-due,
 .tool-duration,
 .due,
 .topbar-done-count,
 .group-title,
-.tabs-brand,
 .drawer-preview {
   font-variant-numeric: tabular-nums;
 }
@@ -486,15 +484,6 @@ code {
   bottom: 0;
   height: 2px;
   background: var(--accent);
-}
-
-/* 右侧的数据源标记：等宽 + 字距，读起来像文件头 */
-.tabs-brand {
-  font-family: var(--font-mono);
-  font-size: var(--fs-2xs);
-  color: var(--muted);
-  letter-spacing: 0.06em;
-  white-space: nowrap;
 }
 
 /* --- 工具条：坐在纸面上，而不是又一条白栏 --- */
@@ -777,12 +766,44 @@ code {
   margin-bottom: var(--sp-1);
 }
 
-.sidebar-heading {
-  font-family: var(--font-mono);
-  font-size: var(--fs-2xs);
-  color: var(--muted);
-  padding: var(--sp-4) var(--sp-2) var(--sp-1);
-  letter-spacing: 0.06em;
+/* --- 分类 / 项目：可展开的分组（只到「具体分类 / 项目」这一层）---
+   分组行 = 展开箭头 + 组名，整行可点；展开后列出组内具体名称（点击过滤右侧主列表），
+   不在侧栏里往下摊任务行 —— 任务列表归右侧主区，侧栏保持"一眼可扫的目录"。 */
+.sidebar-tree {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: var(--r-sm);
+  padding: var(--sp-4) 0 var(--sp-1);
+  text-align: left;
+  color: var(--text-2);
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+
+.sidebar-group-toggle:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.sidebar-group-toggle:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+
+/* 组名：与条目同一字号、正文字体，靠半粗字重把自己和条目区分开 */
+.sidebar-group-name {
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  font-weight: 600;
 }
 
 .nav-item {
@@ -834,6 +855,38 @@ code {
 .nav-item.active .count {
   background: var(--surface);
   color: var(--accent);
+}
+
+/* 展开箭头：方块本体 + 内联 chevron，展开时旋转 90° 并转为强调色。
+   它同时承担「可点」与「当前状态」两种语义 —— 点击热区是整条分组行。 */
+.sidebar-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 18px;
+  block-size: 18px;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.sidebar-caret .icon {
+  transition: transform var(--dur-1) var(--ease-out);
+}
+
+.sidebar-tree.is-open .sidebar-caret {
+  color: var(--accent);
+}
+
+.sidebar-tree.is-open .sidebar-caret .icon {
+  transform: rotate(90deg);
+}
+
+/* 展开内容：组内的具体分类 / 项目名（缩进 + 左侧引导线表达从属关系）。
+   条目复用 .nav-item —— 与「今天 / 全部」同款，点击过滤右侧主列表。 */
+.sidebar-members {
+  margin: var(--sp-1) 0 var(--sp-1) var(--sp-2);
+  padding-left: var(--sp-1);
+  border-left: 1px solid var(--border);
 }
 
 .main {
@@ -917,6 +970,16 @@ code {
 }
 
 .task-row:hover::before {
+  transform: scaleY(1);
+}
+
+/* 选中态（单击选中，双击才进入编辑）：高亮块 + 常驻左侧强调条。
+   放在 hover 之后，选中行即使悬停也保持高亮。 */
+.task-row.selected {
+  background: var(--accent-soft);
+}
+
+.task-row.selected::before {
   transform: scaleY(1);
 }
 
@@ -1167,29 +1230,6 @@ mark {
   flex-direction: column;
 }
 
-.chat-status {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-1) var(--sp-3);
-  font-family: var(--font-mono);
-  font-size: var(--fs-2xs);
-  color: var(--muted);
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.chat-status .dot {
-  display: inline-flex;
-  color: var(--ok);
-}
-
-/* 远端兜底开启后状态色从"安全绿"变成"警告黄"：网络出口是状态变化，不是装饰 */
-.chat-status .dot.dot-warn {
-  color: var(--warn);
-}
-
 /* —— 今日概览摘要条（对话页顶部，点击直达列表页）—— */
 .chat-daybar {
   display: flex;
@@ -1225,27 +1265,6 @@ mark {
 
 .chat-daybar:hover .chat-daybar-go {
   opacity: 1;
-}
-
-/* —— AI 兜底「测试连接」自检结果 —— */
-.ai-test-result {
-  font-family: var(--font-mono);
-  font-size: var(--fs-2xs);
-  line-height: 1.7;
-  padding: var(--sp-2) var(--sp-3);
-  border-radius: var(--r-sm);
-  margin-top: var(--sp-2);
-  word-break: break-all;
-}
-
-.ai-test-result.ok {
-  color: var(--ok);
-  background: var(--ok-soft);
-}
-
-.ai-test-result.fail {
-  color: var(--danger);
-  background: var(--danger-soft);
 }
 
 .chat-stream {
@@ -1715,7 +1734,7 @@ mark {
 /* ============================================================================
    6 · 浮层
    ========================================================================== */
-/* --- 抽屉 --- */
+/* --- 遮罩（编辑浮窗 / 提议弹窗共用） --- */
 .drawer-backdrop {
   position: fixed;
   inset: 0;
@@ -1724,22 +1743,17 @@ mark {
   animation: fade-in var(--dur-2) var(--ease-out) backwards;
 }
 
-.drawer {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 412px;
-  max-width: 94vw;
+/* --- 编辑任务浮窗：居中对话框（配套 .modal 遮罩），不再是右侧抽屉 --- */
+.edit-window {
   background: var(--surface);
-  border-left: 1px solid var(--border-strong);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
   box-shadow: var(--sh-3);
-  z-index: 40;
+  width: 468px;
+  max-width: 100%;
+  max-height: 86vh;
   overflow-y: auto;
-}
-
-.drawer-panel {
-  padding: var(--sp-4) var(--sp-4) var(--sp-6);
+  padding: var(--sp-4) var(--sp-4) var(--sp-5);
 }
 
 .drawer-header {
@@ -1856,6 +1870,118 @@ mark {
   font-weight: 600;
 }
 
+/* --- @分类 / +标签：输入框 + 已保存候选下拉 --- */
+.field-tags {
+  position: relative;
+}
+
+.tag-input {
+  display: flex;
+  gap: var(--sp-1);
+}
+
+.tag-input input {
+  flex: 1;
+  min-width: 0;
+}
+
+.tag-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--h-control-lg);
+  min-width: var(--h-control-lg);
+  border: 1px solid var(--control-line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text-2);
+  padding: 0;
+  transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out);
+}
+
+.tag-toggle:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.tag-toggle.is-open {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tag-menu {
+  position: absolute;
+  z-index: 5;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  max-height: 216px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  box-shadow: var(--sh-2);
+  padding: 4px;
+}
+
+.tag-menu.drop-up {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: 4px;
+}
+
+.tag-menu-empty {
+  padding: var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+.tag-option {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  min-height: var(--h-control);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  text-align: left;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+
+.tag-option:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.tag-option.sel {
+  color: var(--text);
+}
+
+.tag-option-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.tag-option-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .extra-tags {
   margin-top: var(--sp-3);
   font-size: var(--fs-xs);
@@ -1883,6 +2009,13 @@ mark {
   display: flex;
   gap: var(--sp-2);
   margin-top: var(--sp-4);
+}
+
+/* 浮窗底部的快捷键提示（回车保存 / Esc 取消） */
+.drawer-hint {
+  align-self: center;
+  font-size: var(--fs-2xs);
+  color: var(--muted);
 }
 
 /* --- 对话内的提议按钮行（新建/修改/跳过，挂在提议气泡内部） --- */
@@ -2178,6 +2311,16 @@ mark {
   color: var(--text-2);
 }
 
+/* 快捷键速查：键名列加宽一档，键名用等宽字体，与说明文字区分开 */
+.settings-row-keys {
+  grid-template-columns: 150px minmax(0, 1fr);
+}
+
+.settings-row-keys .settings-label {
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+
 .settings-control {
   display: flex;
   flex-direction: column;
@@ -2387,24 +2530,6 @@ mark {
   color: var(--muted);
 }
 
-.tools-nav-foot {
-  flex-shrink: 0;
-  padding: var(--sp-3);
-  border-top: 1px solid var(--border);
-}
-
-.tools-note {
-  margin: 0;
-  font-size: var(--fs-2xs);
-  line-height: var(--lh-base);
-  color: var(--muted);
-}
-
-.tools-note code {
-  font-family: var(--font-mono);
-  font-size: var(--fs-2xs);
-}
-
 .tool-pane {
   flex: 1;
   min-width: 0;
@@ -2439,19 +2564,7 @@ mark {
   color: var(--text);
 }
 
-.tool-head-sub {
-  margin: var(--sp-1) 0 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-snug);
-  color: var(--muted);
-}
-
 /* 标签是分类信息，不是按钮 —— 方角 + 发丝边框，不用药丸、不改色 */
-.tool-tags {
-  display: flex;
-  gap: var(--sp-1);
-}
-
 .tool-tag {
   padding: 0 var(--sp-1);
   line-height: 18px;
@@ -3914,10 +4027,6 @@ mark {
     height: 42px;
   }
 
-  .tabs-brand {
-    display: none; /* 小屏优先让位给操作，品牌不承载功能 */
-  }
-
   .topbar {
     flex-wrap: wrap;
     gap: var(--sp-2);
@@ -3985,8 +4094,30 @@ mark {
     flex-shrink: 0;
   }
 
-  .sidebar-heading {
+  /* 分类 / 项目在横向过滤条上仍是可展开分组，只是排成一行：
+     组名在前，组内条目横向铺开（纵向的左侧引导线在这里没有意义）。 */
+  .sidebar-tree {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--sp-1);
+    flex-shrink: 0;
+  }
+
+  .sidebar-group-toggle {
+    width: auto;
+    flex-shrink: 0;
     padding: 0 var(--sp-1);
+    white-space: nowrap;
+  }
+
+  .sidebar-members {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--sp-1);
+    margin: 0;
+    padding: 0;
+    border-left: none;
     flex-shrink: 0;
   }
 
@@ -4073,10 +4204,6 @@ mark {
     display: none;
   }
 
-  .tools-nav-foot {
-    display: none;
-  }
-
   .tool-head {
     padding: var(--sp-2) var(--sp-3);
   }
@@ -4159,10 +4286,9 @@ mark {
     width: 92%;
   }
 
-  .drawer {
+  .edit-window {
     width: 100%;
     max-width: 100%;
-    border-left: none;
   }
 
   .statusbar {
@@ -4302,7 +4428,8 @@ mark {
   .tools-item,
   .tool-tab,
   .tool-group-toggle,
-  .tool-row-del {
+  .tool-row-del,
+  .sidebar-group-toggle {
     min-height: 44px;
   }
 

@@ -91,7 +91,6 @@ beforeEach(() => {
 afterEach(() => {
   delete globalThis.window;
   delete globalThis.fetch;
-  delete globalThis.localStorage;
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -317,90 +316,5 @@ describe('对抗性 #8-10：空输入 / 事件日志 / confirmTarget 收尾', ()
     expect(last).toBeTruthy();
     expect(last.text).toContain('已取消本次操作');
     expect(agent.pending).toBeFalsy();
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 对抗性补充：create 第三态 × AI 兜底 的【联合路径】。
-//
-// route() 在 unknown 分支里先走 tryFallback：
-//   AI 成功 → 返回 'done' → 调用方【不得】出收尾；
-//   AI 失败(null) → 返回 'unknown' → 调用方【必须】出带标题收尾。
-// "AI 成功时不许出收尾" 是个非平凡不变式（极易写成无论 AI 成不成都出收尾），
-// 这两条此前只有静态论证、没有独立用例，故补上。
-describe('对抗性补充 #11-12：create 第三态 × AI 兜底联合路径', () => {
-  const AI_CFG = {
-    enabled: true,
-    apiKey: 'sk-test',
-    baseUrl: 'https://api.example.com/v1',
-    model: 'gpt-test',
-  };
-  // 装上"已配置 AI"的 localStorage + 指定 fetch 替身（afterEach 统一清理这两个全局）
-  const installAi = (fetchImpl) => {
-    globalThis.localStorage = {
-      getItem: () => JSON.stringify(AI_CFG),
-      setItem() {},
-      removeItem() {},
-    };
-    globalThis.fetch = fetchImpl;
-  };
-
-  it('#11 create 态 + 已配置 AI + AI 成功 → 按 AI 意图执行，且【不出收尾】', async () => {
-    installAi(
-      vi.fn(async () => ({
-        ok: true,
-        status: 200,
-        async json() {
-          return { choices: [{ message: { content: '{"intent":"complete","targetIndex":1}' } }] };
-        },
-      }))
-    );
-
-    const { store } = makeStore(SEED_TASKS);
-    const render = makeRenderer(store);
-    let agent = render();
-    await agent.send('后天上午9点有月报会议要开'); // 进入 create 澄清
-    agent = render();
-    expect(agent.pending.kind).toBe('create');
-
-    await agent.send('嗯这个嘛回头再说吧'); // 第三态；本地 unknown → AI 兜底成功
-    agent = render();
-
-    // ① 确实走了 AI 并按 AI 的意图执行（complete 第 1 条 = k1）
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-    expect(store.toggleComplete).toHaveBeenCalledTimes(1);
-    expect(store.toggleComplete.mock.calls[0][0].id).toBe('k1');
-    // ② AI 成功 → 绝不能出"没有新建"收尾（最容易写错的不变式）
-    expect(agentTexts(agent)).not.toContain('没有新建');
-    // ③ 旧 create 的 pending 不得复活；且没有凭空新建任务
-    expect(agent.pending).toBeFalsy();
-    expect(store.addTask).not.toHaveBeenCalled();
-  });
-
-  it('#12 create 态 + 已配置 AI + AI 请求失败 → 静默退回，【必须出带标题收尾】', async () => {
-    installAi(
-      vi.fn(async () => {
-        throw new Error('network down');
-      })
-    );
-
-    const { store } = makeStore(SEED_TASKS);
-    const render = makeRenderer(store);
-    let agent = render();
-    await agent.send('后天上午9点有月报会议要开');
-    agent = render();
-    expect(agent.pending.kind).toBe('create');
-
-    await agent.send('嗯这个嘛回头再说吧'); // 第三态；AI 抛错 → tryFallback 返回 null → 'unknown'
-    agent = render();
-
-    // AI 失败不把网络错误甩给用户；回到未知态 → 必须出收尾（带被打断的标题 + 文件没动）
-    expect(store.addTask).not.toHaveBeenCalled();
-    expect(store.toggleComplete).not.toHaveBeenCalled();
-    const last = lastAgent(agent).text;
-    expect(last).toContain('没有新建');
-    expect(last).toContain('月报会议');
-    expect(last).toContain('文件没动');
-    expect(last).not.toContain('抱歉，没听懂');
   });
 });

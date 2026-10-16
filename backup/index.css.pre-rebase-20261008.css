@@ -1222,7 +1222,7 @@ mark {
   opacity: 1;
 }
 
-/* —— AI 兜底「测试连接」自检结果 —— */
+/* —— 联网解析「测试连接」自检结果 —— */
 .ai-test-result {
   font-family: var(--font-mono);
   font-size: var(--fs-2xs);

@@ -70,6 +70,25 @@ export function sortTasks(tasks, mode) {
   return tasks; // 手动模式 = 文件行序
 }
 
+// 当前视图下、经搜索过滤与排序后的任务列表（「今天」视图尚未分组）。
+// 主列表与键盘导航共用这一条口径，避免"看得见的顺序"和"上下键走的顺序"分叉。
+export function viewTasks(entries, view, sortMode, query, today) {
+  const base = tasksForView(entries, view, today);
+  const filtered = base.filter((t) => searchMatch(t, query));
+  return sortTasks(filtered, sortMode);
+}
+
+// 列表自上而下的显示顺序：今天视图按「逾期 → 今日到期 → 无日期」分组，
+// 其余视图就是 viewTasks 的顺序。键盘 ↑↓ 移动选中项时以此为准。
+export function displayOrder(entries, view, sortMode, query, today) {
+  const tasks = viewTasks(entries, view, sortMode, query, today);
+  if (view === 'today') {
+    const g = todayGroups(tasks, today);
+    return [...g.overdue, ...g.dueToday, ...g.noDate];
+  }
+  return tasks;
+}
+
 // 今天视图分组：逾期 / 今日到期 / 无日期
 export function todayGroups(tasks, today) {
   const overdue = [];

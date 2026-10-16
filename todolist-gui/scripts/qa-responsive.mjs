@@ -70,7 +70,7 @@ const PROBES = {
   snapshot: '.snapshot',
   msg: '.msg:not(.msg-tool)',
   toolcard: '.tool-card',
-  drawer: '.drawer',
+  editwin: '.edit-window',
   statusbar: '.statusbar',
   // 工具集（第三个页签）：左栏清单 + 右侧工具工作区
   toolsNav: '.tools-nav',
@@ -97,7 +97,7 @@ const CASES = [
   { name: 'mobile-360', w: 360, h: 780, view: 'list', tier: 'small' },
   { name: 'mobile-320', w: 320, h: 640, view: 'list', tier: 'small', note: '最窄兜底' },
   { name: 'narrow-390-chat', w: 390, h: 844, view: 'chat', tier: 'small', note: '对话页小屏：快照列转底部条' },
-  { name: 'narrow-390-drawer', w: 390, h: 844, view: 'drawer', tier: 'small', note: '抽屉小屏：占满宽度' },
+  { name: 'narrow-390-drawer', w: 390, h: 844, view: 'drawer', tier: 'small', note: '编辑浮窗小屏：占满可用宽度' },
   { name: 'coarse-390', w: 390, h: 844, view: 'list', tier: 'small', coarse: true, note: '触屏命中区 ≥44px' },
   { name: 'dark-1440', w: 1440, h: 900, view: 'list', tier: 'wide', dark: true },
   { name: 'dark-390', w: 390, h: 844, view: 'list', tier: 'small', dark: true },
@@ -438,9 +438,14 @@ function assertions(c, m) {
     }
   }
 
-  if (c.view === 'drawer' && m.drawer) {
+  if (c.view === 'drawer' && m.editwin) {
+    ok('编辑浮窗在视口内（居中且不溢出）',
+      (g('editwin')?.x ?? -1) >= 0 && (g('editwin')?.x ?? 0) + (g('editwin')?.w ?? 0) <= m.vw + 1,
+      JSON.stringify({ x: g('editwin')?.x, w: g('editwin')?.w, vw: m.vw }));
     if (c.tier === 'narrow' || c.tier === 'small') {
-      ok('抽屉占满宽度', Math.abs((g('drawer')?.w ?? 0) - m.docW) <= 4, `w=${g('drawer')?.w} docW=${m.docW}`);
+      ok('编辑浮窗占满可用宽度（仅留遮罩边距）',
+        (g('editwin')?.w ?? 0) >= m.docW * 0.85 && (g('editwin')?.w ?? 0) <= m.docW,
+        `w=${g('editwin')?.w} docW=${m.docW}`);
     }
   }
 

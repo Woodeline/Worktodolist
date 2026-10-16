@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import { useTodoStore } from './hooks/useTodoStore';
 import { useNativeShell } from './hooks/useNativeShell';
+import { useAlwaysOnTop } from './hooks/useAlwaysOnTop';
 import { isTauri } from './lib/runtime.js';
 import { useTodoSnapshot } from './hooks/useTodoSnapshot';
 import useDebounce from './hooks/useDebounce';
 import useHotkeys from './hooks/useHotkeys';
 import { useContextMenu } from './hooks/useContextMenu.jsx';
-import { searchMatch, sortTasks, tasksForView, todayGroups } from './lib/sortFilter';
+import { displayOrder, todayGroups, viewTasks } from './lib/sortFilter';
 import TopBar from './components/TopBar.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import TaskRow from './components/TaskRow.jsx';
@@ -193,11 +194,10 @@ export function MainList({ store, query }) {
     () => store.doneEntries.filter((e) => e.kind === 'task'),
     [store.doneEntries]
   );
-  const visible = useMemo(() => {
-    const base = tasksForView(store.todoEntries, store.view, today);
-    const filtered = base.filter((t) => searchMatch(t, query));
-    return sortTasks(filtered, store.sortMode);
-  }, [store.todoEntries, store.view, store.sortMode, query, today]);
+  const visible = useMemo(
+    () => viewTasks(store.todoEntries, store.view, store.sortMode, query, today),
+    [store.todoEntries, store.view, store.sortMode, query, today]
+  );
 
   const rawSection = (store.view === 'all' || store.view === 'inbox') && rawEntries.length > 0;
 
@@ -272,7 +272,7 @@ export function MainList({ store, query }) {
 
 // 页签条 = 应用工具条：左边是应用菜单（原生菜单栏的位置），中间是页签，
 // 右边是设置入口（齿轮）—— 与「☰ 菜单 / Ctrl+,」三个入口指向同一张设置页。
-export function Tabs({ tab, onChange, store, onOpenSettings, settingsOpen }) {
+export function Tabs({ tab, onChange, store, onOpenSettings, settingsOpen, alwaysOnTop, onToggleTop }) {
   const { openAt } = useContextMenu();
   const menuBtnRef = useRef(null);
 
@@ -344,6 +344,13 @@ export function Tabs({ tab, onChange, store, onOpenSettings, settingsOpen }) {
         },
       },
       { type: 'sep' },
+      { type: 'header', label: '窗口' },
+      {
+        type: 'item',
+        label: alwaysOnTop ? '取消窗口置顶' : '窗口置顶',
+        checked: Boolean(alwaysOnTop),
+        onClick: () => onToggleTop && onToggleTop(),
+      },
       { type: 'item', label: '重新载入文件', onClick: store.manualReload },
       { type: 'item', label: '切换数据目录…', onClick: store.pickDirectory },
       { type: 'sep' },
@@ -385,6 +392,17 @@ export function Tabs({ tab, onChange, store, onOpenSettings, settingsOpen }) {
         ))}
       </div>
       <span className="spacer" />
+      {onToggleTop && (
+        <button
+          type="button"
+          className={'appmenu-btn' + (alwaysOnTop ? ' is-on' : '')}
+          onClick={onToggleTop}
+          title={alwaysOnTop ? '取消窗口置顶' : '窗口置顶（总在最前）'}
+          aria-pressed={Boolean(alwaysOnTop)}
+        >
+          <Icon name="pin" size={15} />
+        </button>
+      )}
       {onOpenSettings && (
         <button
           type="button"
@@ -395,7 +413,6 @@ export function Tabs({ tab, onChange, store, onOpenSettings, settingsOpen }) {
           <Icon name="settings" size={15} />
         </button>
       )}
-      <span className="tabs-brand">todo.txt</span>
     </div>
   );
 }
@@ -405,8 +422,17 @@ export default function App() {
   // 壳级行为：关窗握手刷盘 / 启动时一次 git 提交 / 09:00 提醒。
   // 浏览器版内部整体短路（isTauri() 为假），不产生任何副作用或网络请求。
   useNativeShell(store);
+  // 窗口置顶：状态由壳广播回传，按钮与托盘菜单共用一个真相。
+  const { onTop: alwaysOnTop, toggle: toggleAlwaysOnTop } = useAlwaysOnTop();
   const query = useDebounce(store.search, 150);
   const [tab, setTab] = useState('chat');
+  // 列表页键盘导航用的顺序：与主列表实际渲染顺序同源（displayOrder 是唯一排布口径）。
+  // 只读视图（已完成）没有可选行，返回空数组让 ↑↓ 自然失效。
+  const orderedIds = useMemo(() => {
+    if (store.view === 'done') return [];
+    const today = dayjs().format('YYYY-MM-DD');
+    return displayOrder(store.todoEntries, store.view, store.sortMode, query, today).map((t) => t.id);
+  }, [store.todoEntries, store.view, store.sortMode, query]);
   // 设置是独立页面，不占页签：打开时主内容整体让位，Esc / 「返回」退出。
   const [settingsOpen, setSettingsOpen] = useState(false);
   // 工具页的只读投影：派生逻辑全在 lib/todoSnapshot.js（纯函数、可单测）。
@@ -466,17 +492,38 @@ export default function App() {
     ]);
   };
 
+  // ↑↓ 在列表里移动选中项：到达首/尾即停（不环绕），未选中时向下选第一条、向上选最后一条。
+  const moveSelection = useCallback(
+    (delta) => {
+      if (orderedIds.length === 0) return;
+      const cur = orderedIds.indexOf(store.focusedId);
+      const next =
+        cur === -1
+          ? delta > 0
+            ? 0
+            : orderedIds.length - 1
+          : Math.min(orderedIds.length - 1, Math.max(0, cur + delta));
+      if (orderedIds[next] !== store.focusedId) store.setFocusedId(orderedIds[next]);
+    },
+    [orderedIds, store.focusedId, store.setFocusedId]
+  );
+
   useHotkeys({
     // 对话页签激活时禁用全局快捷键，改由 ChatPanel 内部处理（避免 / 与 Ctrl+Z 冲突）。
     // 设置页打开时同样禁用 —— 否则在设置里按 Esc 会顺手清掉列表页的搜索词。
-    enabled: tab === 'list' && !settingsOpen,
+    // 编辑浮窗打开时也禁用：空格 / e / n 不该穿透到浮窗后面的列表（Esc / 回车由浮窗自己处理）。
+    enabled: tab === 'list' && !settingsOpen && !store.editingTask,
     onNew: () => store.quickAddRef.current && store.quickAddRef.current.focus(),
     onSearch: () => store.searchRef.current && store.searchRef.current.focus(),
+    onMove: moveSelection,
     onToggle: () => {
       const task = findFocusedTask();
       if (task) store.toggleComplete(task);
     },
     onEdit: () => {
+      if (store.focusedId) store.openEditor(store.focusedId);
+    },
+    onEnter: () => {
       if (store.focusedId) store.openEditor(store.focusedId);
     },
     onEscape: () => {
@@ -527,6 +574,8 @@ export default function App() {
         store={store}
         onOpenSettings={() => setSettingsOpen(true)}
         settingsOpen={settingsOpen}
+        alwaysOnTop={alwaysOnTop}
+        onToggleTop={toggleAlwaysOnTop}
       />
       {settingsOpen ? (
         <SettingsPage onClose={() => setSettingsOpen(false)} />

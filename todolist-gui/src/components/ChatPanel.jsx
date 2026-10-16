@@ -4,7 +4,6 @@ import dayjs from 'dayjs';
 import { useChatAgent } from '../hooks/useChatAgent';
 import { COMMAND_HINTS } from '../lib/nlRules';
 import { visibleTools } from './tools/registry.js';
-import useAiSettings from '../hooks/useAiSettings';
 import Icon from './Icon.jsx';
 import ToolCallCard from './ToolCallCard.jsx';
 import ProposalModal from './ProposalModal.jsx';
@@ -51,10 +50,6 @@ export default function ChatPanel({ store, onOpenList, onOpenTool }) {
   const streamRef = useRef(null);
   const inputRef = useRef(null);
   const { openMenu } = useContextMenu();
-
-  // 引擎状态与配置来自同一份真相（localStorage）：在设置页改完，这里立刻跟着变。
-  // 配置项本身已集中到设置页，这里只做「当前会不会联网」的明示。
-  const { aiOn, aiTarget } = useAiSettings();
 
   // P1-2：对话页顶部的「今日概览」。对话页是默认页，但"打开先看今天要干什么"
   // 的需求不该被迫切页签才能满足——摘要条常驻顶部，点击直达列表页。
@@ -203,28 +198,10 @@ export default function ChatPanel({ store, onOpenList, onOpenTool }) {
             <span className="chat-daybar-go">去列表 ›</span>
           </button>
         )}
-        <div className="chat-status">
-          <span className={'dot' + (aiOn ? ' dot-warn' : ' dot-ok')}>
-            <Icon name="dot" size={13} />
-          </span>
-          <span>
-            {aiOn
-              ? `本地规则引擎优先 · 仅在听不懂时发往 ${aiTarget}`
-              : '本地规则引擎 · 无网络请求'}
-          </span>
-          <span className="spacer" />
-          <span>
-            事件日志 {agent.logCount} 条 · 最后 seq {agent.lastSeq}
-          </span>
-        </div>
-
         <div className="chat-stream" ref={streamRef}>
           {agent.messages.length === 0 && (
             <div className="chat-empty">
               <p className="chat-empty-title">用大白话指挥它改你的 todo.txt</p>
-              <p className="hint">
-                点下面任意一个例子 → 它会填进输入框 → 按 <strong>Enter</strong> 发送。也可以自己随便打字。
-              </p>
               <div className="samples">
                 {SAMPLES.map((s) => (
                   <button
@@ -239,7 +216,9 @@ export default function ChatPanel({ store, onOpenList, onOpenTool }) {
                   </button>
                 ))}
               </div>
-              <p className="hint">右边那列是你的任务实时快照，序号就是「第 N 条」里的 N。</p>
+              <p className="hint">
+                点例子填进输入框，按 <strong>Enter</strong> 发送；右边那列的序号就是「第 N 条」里的 N。
+              </p>
             </div>
           )}
 
@@ -347,7 +326,7 @@ export default function ChatPanel({ store, onOpenList, onOpenTool }) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKeyDown}
-              placeholder="用大白话就行，例如：后天上午9点有月报会议要开（Enter 发送）"
+              placeholder="说一句待办就行，例如：明天交周报（Enter 发送）"
             />
             <button className="btn btn-primary" type="submit" disabled={agent.busy || !input.trim()}>
               发送

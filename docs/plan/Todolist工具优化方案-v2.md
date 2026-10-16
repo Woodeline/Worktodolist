@@ -156,7 +156,7 @@ Task {
 | 项 | 选型 | 理由 |
 |---|---|---|
 | 形态 | **浏览器直接访问的 Web 单页**（WorkBuddy 本地静态服务预览 / 发布为应用） | 不上 PWA Service Worker（无离线诉求，文件即数据源）、不上 Tauri/Electron（老机 8GB，桌面壳纯负担） |
-| 框架 | React 18 + Vite，**plain JS**（不用 TS 严格模式） | AI 辅助开发对冲学习曲线；砍掉 TS/Zustand/Dexie 三层抽象，状态用 useState/useReducer 足够 |
+| 框架 | React 18 + Vite，**plain JS**（不用 TS 严格模式） | 开发效率对冲学习曲线；砍掉 TS/Zustand/Dexie 三层抽象，状态用 useState/useReducer 足够 |
 | 样式 | 轻量 CSS（手写或 Tailwind 单文件引入） | 任务列表 UI 元素少，组件库（MUI/shadcn）属过度引入 |
 | 日期 | day.js | 轻量，日期计算够用 |
 | 文件访问 | File System Access API（Chromium） | Win10 Edge/Chrome 原生支持；降级为手动打开/下载 |
