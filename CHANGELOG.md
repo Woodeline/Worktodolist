@@ -9,7 +9,7 @@
 | 文件 | 体积 | 说明 |
 |---|---|---|
 | `Worktodolist.exe` | 3 721 216 B (3.55 MiB) | 绿色单文件，双击即用；需系统自带 WebView2 |
-| `Worktodolist_1.0.3_x64-setup.exe` | 3 141 155 B (3.00 MiB) | NSIS 安装包，装到当前用户，附开始菜单/桌面快捷方式 |
+| `Worktodolist_1.0.3_x64-setup.exe` | 3 141 312 B (3.00 MiB) | NSIS 安装包，装到当前用户，附开始菜单/桌面快捷方式 |
 | `SHA256SUMS.txt` | — | 上方两个文件的 SHA-256 校验和 |
 
 ### 答案流：先看结论，再看证据
