@@ -1,10 +1,11 @@
 // 多材料对比页 · 画布交互"
 //
 // 这一页保留原来的功能（录入各材料的温度-t₅₀、对数 Y、坐标范围、PNG 导出），
-// 但把画布上**原本只写在说明里的手势摆到台面上**：
-//   现状：悬停读值 / 点击固定 / 右键取消，全靠一段散文交代，右键还和系统菜单抢。
-//   现在：光标旁常驻读数、固定后出现可见的「取消固定」按钮、再点已固定的同一处即取消，
-//         彻底不用右键。
+// 版式则是**左数据右图**：左边只放"温度 / t₅₀"两格输入，用不了半屏；右边是图，
+// 坐标设置（对数 Y + 温度上下限）跟着图走，与左栏的动作按钮同一行。
+//
+// 画布上的手势也都摆到台面上（不再靠一段散文交代，右键还和系统菜单抢）：
+//   光标旁常驻读数、固定后出现可见的「取消固定」按钮、再点已固定的同一处即取消。
 //
 // 交互态（悬停/固定）刻意存在 ref 里而不是 React state：鼠标移动不该触发整棵子树
 // 重渲染，重画一次画布就够了 —— 这也正是原独立工具的做法。chip 这类"要显示成 DOM"
@@ -190,11 +191,11 @@ function CompareChart({ series, xRange, logY, onError }) {
         </span>
         <span className="tool-toolbar-spring" />
         {pinInfo && (
-          <button type="button" className="btn btn-sm" onClick={cancelPin}>
+          <button type="button" className="btn btn-sm btn-soft" onClick={cancelPin}>
             取消固定
           </button>
         )}
-        <button type="button" className="btn btn-sm" onClick={() => downloadCanvasPNG(canvasRef.current, `图3-材料对比-${stamp()}.png`).catch((e) => onError(e))}>
+        <button type="button" className="btn btn-sm btn-soft" onClick={() => downloadCanvasPNG(canvasRef.current, `图3-材料对比-${stamp()}.png`).catch((e) => onError(e))}>
           保存 PNG
         </button>
       </div>
@@ -225,172 +226,168 @@ export default function RtiCompare({ state, setState, onDemo, onClear, onPaste, 
 
   return (
     <div className="tool-stack">
-      <section className="tool-sec">
-        <h3 className="tool-sec-title">录入各材料的（温度, t₅₀）</h3>
+      {/* 左录数据、右看对比图。两栏的**第一行各是一句标题**，所以下面那一行
+          （左「填入示例」动作组 / 右「Y 轴对数 + 温度上下限」）自然齐平 ——
+          坐标设置属于图，就跟着图走，不再把录入区与图隔成上下两段去滚。 */}
+      <div className="tool-split-row">
+        <section className="tool-sec">
+          <h3 className="tool-sec-title">录入各材料的（温度, t₅₀）</h3>
 
-        <div className="tool-toolbar">
-          <button type="button" className="btn btn-sm" onClick={onDemo}>
-            填入示例
-          </button>
-          <button type="button" className="btn btn-sm" onClick={addMat}>
-            添加材料
-          </button>
-          <button type="button" className="btn btn-sm" onClick={onPaste}>
-            粘贴导入
-          </button>
-          <button type="button" className="btn btn-sm btn-danger" onClick={onClear}>
-            清空
-          </button>
-        </div>
-
-        <div className="tool-groups">
-          {state.mats.map((m, mi) => (
-            <div className="tool-group" key={mi}>
-              <div className="tool-group-head">
-                <span className="tool-group-label">材料名称</span>
-                <input
-                  className="tool-input tool-input-wide"
-                  type="text"
-                  value={m.name}
-                  aria-label={`第 ${mi + 1} 种材料的名称`}
-                  onChange={(e) => patchMat(mi, (mm) => ({ ...mm, name: e.target.value }))}
-                />
-                <span className="tool-group-meta">{m.rows.length} 个温度点</span>
-                <span className="tool-group-acts">
-                  <button type="button" className="btn btn-sm" onClick={() => addRow(mi)}>
-                    加温度点
-                  </button>
-                  <button type="button" className="btn btn-sm btn-danger" onClick={() => delMat(mi)}>
-                    删除材料
-                  </button>
-                </span>
-              </div>
-              <div className="tool-group-body">
-                {m.rows.length === 0 ? (
-                  <div className="tool-empty">
-                    <b>这种材料还没有数据</b>点「加温度点」，填入温度与对应的 t₅₀。
-                  </div>
-                ) : (
-                  <div className="tool-table-wrap">
-                    <table className="tool-table">
-                      <thead>
-                        <tr>
-                          <th>#</th>
-                          <th>老化温度 T（°C）</th>
-                          <th>50% 特性老化时间 t₅₀（h）</th>
-                          <th />
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {m.rows.map((r, ri) => (
-                          <tr key={ri}>
-                            <td className="tool-td-idx">{ri + 1}</td>
-                            <td>
-                              <NumberCell value={r.T} onChange={(v) => setRow(mi, ri, 'T', v)} />
-                            </td>
-                            <td>
-                              <NumberCell value={r.t} onChange={(v) => setRow(mi, ri, 't', v)} />
-                            </td>
-                            <td className="tool-td-act">
-                              <button type="button" className="tool-row-del" onClick={() => delRow(mi, ri)} title="删除该行" aria-label={`删除第 ${ri + 1} 行`}>
-                                ✕
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-          {state.mats.length === 0 && (
-            <div className="tool-empty">
-              <b>还没有材料</b>点「添加材料」，把每种材料的温度点和对应的 t₅₀ 填进来就能画对比图；
-              也可以在「耐热指数」页算出结果后直接「加入多材料对比」。
-            </div>
-          )}
-        </div>
-
-        <div className="tool-toolbar">
-          <label className="tool-check">
-            <input type="checkbox" checked={state.logY} onChange={(e) => setState((s) => ({ ...s, logY: e.target.checked }))} />
-            Y 轴对数坐标（t₅₀ 常跨好几个数量级）
-          </label>
-        </div>
-
-        <div className="tool-fields">
-          <div className="tool-field">
-            <label className="tool-field-label" htmlFor="cmp-xmax">
-              温度上限（°C）
-            </label>
-            <div className="tool-field-body">
-              <input
-                id="cmp-xmax"
-                className="tool-input"
-                type="text"
-                inputMode="decimal"
-                value={state.xMax}
-                onChange={(e) => setState((s) => ({ ...s, xMax: e.target.value }))}
-                onBlur={() => setState((s) => ({ ...s, xMin: String(xRange.min), xMax: String(xRange.max) }))}
-              />
-            </div>
+          <div className="tool-toolbar">
+            <button type="button" className="btn btn-sm btn-soft" onClick={onDemo}>
+              填入示例
+            </button>
+            <button type="button" className="btn btn-sm btn-soft" onClick={addMat}>
+              添加材料
+            </button>
+            <button type="button" className="btn btn-sm btn-soft" onClick={onPaste}>
+              粘贴导入
+            </button>
+            <button type="button" className="btn btn-sm btn-danger" onClick={onClear}>
+              清空
+            </button>
           </div>
-          <div className="tool-field">
-            <label className="tool-field-label" htmlFor="cmp-xmin">
-              温度下限（°C）
+
+          <div className="tool-groups">
+            {state.mats.map((m, mi) => (
+              <div className="tool-group" key={mi}>
+                <div className="tool-group-head">
+                  <span className="tool-group-label">材料名称</span>
+                  <input
+                    className="tool-input tool-input-wide"
+                    type="text"
+                    value={m.name}
+                    aria-label={`第 ${mi + 1} 种材料的名称`}
+                    onChange={(e) => patchMat(mi, (mm) => ({ ...mm, name: e.target.value }))}
+                  />
+                  <span className="tool-group-meta">{m.rows.length} 个温度点</span>
+                  <span className="tool-group-acts">
+                    <button type="button" className="btn btn-sm btn-soft" onClick={() => addRow(mi)}>
+                      加温度点
+                    </button>
+                    <button type="button" className="btn btn-sm btn-danger" onClick={() => delMat(mi)}>
+                      删除材料
+                    </button>
+                  </span>
+                </div>
+                <div className="tool-group-body">
+                  {m.rows.length === 0 ? (
+                    <div className="tool-empty">
+                      <b>这种材料还没有数据</b>点「加温度点」，填入温度与对应的 t₅₀。
+                    </div>
+                  ) : (
+                    <div className="tool-table-wrap">
+                      <table className="tool-table">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>老化温度 T（°C）</th>
+                            <th>50% 特性老化时间 t₅₀（h）</th>
+                            <th />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {m.rows.map((r, ri) => (
+                            <tr key={ri}>
+                              <td className="tool-td-idx">{ri + 1}</td>
+                              <td>
+                                <NumberCell value={r.T} onChange={(v) => setRow(mi, ri, 'T', v)} />
+                              </td>
+                              <td>
+                                <NumberCell value={r.t} onChange={(v) => setRow(mi, ri, 't', v)} />
+                              </td>
+                              <td className="tool-td-act">
+                                <button type="button" className="tool-row-del" onClick={() => delRow(mi, ri)} title="删除该行" aria-label={`删除第 ${ri + 1} 行`}>
+                                  ✕
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+            {state.mats.length === 0 && (
+              <div className="tool-empty">
+                <b>还没有材料</b>点「添加材料」，把每种材料的温度点和对应的 t₅₀ 填进来就能画对比图；
+                也可以在「耐热指数」页算出结果后直接「加入多材料对比」。
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="tool-sec">
+          <h3 className="tool-sec-title">对比图</h3>
+
+          <div className="tool-toolbar">
+            <label className="tool-check" title="t₅₀ 常跨好几个数量级">
+              <input type="checkbox" checked={state.logY} onChange={(e) => setState((s) => ({ ...s, logY: e.target.checked }))} />
+              Y 轴对数坐标
             </label>
-            <div className="tool-field-body">
+            <label className="tool-inline-field" htmlFor="cmp-xmin">
+              温度下限
               <input
                 id="cmp-xmin"
-                className="tool-input"
+                className="tool-input tool-input-axis"
                 type="text"
                 inputMode="decimal"
                 value={state.xMin}
                 onChange={(e) => setState((s) => ({ ...s, xMin: e.target.value }))}
                 onBlur={() => setState((s) => ({ ...s, xMin: String(xRange.min), xMax: String(xRange.max) }))}
               />
+              <span className="tool-hint">°C</span>
+            </label>
+            <label className="tool-inline-field" htmlFor="cmp-xmax">
+              温度上限
+              <input
+                id="cmp-xmax"
+                className="tool-input tool-input-axis"
+                type="text"
+                inputMode="decimal"
+                value={state.xMax}
+                onChange={(e) => setState((s) => ({ ...s, xMax: e.target.value }))}
+                onBlur={() => setState((s) => ({ ...s, xMin: String(xRange.min), xMax: String(xRange.max) }))}
+              />
+              <span className="tool-hint">°C</span>
+            </label>
+            <span className="tool-toolbar-spring" />
+            <button type="button" className="btn btn-sm btn-soft" onClick={() => setState((s) => ({ ...s, xMin: '60', xMax: '160' }))}>
+              恢复默认
+            </button>
+          </div>
+          {rangeDirty && <p className="tool-hint">输入的范围不完整或上下限颠倒，图里暂按 60–160 °C 显示；离开输入框会自动写回。</p>}
+
+          {series.length === 0 ? (
+            <div className="tool-empty">
+              <b>对比图会画在这里</b>左边录入各材料的（温度, t₅₀）后即刻成图；也可以在「耐热指数」页算出结果后直接「加入多材料对比」。
             </div>
-          </div>
-        </div>
+          ) : (
+            <>
+              {clipped > 0 && (
+                <ul className="tool-warns">
+                  <li>有 {clipped} 个数据点的 t₅₀ 超过 Y 轴上限 {fmtH(CMP_Y_TOP)} h，未显示在图中</li>
+                </ul>
+              )}
+              <CompareChart
+                series={series}
+                xRange={xRange}
+                logY={state.logY}
+                onError={(err) => onToast && onToast(`保存图片失败：${(err && err.message) || err}`)}
+              />
+            </>
+          )}
 
-        <div className="tool-toolbar">
-          <span className="tool-toolbar-spring" />
-          <button type="button" className="btn btn-sm" onClick={() => setState((s) => ({ ...s, xMin: '60', xMax: '160' }))}>
-            恢复默认
-          </button>
-        </div>
-        {rangeDirty && <p className="tool-hint">输入的范围不完整或上下限颠倒，图里暂按 60–160 °C 显示；离开输入框会自动写回。</p>}
-      </section>
-
-      <section className="tool-sec">
-        {series.length === 0 ? (
-          <div className="tool-empty">
-            <b>对比图会画在这里</b>上面录入各材料的（温度, t₅₀）后即刻成图；也可以在「耐热指数」页算出结果后直接「加入多材料对比」。
-          </div>
-        ) : (
-          <>
-            {clipped > 0 && (
-              <ul className="tool-warns">
-                <li>有 {clipped} 个数据点的 t₅₀ 超过 Y 轴上限 {fmtH(CMP_Y_TOP)} h，未显示在图中</li>
-              </ul>
-            )}
-            <CompareChart
-              series={series}
-              xRange={xRange}
-              logY={state.logY}
-              onError={(err) => onToast && onToast(`保存图片失败：${(err && err.message) || err}`)}
-            />
-          </>
-        )}
-        <p className="tool-note">
-          <b>怎么读这张图：</b>浅色实线是各材料在当前坐标下的最小二乘拟合，R² 越接近 1 说明实测点越接近直线；数据点用「颜色 +
-          形状」双编码，黑白打印或色弱也能分辨。Y 轴上限固定 {fmtH(CMP_Y_TOP)} h，另有 50,000 h 虚线参考线。<b>悬停</b>
-          即读值，<b>点击</b>固定后沿水平线读出其它材料的对应温度，<b>再点一次</b>取消。需要按 Arrhenius 关系外推并给出置信区间时，
-          请到「耐热指数」页。
-        </p>
-      </section>
+          <p className="tool-note">
+            <b>怎么读这张图：</b>浅色实线是各材料在当前坐标下的最小二乘拟合，R² 越接近 1 说明实测点越接近直线；数据点用「颜色 +
+            形状」双编码，黑白打印或色弱也能分辨。Y 轴上限固定 {fmtH(CMP_Y_TOP)} h，另有 50,000 h 虚线参考线。<b>悬停</b>
+            即读值，<b>点击</b>固定后沿水平线读出其它材料的对应温度，<b>再点一次</b>取消。需要按 Arrhenius 关系外推并给出置信区间时，
+            请到「耐热指数」页。
+          </p>
+        </section>
+      </div>
     </div>
   );
 }

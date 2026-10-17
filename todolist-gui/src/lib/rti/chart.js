@@ -553,16 +553,6 @@ export function drawShape(ctx, shape, x, y, r, col, pal) {
   ctx.restore();
 }
 
-function rrect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
 /**
  * 画图 3 并返回坐标几何，供命中测试使用。
  *
@@ -712,12 +702,26 @@ export function cmpValuesAt(chart, hit) {
   return { T, t: chart.logY ? 10 ** y : y, X, Y };
 }
 
-/** 命中测试：先找数据点（半径 14px），再找拟合线（距线 10px） */
+/**
+ * 命中测试：先找数据点（半径 14px），再找拟合线（距线 10px）。
+ *
+ * 只认**绘图区之内**的命中。两处此前会漏：
+ *   ① 光标跑到坐标框外的边距里（上方标题、右侧刻度那一圈）也会命中 —— 那里根本没有
+ *      数据，读数是凭空冒出来的，还画在坐标框外。现在光标不在绘图区就直接返回 null，
+ *      连十字准星都不出现。
+ *   ② 拟合线在温度两端可能被外推到 Y 轴上下限之外。此前按整条线段投影，于是鼠标在
+ *      框内靠上/靠下的位置会命中"画外那段线"，读数和准星一起跑到框外。现在先把参数
+ *      f 限制在**可见段**上（f 仍是整条线的比例，cmpGeomAt 据它还原 X/Y 不受影响）。
+ */
 export function cmpNearest(chart, mx, my) {
+  const { m, w, h } = chart;
+  // 光标不在绘图区里 → 没有命中
+  if (mx < m.l || mx > w - m.r || my < m.t || my > h - m.b) return null;
+
+  const visible = (c) => c.X >= m.l - 1 && c.X <= w - m.r + 1 && c.Y >= m.t - 1 && c.Y <= h - m.b + 1;
   let best = null;
-  const inX = (X) => X >= chart.m.l - 1 && X <= chart.w - chart.m.r + 1;
   const consider = (c) => {
-    if (inX(c.X) && (!best || c.d < best.d)) best = c;
+    if (visible(c) && (!best || c.d < best.d)) best = c;
   };
   chart.series.forEach((s, si) => {
     s.pts.forEach((p, pi) => {
@@ -733,9 +737,20 @@ export function cmpNearest(chart, mx, my) {
       const y2 = chart.py(s.fit.a + s.fit.b * chart.dom.xmax);
       const dx = x2 - x1;
       const dy = y2 - y1;
+      // 看得见的那一段对应的 f 区间（cy(f) = y1 + f·dy 要落在 [m.t, h-m.b] 内）
+      let fLo = 0;
+      let fHi = 1;
+      if (dy !== 0) {
+        const fa = (m.t - y1) / dy;
+        const fb = (h - m.b - y1) / dy;
+        fLo = Math.max(0, Math.min(fa, fb));
+        fHi = Math.min(1, Math.max(fa, fb));
+      } else if (y1 < m.t || y1 > h - m.b) {
+        return; // 整条拟合线都在 Y 轴之外，够不着
+      }
       const L2 = dx * dx + dy * dy;
-      let f = L2 ? ((mx - x1) * dx + (my - y1) * dy) / L2 : 0;
-      f = Math.max(0, Math.min(1, f));
+      let f = L2 ? ((mx - x1) * dx + (my - y1) * dy) / L2 : fLo;
+      f = Math.max(fLo, Math.min(fHi, f));
       const cx = x1 + f * dx;
       const cy = y1 + f * dy;
       const d = Math.hypot(mx - cx, my - cy);
@@ -758,7 +773,7 @@ export function cmpPinHit(chart, mx, my) {
 function drawHover(ctx, chart) {
   const s = chart.series[chart.hover.si];
   const col = chart.pal.series[seriesStyle(s.index ?? chart.hover.si).slot];
-  const { X, Y, T, t } = cmpValuesAt(chart, chart.hover);
+  const { X, Y } = cmpValuesAt(chart, chart.hover);
   ctx.save();
   ctx.setLineDash([4, 4]);
   ctx.strokeStyle = col;
@@ -784,42 +799,9 @@ function drawHover(ctx, chart) {
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // 悬浮提示框：只有悬停才有；点击固定后改为轴上的定点标注（不遮挡图形）
-  const lines = [
-    { text: s.name, strong: true },
-    { text: `T = ${fmtTempTick(T)} °C` },
-    { text: `${chart.hover.type === 'fit' ? 't₅₀(拟合)' : 't₅₀'} = ${fmtTick(t)} h` },
-  ];
-  if (s.fit && s.fit.r2 != null) lines.push({ text: `R² = ${fmtR2Tick(s.fit.r2)}` });
-
-  const pal = chart.pal;
-  const widths = lines.map((l) => {
-    ctx.font = l.strong ? fnt(pal, 12, 'bold') : fnt(pal, 12, '', true);
-    return ctx.measureText(l.text).width;
-  });
-  const tw = Math.max(...widths) + 20;
-  const th = lines.length * 17 + 12;
-  let bx = X + 14;
-  let by = Y - th - 10;
-  if (bx + tw > chart.w - chart.m.r) bx = X - tw - 14;
-  if (by < chart.m.t) by = Y + 14;
-
-  ctx.save();
-  ctx.setLineDash([]);
-  rrect(ctx, bx, by, tw, th, 4);
-  ctx.fillStyle = pal.panel;
-  ctx.fill();
-  ctx.strokeStyle = col;
-  ctx.lineWidth = 1.2;
-  ctx.stroke();
-  lines.forEach((l, i) => {
-    ctx.fillStyle = i === 0 ? col : pal.label;
-    ctx.font = l.strong ? fnt(pal, 12, 'bold') : fnt(pal, 12, '', true);
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillText(l.text, bx + 10, by + 18 + i * 17);
-  });
-  ctx.restore();
+  // 悬停读数不在这里画：画布外那层 DOM「读数片」（见 RtiCompare.jsx）才是唯一的浮窗。
+  // 画布内再画一遍，命中点旁就会叠出两个内容几乎一样的框，互相遮挡。
+  // 这一层只留十字准星与高亮圈，把"指哪儿"说清楚。
 }
 
 function drawPinned(ctx, chart) {
@@ -827,9 +809,13 @@ function drawPinned(ctx, chart) {
   const col = chart.pal.series[seriesStyle(s.index ?? chart.pinned.si).slot];
   const { X, Y } = cmpGeomAt(chart, chart.pinned);
 
-  // 拟合线高亮
+  // 拟合线高亮：拟合在温度两端可能远高于 / 低于 Y 轴，所以裁进绘图区再画，
+  // 否则点击「线」时那条加粗高亮会从坐标框里穿出去
   if (chart.pinned.type === 'fit' && s.fit) {
     ctx.save();
+    ctx.beginPath();
+    ctx.rect(chart.m.l, chart.m.t, chart.w - chart.m.l - chart.m.r, chart.h - chart.m.t - chart.m.b);
+    ctx.clip();
     ctx.globalAlpha = 0.9;
     ctx.strokeStyle = col;
     ctx.lineWidth = 3;
@@ -908,36 +894,41 @@ function drawPinned(ctx, chart) {
     ctx.restore();
   });
 
-  // 温度标注统一贴在 X 轴上方，按 X 排序后横向推开，避免相邻重叠
+  // 温度标注统一贴在 X 轴上方。字号比图里其它小字大一档，让读数成为主角。
+  // 相邻标注若干涉，则把**右侧**那条整行抬高一层（还挤就继续往上找空行）——
+  // 不再横向硬推：硬推会让标注中心偏离它所指的那条竖线，读数跟着指错。
+  const labelFont = 15;
+  const rowH = labelFont + 6;
+  const gap = 8;
   const labels = [
     { col, Xc: X, Tc: pv.T },
     ...hits.map((hh) => ({ col: hh.col, Xc: hh.Xc, Tc: hh.Tc })),
   ].map((l) => ({ ...l, text: `T = ${fmtTempTick(l.Tc)} °C` }));
-  ctx.font = fnt(pal, 13, 'bold', true);
+  ctx.font = fnt(pal, labelFont, 'bold', true);
   labels.forEach((l) => {
     l.tw = ctx.measureText(l.text).width;
   });
   labels.sort((a, b) => a.Xc - b.Xc);
-  for (let i = 1; i < labels.length; i += 1) {
-    const minX = labels[i - 1].Xc + labels[i - 1].tw / 2 + 10;
-    if (labels[i].Xc - labels[i].tw / 2 < minX) labels[i].Xc = minX + labels[i].tw / 2;
-  }
   const ly = chart.h - chart.m.b - 8;
+  const placed = [];
   labels.forEach((l) => {
     const cx = Math.max(chart.m.l + l.tw / 2, Math.min(l.Xc, chart.w - chart.m.r - l.tw / 2));
+    const left = cx - l.tw / 2;
+    const right = cx + l.tw / 2;
+    // 从贴轴那一层往上找第一条放得下的空行
+    let row = 0;
+    while (placed.some((p) => p.row === row && right + gap > p.left && left - gap < p.right)) {
+      row += 1;
+    }
+    placed.push({ row, left, right });
     ctx.fillStyle = l.col;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillText(l.text, cx, ly);
+    ctx.fillText(l.text, cx, ly - row * rowH);
   });
 }
 
 /* 图表内的短格式（与 lib/rti/calc 的界面格式分开：图里不加千分位） */
 function fmtTempTick(v) {
   return Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(v)) : v.toFixed(1);
-}
-function fmtR2Tick(r) {
-  if (r >= 0.999995) return '1.0000';
-  if (r >= 0.99995) return r.toFixed(5);
-  return r.toFixed(4);
 }

@@ -153,17 +153,17 @@ export default function RtiEntry({ open, onToggle, name, setName, p0, setP0, row
       <div className="tool-toolbar">
         <h3 className="tool-sec-title">录入 / 粘贴数据</h3>
         <span className="tool-toolbar-spring" />
-        <button type="button" className="btn btn-sm" onClick={onToggle}>
+        <button type="button" className="btn btn-sm btn-soft" onClick={onToggle}>
           {open ? '收起' : '展开'}
         </button>
       </div>
       {open && (
         <>
           <div className="tool-toolbar">
-            <button type="button" className="btn btn-sm" onClick={onDemo}>
+            <button type="button" className="btn btn-sm btn-soft" onClick={onDemo}>
               填入示例
             </button>
-            <button type="button" className="btn btn-sm" onClick={onPaste}>
+            <button type="button" className="btn btn-sm btn-soft" onClick={onPaste}>
               粘贴导入
             </button>
             <button type="button" className="btn btn-sm btn-danger" onClick={onClear}>

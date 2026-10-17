@@ -160,10 +160,10 @@ export default function RtiAnswer({ model, onToCmp, onToast }) {
           <ArrheniusChart result={result} canvasRef={canvasRef} />
           {result && (
             <div className="tool-chart-tools">
-              <button type="button" className="btn btn-sm" onClick={savePng}>
+              <button type="button" className="btn btn-sm btn-soft" onClick={savePng}>
                 保存 PNG
               </button>
-              <button type="button" className="btn btn-sm" onClick={onToCmp}>
+              <button type="button" className="btn btn-sm btn-primary" onClick={onToCmp}>
                 加入多材料对比
               </button>
             </div>

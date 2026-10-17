@@ -21,6 +21,10 @@ r"""待办清单 · Tauri 版启动器
   .todolist-build.log 写面包屑（开始时间 / 工作目录 / 解析到的 npm / 退出码）；万一窗口
   一闪就退出，失败弹窗会把退出码、耗时与日志末尾一并摊开。想跳过重建直接开旧版：--no-build。
 
+  重建失败（构建窗口被误关、被杀软掐断、或真编译报错）时，只要硬盘上还有上一次的
+  产物，就**直接把它启动起来**并附一句说明 —— 双击图标的意图就是「把应用打开」，
+  让人空手而归是最糟的结果。旧产物照常能用，只是不含最新改动，弹窗里会讲清楚。
+
 注意：构建出来的 exe 是自包含的原生 exe（没有 Node 服务、没有端口），运行期不需要任何
 依赖；构建**期**才需要 Rust 工具链 + Node（见 --status 的探测）。
 
@@ -77,6 +81,13 @@ SOURCE_FILES = [
     os.path.join('src-tauri', 'build.rs'),
 ]
 SKIP_DIRS = {'node_modules', 'target', '.git', 'dist', '.tmp'}
+# 这些文件不会被 vite 打进 exe（单测 / 规格文件），改它们不该触发重建 ——
+# 否则改一个断言也要白等两分钟的 cargo 编译。
+SKIP_FILE_SUFFIXES = ('.test.js', '.test.jsx', '.spec.js', '.spec.jsx')
+
+# 构建窗口被关掉 / 窗口里按了 Ctrl+C 时子进程拿到的退出码（STATUS_CONTROL_C_EXIT）。
+# 它不是「编译报错」，值得单独说清楚 —— 见 build_failed_text()。
+CONTROL_C_EXIT = 0xC000013A
 
 # 构建前置条件的探测路径（glob 的 * 不跨路径分隔符，可以安全地当通配层级用）。
 # 只在 --status / 缺失提示里用，运行期不需要它们。
@@ -184,6 +195,8 @@ def newest_source_mtime(root):
         for dirpath, dirnames, filenames in os.walk(os.path.join(gui, rel)):
             dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
             for fn in filenames:
+                if fn.endswith(SKIP_FILE_SUFFIXES):
+                    continue
                 bump(os.path.join(dirpath, fn))
     for rel in SOURCE_FILES:
         bump(os.path.join(gui, rel))
@@ -275,9 +288,12 @@ def build_log_tail(count):
 
 
 def build_failed_text(code, seconds):
-    """构建失败对话框的文案：把「多快失败的」和「日志末尾」摊开，别只留一句 rc=1。"""
+    """构建失败时的说明：交代「为什么失败」+ 日志末尾 + 接下来会自动做什么。"""
     lines = []
-    if code is not None and seconds is not None:
+    if code is not None and (code & 0xFFFFFFFF) == CONTROL_C_EXIT:
+        lines.append('构建被中断了（退出码 0xC000013A）——\n'
+                     '多半是那个黑色的构建窗口被关掉，或在窗口里按了 Ctrl+C。')
+    elif code is not None and seconds is not None:
         if seconds < 5:
             lines.append('构建窗口刚出现（%.1f 秒）就以退出码 %s 结束了 —— 多半是窗口被'
                          '立刻关闭，或 npm 没能启动。' % (seconds, code))
@@ -286,10 +302,11 @@ def build_failed_text(code, seconds):
     tail = build_log_tail(4)
     if tail:
         lines.append('\n.todolist-build.log 末尾：\n' + tail)
-    lines.append('\n重试：再双击一次图标，或在本文件夹执行\n'
-                 'python launch_todolist_tauri.py --rebuild')
-    return ('重建新版本失败，当前仍是旧版本。\n\n' + '\n'.join(lines) +
-            '\n\n是否仍然启动现有版本？')
+    lines.append('\n已直接启动上一次构建的版本（功能照常，只是不含最新改动）。')
+    lines.append('\n想换成新版本：等这次应用打开后，再双击一次图标，或在本文件夹执行\n'
+                 '    python launch_todolist_tauri.py --rebuild\n'
+                 '构建约需 2 分钟，那个窗口在跑完前请不要关。')
+    return '重建新版本失败。\n\n' + '\n'.join(lines)
 
 
 # ---------------------------------------------------------------- 前置条件探测
@@ -592,15 +609,16 @@ def main():
             if exe is None:
                 alert(missing_text(root))
                 return 1
-            # 还有旧产物可用：征询是否照旧启动（脚本化验证时直接失败，不弹窗）
+            # 还有旧产物可用：**照旧把它启动起来**，再用弹窗说明情况。
+            # 不再「问一句、答否就什么都不开」—— 双击图标的意图就是把应用打开，
+            # 而构建失败多半与代码无关（构建窗口被误关、被杀软掐断…）。让人空手
+            # 而归是最糟的结果：旧版本照常能用，先开着远比什么都没有强。
+            # （脚本化验证 --quiet 时不弹窗也不回落，保持返回值可断言。）
             if QUIET:
                 return 1
-            answer = ctypes.windll.user32.MessageBoxW(
-                None,
-                build_failed_text(build_rc, build_seconds),
-                '待办清单 · 构建失败', 0x04 | 0x30)  # MB_YESNO | MB_ICONWARNING
-            if answer != 6:  # IDYES
-                return 1
+            alert(build_failed_text(build_rc, build_seconds),
+                  title='待办清单 · 构建失败', flags=0x30)  # MB_ICONWARNING
+            return 0 if launch_exe(exe, show_window) else 1
 
     if exe is None:
         # 走到这里说明：产物缺失且 --no-build（不构建），或构建后仍然找不到。

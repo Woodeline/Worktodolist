@@ -2178,6 +2178,27 @@ mark {
   background: var(--danger-soft);
 }
 
+/* 工具区里的次级动作按钮：底与描边都借强调色的浅档。
+   一整排白底按钮在工具面板里"长得一模一样"，识别度很低；给点颜色之后
+   仍然只有实底的 .btn-primary 是"该按的那个"，问的功能层级没有被抹平。
+   文字用 --accent 落在 --accent-soft 上，已由 qa-contrast 按 4.5:1 校验。 */
+.btn-soft {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
+.btn-soft:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+/* 按下不再换成 .btn:active 的灰底（那会在浅色底上闪一下灰），
+   只用描边收一格作为反馈 */
+.btn-soft:active:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
 /* ============================================================================
    设置页 —— 独立页面（不是页签）：左边说明、右边字段，底部一条动作栏。
    参照物是"工具软件的偏好设置面板"，所以分组之间只用发丝线，不做卡片套卡片。
@@ -2765,6 +2786,11 @@ mark {
   width: 110px;
 }
 
+/* 坐标范围格（对比图的温度上下限）：一行里要并排放两组，取更窄的一档 */
+.tool-input-axis {
+  width: 72px;
+}
+
 .tool-hint {
   font-size: var(--fs-2xs);
   color: var(--muted);
@@ -2971,6 +2997,26 @@ mark {
   grid-template-columns: minmax(0, 1fr) minmax(340px, 1fr);
   gap: var(--sp-3);
   align-items: start;
+}
+
+/* 多材料对比页：左录数据、右看对比图。左列只有"温度 / t₅₀"两格输入，用不了半屏；
+   图是按容器宽度画的，给宽一点才画得开坐标，所以右列拿更大的份。
+   两栏的第一行都是标题，第二行（动作组 / 坐标设置）就自然齐平了。 */
+.tool-split-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(420px, 1.25fr);
+  gap: var(--sp-3);
+  align-items: start;
+}
+
+/* 一行里的紧凑字段（标签 + 输入框 + 单位）：塞进图的工具栏，
+   与旁边的复选框同一基线 —— 不必为两个数另起一块参数表。 */
+.tool-inline-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-xs);
+  color: var(--text-2);
 }
 
 .tool-metrics {
@@ -4072,8 +4118,9 @@ mark {
   }
 
   /* 答案流的两列在中等宽度就摞成一列：340px 的图画不出可读的坐标，
-     硬留着只是把结果数字挤到一旁。 */
-  .tool-answer-row {
+     硬留着只是把结果数字挤到一旁。对比页的左右两栏同理。 */
+  .tool-answer-row,
+  .tool-split-row {
     grid-template-columns: minmax(0, 1fr);
   }
 }
