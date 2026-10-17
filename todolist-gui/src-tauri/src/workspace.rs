@@ -68,7 +68,7 @@ fn read_prefs(app: &AppHandle) -> Prefs {
 fn write_prefs(app: &AppHandle, prefs: &Prefs) -> Result<(), String> {
     let path = prefs_file(app)?;
     let text = serde_json::to_string_pretty(prefs).map_err(|e| e.to_string())?;
-    atomic_write(&path, &text)
+    atomic_write(&path, text.as_bytes())
 }
 
 /// 锁定当前数据目录；未选择时报错（前端会据此回到欢迎页）。
@@ -109,7 +109,9 @@ fn is_iso_date(s: &str) -> bool {
 // ---------------------------------------------------------------------------
 
 /// 临时文件 + rename 覆盖。任何一步失败都保证原文件仍是完整的旧内容。
-pub fn atomic_write(path: &Path, text: &str) -> Result<(), String> {
+/// 收 `&[u8]` 而不是 `&str`：同一份逻辑要同时服务 todo.txt（文本）与导出的
+/// xlsx/PNG（二进制），没必要为了字节再抄一遍 tmp+rename。
+pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let dir = path.parent().ok_or_else(|| "非法路径".to_string())?;
     fs::create_dir_all(dir).map_err(|e| format!("创建目录失败：{e}"))?;
     let name = path
@@ -119,7 +121,7 @@ pub fn atomic_write(path: &Path, text: &str) -> Result<(), String> {
     let tmp = dir.join(format!(".{}.{}.tmp", name, std::process::id()));
     {
         let mut f = File::create(&tmp).map_err(|e| format!("创建临时文件失败：{e}"))?;
-        f.write_all(text.as_bytes())
+        f.write_all(bytes)
             .map_err(|e| format!("写入临时文件失败：{e}"))?;
         f.sync_all().map_err(|e| format!("落盘失败：{e}"))?;
     }
@@ -250,7 +252,7 @@ pub fn fs_write(state: State<'_, Workspace>, name: String, text: String) -> Resu
         .write_lock
         .lock()
         .map_err(|_| "写入闸门损坏".to_string())?;
-    atomic_write(&dir.join(name), &text)
+    atomic_write(&dir.join(name), text.as_bytes())
 }
 
 /// 当日首次调用时把 todo.txt 复制到 backup/todo-YYYY-MM-DD.txt，并保留最近 30 份。
@@ -274,9 +276,44 @@ pub fn fs_backup(state: State<'_, Workspace>, today: String) -> Result<bool, Str
             .write_lock
             .lock()
             .map_err(|_| "写入闸门损坏".to_string())?;
-        atomic_write(&target, &source)?;
+        atomic_write(&target, source.as_bytes())?;
     }
     prune_backups(&backup_dir, 30)?;
+    Ok(true)
+}
+
+/// 弹出原生「另存为」对话框，把字节写到用户选定的位置。
+///
+/// 与 `ws_pick` 共用同一套约定：**用户取消返回 `Ok(false)`**，不算错误（前端据此
+/// 静默收场，而不是弹一个"导出失败"）。默认文件名与过滤器都从 `name` 的扩展名推出来
+/// —— 调用方只要给个像样的名字（`RTI工具数据-20261017-1500.xlsx`），就能得到
+/// "Excel 工作簿 (*.xlsx)" 这样的对话框。走 Rust 侧的 dialog 插件（同 `ws_pick`），
+/// 因此不经过前端 ACL，capabilities 不必新增条目。
+#[tauri::command]
+pub async fn fs_save_as(app: AppHandle, name: String, data: Vec<u8>) -> Result<bool, String> {
+    let name = safe_name(&name)?;
+    let ext = Path::new(name)
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_ascii_lowercase())
+        .unwrap_or_default();
+    let label = match ext.as_str() {
+        "xlsx" => "Excel 工作簿",
+        "csv" => "CSV 表格",
+        "png" => "PNG 图片",
+        _ => "文件",
+    };
+
+    let mut builder = app.dialog().file().set_title("另存为").set_file_name(name);
+    if !ext.is_empty() {
+        builder = builder.add_filter(label, &[ext.as_str()]);
+    }
+    let Some(chosen) = builder.blocking_save_file() else {
+        return Ok(false);
+    };
+
+    let path = chosen.to_string();
+    atomic_write(Path::new(&path), &data)?;
     Ok(true)
 }
 

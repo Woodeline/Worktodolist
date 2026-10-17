@@ -699,7 +699,13 @@ function cmpGeomAt(chart, hit) {
   };
 }
 
-function cmpValuesAt(chart, hit) {
+/**
+ * 把一次命中反解成可显示的数据坐标（并给出它在画布上的像素位置）。
+ *
+ * 导出它是为了让界面上的"光标读数 / 固定读数"和画布里的悬停提示框**用同一份几何**，
+ * 而不是在组件里按画布边距再算一遍 —— 那样两处迟早会漂移。
+ */
+export function cmpValuesAt(chart, hit) {
   const { X, Y } = cmpGeomAt(chart, hit);
   const T = chart.dom.xmin + ((X - chart.m.l) / (chart.w - chart.m.l - chart.m.r)) * (chart.dom.xmax - chart.dom.xmin);
   const y = chart.dom.ymin + ((chart.h - chart.m.b - Y) / (chart.h - chart.m.t - chart.m.b)) * (chart.dom.ymax - chart.dom.ymin);

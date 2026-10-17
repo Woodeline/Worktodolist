@@ -17,7 +17,9 @@ r"""待办清单 · Tauri 版启动器
   只要 todolist-gui 下被内嵌进 exe 的文件（src/、src-tauri/src/、tauri.conf.json …）里有
   任何一个比 exe 新，就判定过期。重建前**必须先停掉正在运行的实例** —— 那个进程锁着
   exe，不停就没法覆盖（这正是「明明重建了却还是老版本」的根因之一）。
-  重建会弹出一个可见的构建窗口（关掉它 = 中断构建）。想跳过重建直接开旧版：--no-build。
+  重建会弹出一个可见的构建窗口（关掉它 = 中断构建）。构建脚本每次运行都往
+  .todolist-build.log 写面包屑（开始时间 / 工作目录 / 解析到的 npm / 退出码）；万一窗口
+  一闪就退出，失败弹窗会把退出码、耗时与日志末尾一并摊开。想跳过重建直接开旧版：--no-build。
 
 注意：构建出来的 exe 是自包含的原生 exe（没有 Node 服务、没有端口），运行期不需要任何
 依赖；构建**期**才需要 Rust 工具链 + Node（见 --status 的探测）。
@@ -37,6 +39,7 @@ r"""待办清单 · Tauri 版启动器
 import ctypes
 import glob
 import os
+import re
 import subprocess
 import sys
 import time
@@ -202,22 +205,31 @@ def is_stale(root, exe):
 # ---------------------------------------------------------------- 构建
 
 def build_app(root):
-    """调用 build_todolist_tauri.cmd 重建产物。返回 True/False。
+    """调用 build_todolist_tauri.cmd 重建产物。返回 (是否成功, 退出码, 耗时秒)。
 
     默认弹一个可见的构建控制台（否则 pythonw 下全程静默，用户会以为卡死）；
     QUIET（脚本化验证）时不弹窗，输出追加到 BUILD_LOG。
+
+    子进程额外带一份「Node 目录优先」的 PATH：桌面图标走的是 Explorer 缓存下来的
+    环境，可能早于 Node 的安装，届时 build_todolist_tauri.cmd 里的兜底也够不着 ——
+    这里先把本机找到的 node 目录插到最前面，构建窗口便不再依赖用户 PATH 是否最新。
     """
     if not os.path.isfile(BUILD_CMD):
         alert('找不到构建脚本：\n%s\n\n请确认这个文件还在 todolist 文件夹里。' % BUILD_CMD)
-        return False
+        return False, None, 0.0
 
     log('building: %s' % BUILD_CMD)
     comspec = os.environ.get('ComSpec') or 'cmd.exe'
     argv = [comspec, '/c', BUILD_CMD]
-    kwargs = {'cwd': root, 'stdin': subprocess.DEVNULL}
+    env = dict(os.environ)
+    node = first_glob(NODE_GLOBS)
+    if node:
+        env['PATH'] = os.path.dirname(node) + os.pathsep + env.get('PATH', '')
+    kwargs = {'cwd': root, 'env': env}
     handle = None
     if QUIET:
         kwargs['creationflags'] = CREATE_NO_WINDOW
+        kwargs['stdin'] = subprocess.DEVNULL
         try:
             handle = open(BUILD_LOG, 'a', encoding='utf-8')
             handle.write('\n==== build %s ====\n' % time.strftime('%Y-%m-%d %H:%M:%S'))
@@ -226,8 +238,14 @@ def build_app(root):
         except OSError:
             handle = None
     else:
+        # 可见构建窗口：**任何标准句柄都不要重定向**。桌面图标走的是 pythonw（没有
+        # 控制台），只要指定了 stdin / stdout / stderr 中的一个，Windows 就要求把三个
+        # 句柄全部显式传下去 —— 而 pythonw 自己的 stdout/stderr 是无效句柄，于是
+        # cmd.exe 在第一次输出时就当场退出（rc=1、窗口一闪就没，正是「双击图标还是
+        # 老版本」的真凶）。什么都不传，子进程才会拿到新建控制台自己的句柄。
         kwargs['creationflags'] = CREATE_NEW_CONSOLE
 
+    started = time.time()
     try:
         proc = subprocess.Popen(argv, **kwargs)
     except OSError as exc:  # noqa: BLE001
@@ -235,13 +253,43 @@ def build_app(root):
         if handle:
             handle.close()
         alert('无法启动构建进程：\n%s\n\n日志：\n%s' % (exc, LOG_FILE))
-        return False
+        return False, None, 0.0
 
     code = proc.wait()
+    seconds = time.time() - started
     if handle:
         handle.close()
-    log('build finished rc=%s' % code)
-    return code == 0
+    log('build finished rc=%s after %.1fs' % (code, seconds))
+    return code == 0, code, seconds
+
+
+def build_log_tail(count):
+    """取构建日志末尾若干行，去掉 vite/cargo 的 ANSI 颜色，失败时用来指认原因。"""
+    try:
+        with open(BUILD_LOG, 'r', encoding='utf-8', errors='replace') as fh:
+            rows = [ln.strip() for ln in fh.read().splitlines() if ln.strip()]
+    except OSError:
+        return ''
+    cleaned = [re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', ln) for ln in rows[-count:]]
+    return '\n'.join(cleaned)
+
+
+def build_failed_text(code, seconds):
+    """构建失败对话框的文案：把「多快失败的」和「日志末尾」摊开，别只留一句 rc=1。"""
+    lines = []
+    if code is not None and seconds is not None:
+        if seconds < 5:
+            lines.append('构建窗口刚出现（%.1f 秒）就以退出码 %s 结束了 —— 多半是窗口被'
+                         '立刻关闭，或 npm 没能启动。' % (seconds, code))
+        else:
+            lines.append('构建以退出码 %s 结束，耗时 %.0f 秒。' % (code, seconds))
+    tail = build_log_tail(4)
+    if tail:
+        lines.append('\n.todolist-build.log 末尾：\n' + tail)
+    lines.append('\n重试：再双击一次图标，或在本文件夹执行\n'
+                 'python launch_todolist_tauri.py --rebuild')
+    return ('重建新版本失败，当前仍是旧版本。\n\n' + '\n'.join(lines) +
+            '\n\n是否仍然启动现有版本？')
 
 
 # ---------------------------------------------------------------- 前置条件探测
@@ -537,7 +585,7 @@ def main():
             out('检测到需要重建（%s），正在构建…' % reason)
         # 运行中的实例锁着 exe，必须先停掉才能覆盖 —— 否则「重建」是假动作。
         stop_running(quiet=True)
-        built = build_app(root)
+        built, build_rc, build_seconds = build_app(root)
         kind, exe = find_exe(root)
         if not built or exe is None:
             log('build failed or exe still missing (built=%s exe=%s)' % (built, exe))
@@ -547,11 +595,11 @@ def main():
             # 还有旧产物可用：征询是否照旧启动（脚本化验证时直接失败，不弹窗）
             if QUIET:
                 return 1
-            code = ctypes.windll.user32.MessageBoxW(
+            answer = ctypes.windll.user32.MessageBoxW(
                 None,
-                '重建新版本失败，当前仍是旧版本。\n\n是否仍然启动现有版本？',
+                build_failed_text(build_rc, build_seconds),
                 '待办清单 · 构建失败', 0x04 | 0x30)  # MB_YESNO | MB_ICONWARNING
-            if code != 6:  # IDYES
+            if answer != 6:  # IDYES
                 return 1
 
     if exe is None:

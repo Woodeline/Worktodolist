@@ -220,6 +220,7 @@ pub fn run() {
             workspace::fs_read,
             workspace::fs_write,
             workspace::fs_backup,
+            workspace::fs_save_as,
             git::git_autocommit,
             reminder::reminder_check,
             reminder::notify,

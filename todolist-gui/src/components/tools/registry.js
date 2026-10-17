@@ -40,7 +40,10 @@ export const TOOLS = [
     icon: 'thermometer',
     load: () => import('./RtiTool.jsx'),
     group: 'engineering',
-    layout: 'inspector',
+    // workbench 单列：答案与 Arrhenius 图顶在最上面，录入区折在最后。
+    // 不再用 inspector 的两列 —— 那套版式的前提是"左录参数、右出结果"，
+    // 而实时重算把"录入"这一步降级成了页尾的可展开区，分栏反而把答案挤窄。
+    layout: 'workbench',
     capabilities: { net: false, writes: false, files: false },
     keywords: ['耐热指数', '耐热', 'rti', '活化能', '寿命推算', 'arrhenius', '老化'],
     stateVersion: 1,

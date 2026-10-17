@@ -2962,45 +2962,15 @@ mark {
 }
 
 /* --- 结果 --- */
-.tool-hero {
-  display: flex;
-  align-items: baseline;
+
+/* 答案流：结果卡与 Arrhenius 图并排顶在最上面，桌面上一眼"答案 + 依据"都在；
+   窄屏（≤1080）再竖着摞起来，见响应式一节。答案列与图列对半分 ——
+   图是按容器宽度画的，给窄了看不清坐标，给宽了结果数字又被挤到一边。 */
+.tool-answer-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 1fr);
   gap: var(--sp-3);
-  flex-wrap: wrap;
-  padding: var(--sp-3) var(--sp-4);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--accent);
-  border-radius: var(--r-md);
-}
-
-.tool-hero-label {
-  flex: 1;
-  min-width: 220px;
-  font-size: var(--fs-xs);
-  color: var(--text-2);
-  line-height: var(--lh-snug);
-}
-
-.tool-hero-val {
-  font-family: var(--font-mono);
-  font-size: var(--fs-3xl);
-  font-weight: 600;
-  color: var(--accent);
-  line-height: 1;
-}
-
-.tool-hero-val small {
-  font-size: var(--fs-sm);
-  font-weight: 400;
-  color: var(--muted);
-}
-
-.tool-hero-sub {
-  width: 100%;
-  font-family: var(--font-mono);
-  font-size: var(--fs-2xs);
-  color: var(--muted);
+  align-items: start;
 }
 
 .tool-metrics {
@@ -3122,8 +3092,12 @@ mark {
   color: var(--muted);
 }
 
+/* 图下工具条：按钮 + 一句手势提示 + 靠右弹簧（对比页还要放"取消固定"）。
+   允许换行，窄屏上按钮才不会挤成一团。 */
 .tool-chart-tools {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: var(--sp-2);
 }
 
@@ -3158,6 +3132,84 @@ mark {
   font-size: var(--fs-2xs);
   font-style: normal;
   color: var(--muted);
+}
+
+/* --- 答案流新增件（v1.0.3） ------------------------------------------------ */
+
+/* 画布定位容器：画布上的读数片相对它定位，而不是相对整页 */
+.tool-canvas-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+/* 画布上的读数片：悬停是描边浅片，固定是强调描边。
+   默认抬到命中点上方并水平居中 —— 读数盖住数据点本身是最常见的"反而看不见数据"。
+   pointer-events 关掉，否则它会挡住画布的 mousemove / click。 */
+.tool-chip {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 10px));
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  max-width: 240px;
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font-size: var(--fs-2xs);
+  color: var(--text-2);
+  white-space: nowrap;
+  box-shadow: var(--sh-2);
+  pointer-events: none;
+}
+
+.tool-chip b {
+  font-size: var(--fs-xs);
+  color: var(--text);
+}
+
+.tool-chip.is-hover {
+  border: 1px solid var(--border-strong);
+}
+
+.tool-chip.is-pin {
+  border: 1px solid var(--accent);
+}
+
+/* 下钻表：整行可点（展开某个温度的衰减曲线），展开的行底色与其它行分开 */
+.tool-expand tbody tr:not(.tool-expand-row) {
+  cursor: pointer;
+}
+
+.tool-expand tbody tr.is-open > td {
+  background: var(--surface-2);
+}
+
+.tool-expand-row > td {
+  padding: var(--sp-2) 0 var(--sp-3);
+  background: var(--surface-2);
+}
+
+.tool-caret {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+/* 扁平行录入表：行距比结果表松一点（每一格都要能点中）。
+   同一温度组的第一行补一条上边线 —— 让"写在一起就成组"这件事看得见。 */
+.tool-grid td {
+  padding: var(--sp-1) 0;
+}
+
+.tool-grid .tool-input {
+  max-width: none;
+}
+
+.tool-group-start td {
+  border-top: 1px solid var(--border);
+}
+
+.tool-grid-hint {
+  margin-top: var(--sp-2);
 }
 
 /* 工具内的 toast：形态与全局 toast 一致，只把定位改到工具工作区的角落。
@@ -4018,6 +4070,12 @@ mark {
   .tool-layout-inspector.is-split .tool-col-in {
     position: static;
   }
+
+  /* 答案流的两列在中等宽度就摞成一列：340px 的图画不出可读的坐标，
+     硬留着只是把结果数字挤到一旁。 */
+  .tool-answer-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* --- 窄屏 / 手机：导航转横向段控条，快照列转横向条 --- */
@@ -4390,11 +4448,7 @@ mark {
     font-size: var(--fs-md);
   }
 
-  /* 工具区在手机宽度上：结果大数字降一档，表单字段独占一行 */
-  .tool-hero-val {
-    font-size: var(--fs-2xl);
-  }
-
+  /* 工具区在手机宽度上：结果大数字降一档，指标卡摞成单列 */
   .tool-metrics {
     grid-template-columns: minmax(0, 1fr);
   }

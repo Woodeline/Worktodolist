@@ -39,6 +39,8 @@ npm run build:app          # 只构建 exe（等价于 tauri build --no-bundle�
 想绕过启动器直接用，双击上面那个 exe 即可 —— `launch_todolist_tauri.py` 负责
 「判断产物是否过期 → 过期就重建 → 拉起进程 → 出问题时说清怎么修」。
 根目录的 `build_todolist_tauri.cmd` 是启动器调用的构建入口（带可见的构建窗口）。
+构建过程每次都会往 `.todolist-build.log` 写面包屑（开始时间 / 工作目录 / 解析到的
+`npm` / 退出码），构建失败时先看这个文件。
 
 ## 功能
 
