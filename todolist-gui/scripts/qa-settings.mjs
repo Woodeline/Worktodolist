@@ -226,7 +226,7 @@ async function main() {
       hasInput: !!q('.settings input, .settings textarea, .settings input[type=checkbox]'),
       footButtons: document.querySelectorAll('.settings-foot button').length,
       oldNet: !!q('#set-net-hosts') || !!q('#set-net-timeout') || !!q('#set-net-maxbytes'),
-      gearOn: !!q('.appmenu-btn.is-on'),
+      gearOn: !!q('.tabs .tab.is-on'),
       overflow: document.documentElement.scrollWidth - window.innerWidth,
     };
   })()`);

@@ -343,10 +343,23 @@ fn prune_backups(dir: &Path, keep: usize) -> Result<(), String> {
     names.sort();
     while names.len() > keep {
         let oldest = names.remove(0);
-        // 逐个删除；失败即停，不动其余文件
+        // 逐个删除，删不掉就跳过继续：单个文件被占用（杀软扫描 / 编辑器打开）
+        // 不该让后面所有过期备份都留下来——那等于"保留 30 份"的承诺只兑现一次。
         if fs::remove_file(dir.join(&oldest)).is_err() {
-            break;
+            log_prune_failure(dir, &oldest);
         }
     }
     Ok(())
+}
+
+/// 清理失败留痕。与 git.rs 的 `log_failure` 同一套思路：静默降级但留证据，
+/// 写在数据目录下而不是 stdout（用户是从桌面图标启动的，没有控制台）。
+fn log_prune_failure(dir: &Path, name: &str) {
+    if let Ok(mut fh) = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join(".todolist-backup.log"))
+    {
+        let _ = writeln!(fh, "[prune] 删除失败：{name}");
+    }
 }

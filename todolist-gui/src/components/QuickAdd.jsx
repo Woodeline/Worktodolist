@@ -28,9 +28,16 @@ export default function QuickAdd({ store, inputRef }) {
         ref={inputRef}
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="添加任务，回车创建（支持 @分类 +标签 due:日期 t:日期 (A) star:1）"
-        title="快捷键 n 聚焦"
+        placeholder="添加任务，回车创建"
+        title="支持 @分类 +项目 due:日期 t:日期 (A) star:1"
       />
+      {/* 语法提示从占位文字里挪到右端：占位文字一长，第一眼就不知道这一行是干什么的。
+          它只在不输入时出现，输入后让位给 chips 预览。 */}
+      {!text && !parsed && (
+        <span className="quick-add-hint" aria-hidden="true">
+          @分类 +项目 due:日期 (A)
+        </span>
+      )}
       {parsed && (
         <div className="chips">
           {parsed.priority && <span className="chip chip-priority">({parsed.priority})</span>}

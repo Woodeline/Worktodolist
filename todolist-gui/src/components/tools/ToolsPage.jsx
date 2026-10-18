@@ -1,18 +1,25 @@
-// 工具集外壳：左栏是工具清单，右栏是当前工具的工作区。
+// 工具集外壳：两态 —— 目录态（工具墙）与工作态（当前工具的工作区）。
 //
 // 这个组件刻意"什么都不知道"：它不认识 RTI，也不认识后面加进来的任何工具。
-// 它只读 registry、渲染清单、把选中的那个组件挂上去，外加三件外壳职责：
+// 它只读 registry、渲染清单（目录态委托给 ToolsWall）、把选中的那个组件挂上去，
+// 外加三件外壳职责：
 //   ① 只读投影（snapshot）经它透传 —— 工具拿不到 store，也就没有写入口；
 //   ② 提议确认通道（只有 capabilities.writes 授权的工具能拿到 propose）；
 //   ③ 崩溃隔离 + 打开/导出这类动作写进会话事件线。
 // 于是"继续添加更多工具"不会让它变大：新增工具只改 registry。
+//
+// 两态的边界：
+//   mode='wall'  只渲染 ToolsWall（分组卡片网格 + 搜索 + 收藏/MRU）；
+//   mode='tool'  渲染页头（返回 + 面包屑 + 风险徽标）与工具本体，
+//                本体部分与改造前一致 —— ToolBoundary / Suspense /
+//                懒加载缓存 / propose / logEvent 全部原样。
+//   对话页路由（request.id）直达工作态，不经过墙；Esc 或「← 工具集」回墙。
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GROUPS, canWrite, findTool, riskBadges, visibleTools } from './registry.js';
+import { canWrite, findTool, riskBadges, visibleTools } from './registry.js';
+import ToolsWall from './ToolsWall.jsx';
 import ToolBoundary from './ToolBoundary.jsx';
 import ProposalModal from '../ProposalModal.jsx';
 import Icon from '../Icon.jsx';
-import { useContextMenu } from '../../hooks/useContextMenu.jsx';
-import useMediaQuery from '../../hooks/useMediaQuery.js';
 import { dispatch } from '../../lib/actions.js';
 import { proposalToIntent } from '../../lib/proposals.js';
 import { logToolEvent } from '../../lib/toolEvents.js';
@@ -26,25 +33,20 @@ function lazyFor(tool) {
   return LAZY.get(tool.id);
 }
 
-function haystack(tool) {
-  return [tool.name, tool.desc, tool.detail, ...(tool.tags || []), ...(tool.keywords || [])]
-    .join(' ')
-    .toLowerCase();
-}
-
 export default function ToolsPage({ snapshot, store, request }) {
   const list = useMemo(() => visibleTools(), []);
   const [activeId, setActiveId] = useState(
     () => (findTool(request && request.id) ? request.id : list[0] && list[0].id) || null
   );
-  const [query, setQuery] = useState('');
-  const [collapsed, setCollapsed] = useState(() => new Set());
+  // 目录态是"家"：刷新回落在这里；只有带 request.id（对话页路由 / QA 直达视图）
+  // 才一进来就在工作态。
+  const [mode, setMode] = useState(() =>
+    request && request.id && findTool(request.id) ? 'tool' : 'wall'
+  );
   const [meta, setMeta] = useState(() => loadToolMeta());
   const [pending, setPending] = useState(null);
   const [busy, setBusy] = useState(false);
   const [params, setParams] = useState(null);
-  const narrow = useMediaQuery('(max-width: 768px)');
-  const { openMenu } = useContextMenu();
 
   const paneRef = useRef(null);
   const consumedSeq = useRef(0);
@@ -54,7 +56,7 @@ export default function ToolsPage({ snapshot, store, request }) {
   const handleRef = useRef(null);
   handleRef.current = store && store.dirHandleRef ? store.dirHandleRef.current : null;
 
-  /* --- 元数据（最近使用 / 收藏）：写 localStorage，属于左栏排序，不是新页面 --- */
+  /* --- 元数据（最近使用 / 收藏）：写 localStorage，属于墙的排序，不是新页面 --- */
   const persistMeta = useCallback((next) => {
     saveToolMeta(next);
     return next;
@@ -65,6 +67,11 @@ export default function ToolsPage({ snapshot, store, request }) {
     [persistMeta]
   );
 
+  const toggleFav = useCallback(
+    (id) => setMeta((m) => persistMeta(toggleFavorite(m, id))),
+    [persistMeta]
+  );
+
   const logEvent = useCallback(async (type, payload) => {
     await logToolEvent(handleRef.current, type, payload, snapshot && snapshot.today);
   }, [snapshot]);
@@ -72,12 +79,15 @@ export default function ToolsPage({ snapshot, store, request }) {
   const activate = useCallback(
     (id, source) => {
       setActiveId(id);
+      setMode('tool');
       setParams(null);
       rememberUse(id);
       logEvent('tool.open', { toolId: id, source });
     },
     [logEvent, rememberUse]
   );
+
+  const backToWall = useCallback(() => setMode('wall'), []);
 
   // 切页后聚焦：目标组件要等设置页卸载 / Suspense 解析完才挂载，
   // 所以按帧重试（沿用「切页后聚焦」的既有做法），不是只等一次 setTimeout。
@@ -101,6 +111,7 @@ export default function ToolsPage({ snapshot, store, request }) {
     consumedSeq.current = request.seq;
     if (findTool(request.id)) {
       setActiveId(request.id);
+      setMode('tool');
       rememberUse(request.id);
     }
     setParams(request.params ? { ...request.params } : null);
@@ -149,185 +160,81 @@ export default function ToolsPage({ snapshot, store, request }) {
     if (store && store.showToast) store.showToast(result ? result.reply : '已完成');
   }, [pending, busy, store, snapshot, active, logEvent]);
 
-  /* --- 左栏：检索 + 分组折叠 + 收藏/最近 --- */
-  const q = query.trim().toLowerCase();
-  const matched = useMemo(
-    () => (q ? list.filter((t) => haystack(t).includes(q)) : list),
-    [list, q]
-  );
-
-  const mruRank = (id) => {
-    const i = meta.mru.indexOf(id);
-    return i === -1 ? 999 : i;
-  };
-  const byMru = (a, b) => mruRank(a.id) - mruRank(b.id);
-  const favoriteSet = new Set(meta.favorites);
-  const favorites = meta.favorites.map((id) => findTool(id)).filter(Boolean).filter((t) => matched.includes(t));
-
-  // 窄屏（≤768）段控条上 **不做折叠也不分组**：折叠头会把高度撑成两层，
-  // 而被折叠那组的工具会连入口一起消失。这里是一个行为降级，不是样式降级。
-  const flat = narrow || Boolean(q);
-  const sections = useMemo(() => {
-    if (flat) return [{ id: '__flat', label: '', tools: matched.slice().sort(byMru) }];
-    const out = [];
-    if (favorites.length) out.push({ id: '__fav', label: '收藏', tools: favorites });
-    for (const g of GROUPS) {
-      const tools = matched.filter((t) => t.group === g.id && !favoriteSet.has(t.id)).sort(byMru);
-      if (tools.length) out.push({ id: g.id, label: g.label, tools });
-    }
-    const known = new Set(GROUPS.map((g) => g.id));
-    const orphan = matched.filter((t) => !known.has(t.group) && !favoriteSet.has(t.id)).sort(byMru);
-    if (orphan.length) out.push({ id: '__other', label: '其它', tools: orphan });
-    return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flat, matched, meta.favorites, meta.mru, favorites.length]);
-
-  const toggleCollapse = (id) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
-  const onItemContextMenu = (e, tool) => {
-    const isFav = favoriteSet.has(tool.id);
-    openMenu(e, [
-      { type: 'header', label: tool.name },
-      { type: 'item', label: '打开', onClick: () => activate(tool.id, 'nav') },
-      {
-        type: 'item',
-        label: isFav ? '取消收藏' : '收藏（置顶到左栏）',
-        checked: isFav,
-        onClick: () => setMeta((m) => persistMeta(toggleFavorite(m, tool.id))),
-      },
-    ]);
-  };
-
-  const renderItem = (tool) => {
-    const on = tool.id === activeId;
-    const isFav = favoriteSet.has(tool.id);
-    const recent = !isFav && mruRank(tool.id) < 3;
-    return (
-      <li className="tools-entry" key={tool.id}>
-        <button
-          type="button"
-          className={'tools-item' + (on ? ' is-on' : '')}
-          onClick={() => activate(tool.id, 'nav')}
-          onContextMenu={(e) => onItemContextMenu(e, tool)}
-          aria-current={on ? 'true' : undefined}
-        >
-          <span className="tools-item-icon">
-            <Icon name={tool.icon} size={15} />
-          </span>
-          <span className="tools-item-text">
-            <span className="tools-item-name">{tool.name}</span>
-            <span className="tools-item-desc">{tool.desc}</span>
-          </span>
-          {(isFav || recent || tool.beta) && (
-            <span className="tools-item-flag" title={isFav ? '已收藏' : recent ? '最近用过' : '测试中'}>
-              {isFav ? <Icon name="star" size={12} /> : recent ? <Icon name="clock" size={12} /> : null}
-              {tool.beta && <span className="tools-item-beta">beta</span>}
-            </span>
-          )}
-        </button>
-      </li>
-    );
-  };
-
-  if (!list.length) {
-    return (
-      <div className="tools">
-        <div className="tools-nav">
-          <div className="tools-nav-head">
-            <Icon name="toolbox" size={13} />
-            <span>工具集</span>
-          </div>
-        </div>
-        <div className="tool-pane">
-          <div className="tool-loading">工具集是空的。在 tools/registry.js 里登记一个工具就能用。</div>
-        </div>
-      </div>
-    );
-  }
+  /* --- Esc 回墙：只在工作态生效；表单聚焦与模态打开时不拦截 --- */
+  useEffect(() => {
+    if (mode !== 'tool') return;
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      if (pending) return; // 提议确认框自己收尾，别被一层 Esc 连关两层
+      const t = e.target;
+      if (
+        t &&
+        (t.tagName === 'INPUT' ||
+          t.tagName === 'TEXTAREA' ||
+          t.tagName === 'SELECT' ||
+          t.isContentEditable)
+      ) {
+        return;
+      }
+      setMode('wall');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mode, pending]);
 
   return (
     <div className="tools">
-      <nav className="tools-nav">
-        <div className="tools-nav-head">
-          <Icon name="toolbox" size={13} />
-          <span>工具集</span>
-          <span className="tools-nav-count">{list.length}</span>
-        </div>
-        <div className="tools-search">
-          <input
-            className="tools-search-input"
-            type="search"
-            value={query}
-            placeholder="搜索工具"
-            aria-label="搜索工具"
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-        <div className="tools-list">
-          {sections.map((sec) => {
-            const isDone = !flat && collapsed.has(sec.id);
-            return (
-              <div className="tools-group" key={sec.id || '__all'}>
-                {sec.label && (
-                  <button
-                    type="button"
-                    className="tools-group-head"
-                    aria-expanded={!isDone}
-                    onClick={() => toggleCollapse(sec.id)}
-                  >
-                    <Icon name={isDone ? 'chevron-right' : 'chevron-down'} size={12} />
-                    <span className="tools-group-label">{sec.label}</span>
-                    <span className="tools-group-count">{sec.tools.length}</span>
-                  </button>
-                )}
-                {!isDone && <ul className="tools-sublist">{sec.tools.map(renderItem)}</ul>}
+      {mode === 'wall' ? (
+        <ToolsWall tools={list} meta={meta} onOpen={activate} onToggleFav={toggleFav} />
+      ) : (
+        <section className="tool-pane" ref={paneRef}>
+          {active && (
+            <header className="tool-head">
+              <div className="tool-head-main">
+                <button
+                  type="button"
+                  className="btn btn-soft tool-back"
+                  onClick={backToWall}
+                  title="返回工具集（Esc）"
+                >
+                  <Icon name="chevron-left" size={13} />
+                  工具集
+                </button>
+                <span className="tool-head-icon">
+                  <Icon name={active.icon} size={15} />
+                </span>
+                <nav className="tool-crumb" aria-label="所在位置">
+                  <span className="tool-crumb-prefix">工具集</span>
+                  <Icon name="chevron-right" size={11} />
+                  <h2 className="tool-title" title={active.detail}>
+                    {active.name}
+                  </h2>
+                </nav>
+                <span className="spacer" />
+                <span className="tool-status">
+                  {riskBadges(active).map((b) => (
+                    <span key={b.label} className={'tool-risk is-' + b.tone}>
+                      {b.label}
+                    </span>
+                  ))}
+                </span>
               </div>
-            );
-          })}
-          {q && matched.length === 0 && <div className="tools-none">没有匹配「{query.trim()}」的工具</div>}
-        </div>
-      </nav>
-
-      <section className="tool-pane" ref={paneRef}>
-        {active && (
-          <header className="tool-head">
-            <div className="tool-head-main">
-              <span className="tool-head-icon">
-                <Icon name={active.icon} size={17} />
-              </span>
-              <h2 className="tool-title" title={active.detail}>
-                {active.name}
-              </h2>
-              <span className="spacer" />
-              <span className="tool-status">
-                {riskBadges(active).map((b) => (
-                  <span key={b.label} className={'tool-risk is-' + b.tone}>
-                    {b.label}
-                  </span>
-                ))}
-              </span>
-            </div>
-          </header>
-        )}
-        <ToolBoundary toolId={activeId}>
-          <Suspense fallback={<div className="tool-loading">正在载入工具…</div>}>
-            {Active && (
-              <Active
-                snapshot={snapshot}
-                params={params}
-                propose={propose}
-                logEvent={logEvent}
-              />
-            )}
-          </Suspense>
-        </ToolBoundary>
-      </section>
+            </header>
+          )}
+          <ToolBoundary toolId={activeId}>
+            <Suspense fallback={<div className="tool-loading">正在载入工具…</div>}>
+              {Active && (
+                <Active
+                  snapshot={snapshot}
+                  params={params}
+                  propose={propose}
+                  logEvent={logEvent}
+                />
+              )}
+            </Suspense>
+          </ToolBoundary>
+        </section>
+      )}
 
       {pending && (
         <ProposalModal

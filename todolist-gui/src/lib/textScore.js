@@ -70,6 +70,89 @@ export function similarity(query, title) {
 }
 
 /**
+ * 受限编辑距离（OSA 距离）：单字替换、单字增删、**相邻两字交换**各算一处。
+ * 只在短串上用（待办标题 ≤ 20 字），O(mn) 且无截断风险。
+ *
+ * 为什么要"相邻交换"这一档：「疫苗 → 苗疫」这类相邻换序在双字词上极常见，
+ * 经典 Levenshtein 要记两处（删+插），会把真正的单字手误挡在阈值外。
+ * 反过来说，换了字又换了序（「疫苗 → 苗役」）本就是两处，不该被容错档接走。
+ */
+export function editDistance(a, b) {
+  const s = String(a == null ? '' : a);
+  const t = String(b == null ? '' : b);
+  const m = s.length;
+  const n = t.length;
+  if (!m) return n;
+  if (!n) return m;
+  let prev2 = null;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i += 1) {
+    const cur = [i];
+    for (let j = 1; j <= n; j += 1) {
+      const cost = s[i - 1] === t[j - 1] ? 0 : 1;
+      let v = Math.min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+      if (i > 1 && j > 1 && s[i - 1] === t[j - 2] && s[i - 2] === t[j - 1]) {
+        v = Math.min(v, prev2[j - 2] + 1);
+      }
+      cur[j] = v;
+    }
+    prev2 = prev;
+    prev = cur;
+  }
+  return prev[n];
+}
+
+// 只留汉字：错字判定不该被空格、数字、标点稀释。
+function hanOnly(input) {
+  return (String(input == null ? '' : input).match(/[\u4e00-\u9fff]/g) || []).join('');
+}
+
+/**
+ * 容错档相似度：**只**认"一处错字"的命中，返回固定值 0.45。
+ *
+ * 为什么固定而不是算比例：这个函数的用途只有一个 —— 把"完全听不懂"变成
+ * "是不是这几条"。0.45 刻意卡在强匹配门槛 0.5 **之下**，所以它的结果
+ * 天生只可能进 nearMatches（澄清候选），不可能进 matches（直接执行）。
+ * 这是一道用数值表达的架构红线，不靠调用方自觉。
+ *
+ * 为什么不背拼音词典（几十 KB 起）：待办标题只有 4~8 字，同音/形近错字在这种
+ * 长度上表现为"标题里存在一个与查询只差一处的等长窗口"。允许一处编辑就已经接住了，
+ * 拼音词典并不能比它多认什么，只是把"为什么像"解释了一遍 —— 而解释不是判据。
+ *
+ * @returns {number} 0 或 0.45
+ */
+export function similarityFuzzy(query, title) {
+  // 已经算强命中的（含整串包含）不归容错档管，否则会重复给候选加分。
+  if (similarity(query, title) >= 0.5) return 0;
+  const q = hanOnly(query);
+  const t = hanOnly(title);
+  // 三个字以下没有"一处错字"可言：两字窗口几乎能和任何两字凑成距离 1。
+  if (q.length < 3 || t.length < 3) return 0;
+  for (const len of [q.length - 1, q.length, q.length + 1]) {
+    if (len < 3 || len > t.length) continue;
+    for (let i = 0; i + len <= t.length; i += 1) {
+      // 只在标题里滑与查询**等长或差一字**的窗口，不做全局对齐 ——
+      // 全局对齐会让一条长标题跟任何短句都"只差几个字"，容错档就失去意义了。
+      if (editDistance(q, t.slice(i, i + len)) <= 1) return 0.45;
+    }
+  }
+  return 0;
+}
+
+/**
+ * 容错档候选排序：语义与 rankBySimilarity 一致，但门槛就是上面那个固定值。
+ * 用途**只有一个** —— 在强匹配与常规弱匹配都空手时，再兜一批澄清候选出来。
+ */
+export function rankByFuzzy(query, items, { key = (x) => x.title } = {}) {
+  const out = [];
+  for (const item of items) {
+    const score = similarityFuzzy(query, key(item));
+    if (score > 0) out.push({ item, score });
+  }
+  return out;
+}
+
+/**
  * 在一组候选里按相似度排序。
  * 默认阈值 0.5 —— 即查询侧的 bigram 有一半以上命中才算候选。
  * 这条线是"宁可少认，不要认错"的取舍：认错了会去改用户的文件，认少了只是多问一轮。

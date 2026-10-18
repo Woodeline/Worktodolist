@@ -4,8 +4,9 @@
 // 分两层，职责不同：
 //
 //   ① 外壳契约（通用，认 registry 不认具体工具）
-//      遍历 registry 里每个可见工具，逐个激活，核对页头文案 / 标签 / 风险徽标 /
-//      版式类名 / 是否掉进崩溃页 / 本体有没有渲染出东西 / 有没有旧类名残留。
+//      遍历 registry 里每个可见工具，在卡片墙（目录态）上逐张点卡进入
+//      工作态，核对页头文案 / 风险徽标 / 版式类名 / 是否掉进崩溃页 /
+//      本体有没有渲染出东西 / 有没有旧类名残留；再核对返回与 Esc。
 //      期望值全部**从 registry 现算**，所以新增一个工具会自动进入门禁，
 //      这个脚本不需要跟着改 —— 这正是"加工具只改 registry"那句承诺的验证方式。
 //
@@ -16,7 +17,15 @@
 //
 // 顺带核对工具集外壳的两条结构约定：
 //   ① 顶栏是三个页签（对话 / 列表 / 工具），「工具」为当前页；
-//   ② 外壳不认识任何具体工具 —— 清单由 registry 驱动，加工具不改外壳。
+//   ② 外壳不认识任何具体工具 —— 墙由 registry 驱动，加工具不改外壳。
+//
+// 2026-10-17 卡片式改版后的口径变化：
+//   · 目录态探 .tools-wall / .tools-cards / .tools-card（旧的 .tools-nav /
+//     .tools-item 已随左栏一起删除）；
+//   · 工具卡数 = registry 可见工具数；预留卡（.tools-slot，虚线装饰位）
+//     按分组现算，规则与实现同源于 wallConfig.js，不另抄一份；
+//   · 卡片名改集合比较 —— 收藏置顶与 MRU 会重排，不能再逐序断言；
+//   · 墙态默认视图（?view=tools）不再直接打开第一个工具，要点卡才进工作态。
 //
 // 用法：npm run test:tools   （需要先起 dev：npm run dev -- --port 15181 --strictPort）
 //      SG_BASE=http://localhost:15181 npm run test:tools
@@ -29,11 +38,22 @@ import { pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 
-// 门禁的期望值直接来自 registry —— 不另抄一份清单，否则两边迟早漂移。
-const { visibleTools, findTool, riskBadges, canWrite } = await import(
+// 门禁的期望值直接来自 registry 与 wallConfig —— 不另抄一份清单，否则两边迟早漂移。
+const { GROUPS, visibleTools, findTool, riskBadges, canWrite } = await import(
   pathToFileURL(path.join(ROOT, 'src', 'components', 'tools', 'registry.js')).href
 );
+const { RESERVED_SLOT_LIMIT } = await import(
+  pathToFileURL(path.join(ROOT, 'src', 'components', 'tools', 'wallConfig.js')).href
+);
 const TOOL_LIST = visibleTools();
+
+// 预留卡期望数：按 registry 分组现算（组内工具数 < RESERVED_SLOT_LIMIT 才出一张）。
+// 收藏分区不渲染预留卡，所以期望值与收藏状态无关。
+const RESERVED_SLOTS = GROUPS.reduce((n, g) => {
+  const count = TOOL_LIST.filter((t) => t.group === g.id).length;
+  return n + (count > 0 && count < RESERVED_SLOT_LIMIT ? 1 : 0);
+}, 0);
+const EXPECT_GROUP_LABELS = GROUPS.map((g) => g.label);
 
 const EDGE = process.env.EDGE || [
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
@@ -239,9 +259,14 @@ async function main() {
       document.body.style.background = getComputedStyle(document.documentElement).getPropertyValue('--bg');
       return true;
     })()`, 10000);
-    // 懒加载的工具组件要等它挂上（Suspense 的 fallback 会先出现）
+    // 等这一态真的就位：tools-<id> 视图（带 request）直接进工作态，等工具本体；
+    // tools 视图先进目录态，等卡片墙。两态不同的等待目标，别互相傻等。
+    const wantTool = view.startsWith('tools-');
+    const ready = wantTool
+      ? `!!document.querySelector('.tool-layout') && !document.querySelector('.tool-loading')`
+      : `!!document.querySelector('.tools-wall')`;
     for (let i = 0; i < 40; i += 1) {
-      const ok = await evalJs(`!!document.querySelector('.tool-layout') && !document.querySelector('.tool-loading')`, 8000);
+      const ok = await evalJs(ready, 8000);
       if (ok) break;
       await sleep(120);
     }
@@ -265,71 +290,67 @@ async function main() {
   mkdirSync(OUT, { recursive: true });
 
   /* ═══════════════════════════════════════════════════════════════════
-     1. 外壳结构：三个页签 + 清单驱动的左栏 + 右侧工作区
+     1. 外壳结构：三个页签 + registry 驱动的卡片墙
      ═══════════════════════════════════════════════════════════════════ */
   await goto('tools', 1280, 900);
   const shell = await evalJs(`(() => {
     const q = window.__q;
-    const tabs = window.__qa('.tabs-group .tab').map((b) => b.textContent.trim());
-    const items = window.__qa('.tools-item');
+    const cards = window.__qa('.tools-card');
+    const grid = q('.tools-cards');
     return {
-      tabs,
-      tabCount: tabs.length,
-      tools: !!q('.tools'),
-      nav: !!q('.tools-nav'),
-      list: !!q('.tools-list'),
-      pane: !!q('.tool-pane'),
-      itemCount: items.length,
-      itemNames: items.map((b) => (b.querySelector('.tools-item-name') || {}).textContent || ''),
-      onCount: window.__qa('.tools-item.is-on').length,
-      groupHeads: window.__qa('.tools-group-head .tools-group-label').map((e) => e.textContent.trim()),
-      search: !!q('.tools-search-input'),
+      tabs: window.__qa('.tabs-group .tab').map((b) => b.textContent.trim()),
+      tabCount: window.__qa('.tabs-group .tab').length,
+      wall: !!q('.tools-wall'),
+      cards: !!grid,
+      search: !!q('.tools-wall-search input'),
       navFoot: !!q('.tools-nav-foot'),
-      navFootText: q('.tools-nav-foot') ? q('.tools-nav-foot').textContent : '',
-      head: !!q('.tool-head'),
-      // 左栏与工作区是并排的（而不是上下堆叠）
-      sideBySide: (() => {
-        const n = q('.tools-nav'); const p = q('.tool-pane');
-        return n && p ? p.getBoundingClientRect().left >= n.getBoundingClientRect().right - 2 : false;
-      })(),
+      // 墙态不该挂着工作区 —— 点卡片才进工具
+      pane: !!q('.tool-pane'),
+      cardCount: cards.length,
+      slotCount: window.__qa('.tools-slot').length,
+      // 集合比较：收藏置顶与 MRU 会改变卡片顺序，逐序断言会误报
+      cardNames: cards.map((c) => (c.querySelector('.tools-card-name') || {}).textContent || '').sort(),
+      secLabels: window.__qa('.tools-sec-name').map((e) => e.textContent.trim()),
+      cols: grid ? getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length : 0,
+      cardW: cards.length ? Math.round(cards[0].getBoundingClientRect().width) : 0,
       overflow: document.documentElement.scrollWidth - window.innerWidth,
     };
   })()`);
   check('顶栏是三个页签，且第三项是「工具」', shell.tabCount === 3 && shell.tabs[2] === '工具', JSON.stringify(shell.tabs));
-  check('工具集三段式结构到位（清单 / 工作区 / 页头）', shell.tools && shell.nav && shell.list && shell.pane && shell.head);
+  check('卡片墙结构到位（墙 / 网格 / 搜索，无旧左栏残留）', shell.wall && shell.cards && shell.search && !shell.navFoot, JSON.stringify({ wall: shell.wall, cards: shell.cards, search: shell.search, navFoot: shell.navFoot }));
+  check('墙态不挂工作区（点卡片才进工具）', shell.pane === false, `pane=${shell.pane}`);
   check(
-    `左栏工具数 = registry 可见工具数（${TOOL_LIST.length}）`,
-    shell.itemCount === TOOL_LIST.length,
-    `DOM ${shell.itemCount} vs registry ${TOOL_LIST.length}`
+    `工具卡数 = registry 可见工具数（${TOOL_LIST.length}），预留卡 ${RESERVED_SLOTS} 张`,
+    shell.cardCount === TOOL_LIST.length && shell.slotCount === RESERVED_SLOTS,
+    `卡片 ${shell.cardCount} / 预留 ${shell.slotCount}，期望 ${TOOL_LIST.length} / ${RESERVED_SLOTS}`
   );
   check(
-    '左栏工具名与 registry 逐项一致，且默认选中恰好一个',
-    JSON.stringify(shell.itemNames) === JSON.stringify(TOOL_LIST.map((t) => t.name)) && shell.onCount === 1,
-    JSON.stringify(shell.itemNames)
+    '卡片名与 registry 逐项一致（集合，不比顺序）',
+    JSON.stringify(shell.cardNames) === JSON.stringify(TOOL_LIST.map((t) => t.name).sort()),
+    JSON.stringify(shell.cardNames)
   );
-  // 分组折叠头：registry 的 GROUPS 收紧到 2 组（工程计算 / 待办数据）后，
-  // 下限随之从 3 改为 2。收藏组存在时会更多，所以用 ≥ 而不是等号。
-  check('左栏有搜索框与分组折叠头（条目 14）', shell.search === true && shell.groupHeads.length >= 2, JSON.stringify(shell.groupHeads));
-  check('左栏底部不再有开发者说明（界面以清晰为先，已移除）', shell.navFoot === false, shell.navFootText);
-  check('左栏与工作区左右并排', shell.sideBySide === true);
+  check(
+    `分区标签覆盖 registry 全部分组（${EXPECT_GROUP_LABELS.join(' / ')}）`,
+    EXPECT_GROUP_LABELS.every((l) => shell.secLabels.includes(l)),
+    JSON.stringify(shell.secLabels)
+  );
+  check('1280 宽下卡片网格 ≥4 列且卡宽 ≥200', shell.cols >= 4 && shell.cardW >= 200, `cols=${shell.cols} cardW=${shell.cardW}`);
   check('1280 宽下无横向溢出', shell.overflow <= 0, `overflow=${shell.overflow}`);
 
   /* ═══════════════════════════════════════════════════════════════════
-     2. 外壳契约 —— 逐个工具激活并核对
+     2. 外壳契约 —— 逐张点卡进入工作态，核对后返回墙
      ═══════════════════════════════════════════════════════════════════ */
   console.log('\n── 外壳契约（逐工具） ──');
   const contract = await evalJs(`(async () => {
     const q = window.__q;
-    const items = window.__qa('.tools-item');
+    const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
     const read = () => {
       const pane = q('.tool-pane');
       const layoutEl = pane ? pane.querySelector('.tool-layout') : null;
       return {
         title: q('.tool-title') ? q('.tool-title').textContent.trim() : '',
-        sub: q('.tool-head-sub') ? q('.tool-head-sub').textContent.trim() : '',
         // 必须限定在页头里取 —— 工具本体也可能用 .tool-tag 画自己的分类芯片
         // （批量优先级就有一排 @分类 / +项目），不限定就会把它们算进页头标签。
-        tags: window.__qa('.tool-head .tool-tag').map((e) => e.textContent.trim()),
         risks: window.__qa('.tool-head .tool-risk').map((e) => e.textContent.trim()),
         layout: layoutEl ? ((layoutEl.className.match(/tool-layout-([a-z]+)/) || [])[1] || '') : '',
         crashed: !!q('.tool-crash'),
@@ -340,21 +361,40 @@ async function main() {
         rendered: !!(pane && pane.querySelector('.tool-sec, .tool-empty, .tool-instant-form, .tool-metric, .tool-field')),
         // 类名中性化（rti-* → tool-*）之后不该再有旧前缀残留
         legacy: pane ? pane.querySelectorAll('[class*="rti-"]').length : 0,
-        onCount: window.__qa('.tools-item.is-on').length,
+        // 进工作态后墙应当卸载（两态互斥）
+        wallGone: !q('.tools-wall'),
       };
     };
-    const out = {};
-    for (const item of items) {
-      const name = (item.querySelector('.tools-item-name') || {}).textContent.trim();
-      item.click();
+    const waitTool = async (name) => {
       for (let i = 0; i < 80; i += 1) {
         const r = read();
-        // 等到工作区真的换成了刚点的那一个再读 —— 否则会读到上一个工具残留的 DOM
-        if (!r.loading && r.layout && r.title === name) break;
-        await new Promise((res) => setTimeout(res, 80));
+        if (!r.loading && r.layout && r.title === name && r.wallGone) return r;
+        await sleep(80);
       }
-      await new Promise((res) => setTimeout(res, 60));
-      out[name] = read();
+      return read();
+    };
+    const waitWall = async () => {
+      for (let i = 0; i < 80; i += 1) {
+        if (q('.tools-wall') && !q('.tool-title')) return true;
+        await sleep(80);
+      }
+      return false;
+    };
+    const out = {};
+    // 墙在「进工具 / 回墙」之间会整体卸载重挂载 —— 每轮都必须重新取卡片节点，
+    // 循环外捕获的数组在第二轮起全是 detached node，点了不会有反应。
+    const names = Array.from(window.__qa('.tools-card .tools-card-name')).map((e) => e.textContent.trim());
+    for (const name of names) {
+      await waitWall();
+      const card = window.__qa('.tools-card').find(
+        (c) => (c.querySelector('.tools-card-name') || {}).textContent.trim() === name
+      );
+      card.click();
+      const r = await waitTool(name);
+      out[name] = { ...r, backOk: false };
+      const back = q('.tool-back');
+      if (back) back.click();
+      out[name].backOk = await waitWall();
     }
     return out;
   })()`, 120000);
@@ -363,29 +403,117 @@ async function main() {
     const got = contract[tool.name] || {};
     const want = {
       title: tool.name,
-      // 页头已精简：说明段与分类标签不再平铺（说明改挂到标题的 title 提示上）
-      sub: '',
-      tags: [],
       risks: riskBadges(tool).map((b) => b.label),
       layout: tool.layout,
       crashed: false,
       rendered: true,
       legacy: 0,
+      wallGone: true,
+      backOk: true,
     };
     const bad = Object.keys(want).filter((k) => JSON.stringify(got[k]) !== JSON.stringify(want[k]));
     check(
-      `[${tool.id}] 页头精简 / 徽标 / 版式 / 不崩 / 有内容 / 无旧类名`,
+      `[${tool.id}] 页头 / 徽标 / 版式 / 不崩 / 有内容 / 无旧类名 / 进得出`,
       bad.length === 0,
       [bad.map((k) => `${k}: 得到 ${JSON.stringify(got[k])} 期望 ${JSON.stringify(want[k])}`).join('; '), got.crashMsg, got.crashWhere]
         .filter(Boolean)
         .join('  ||  ')
     );
   }
+
+  /* ── 2b. 墙态交互：Esc 返回、搜索过滤、收藏置顶 ─────────────────────── */
+  console.log('\n── 墙态交互 ──');
+  const esc = await evalJs(`(async () => {
+    const q = window.__q;
+    const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+    const cardOf = (name) =>
+      window.__qa('.tools-card').find((c) => (c.querySelector('.tools-card-name') || {}).textContent.trim() === name);
+    // 批量优先级的工作态第一屏就有关键字输入框（.tool-input），拿它验表单豁免
+    cardOf('批量优先级').click();
+    await sleep(500);
+    const inTool = !!q('.tool-title');
+    // 表单聚焦时 Esc 不拦 —— 在输入框上派发（会冒泡到 window），
+    // e.target 是输入框本身，外壳据此放行
+    const input = q('.tool-pane .tool-input');
+    let stayedInForm = null;
+    if (input) {
+      input.focus();
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await sleep(150);
+      stayedInForm = !!q('.tool-title');
+    }
+    // 非表单焦点：在页头上派发，应当返回墙
+    q('.tool-head').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await sleep(250);
+    return { inTool, stayedInForm, backToWall: !!q('.tools-wall') && !q('.tool-title') };
+  })()`);
+  check('Esc 从工作态返回卡片墙', esc.inTool === true && esc.backToWall === true, JSON.stringify(esc));
   check(
-    '激活工具后选中态始终唯一',
-    Object.values(contract).every((r) => r.onCount === 1),
-    JSON.stringify(Object.fromEntries(Object.entries(contract).map(([k, v]) => [k, v.onCount])))
+    '焦点在表单里时 Esc 不误返回（放行给工具自己处理）',
+    esc.stayedInForm !== false,
+    JSON.stringify(esc)
   );
+
+  const search = await evalJs(`(async () => {
+    const q = window.__q;
+    const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+    const input = q('.tools-wall-search input');
+    const snap = () => ({
+      cards: window.__qa('.tools-card').length,
+      slots: window.__qa('.tools-slot').length,
+      secNames: window.__qa('.tools-sec-name').map((e) => e.textContent.trim()),
+      none: !!q('.tools-none'),
+      names: window.__qa('.tools-card-name').map((e) => e.textContent.trim()),
+    });
+    window.__set(input, 'rti');
+    await sleep(250);
+    const hit = snap();
+    window.__set(input, '周报');
+    await sleep(250);
+    const weekly = snap();
+    window.__set(input, 'zzz-不存在的关键字');
+    await sleep(250);
+    const empty = snap();
+    window.__set(input, '');
+    await sleep(250);
+    return { hit, weekly, empty, restored: snap().cards };
+  })()`);
+  check(
+    '搜索「rti」只剩 1 张卡，且平铺（无分组头、无预留卡）',
+    search.hit.cards === 1 && search.hit.slots === 0 && search.hit.secNames.length === 0,
+    JSON.stringify(search.hit)
+  );
+  check(
+    '搜索「周报」命中周报导出（名称/关键词都可命中）',
+    search.weekly.cards === 1 && search.weekly.names[0] === '周报导出',
+    JSON.stringify(search.weekly)
+  );
+  check('搜索无命中出空态', search.empty.cards === 0 && search.empty.none === true, JSON.stringify(search.empty));
+  check(`清空搜索后恢复全部 ${TOOL_LIST.length} 张工具卡`, search.restored === TOOL_LIST.length, `restored=${search.restored}`);
+
+  const fav = await evalJs(`(async () => {
+    const q = window.__q;
+    const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+    const cardOf = (name) =>
+      window.__qa('.tools-card').find((c) => (c.querySelector('.tools-card-name') || {}).textContent.trim() === name);
+    cardOf('统计').querySelector('.tools-card-fav').click();
+    await sleep(250);
+    const on = {
+      secs: window.__qa('.tools-sec-name').map((e) => e.textContent.trim()),
+      onCount: window.__qa('.tools-card-fav.is-on').length,
+      stillWall: !!q('.tools-wall') && !q('.tool-title'),
+    };
+    // 卡片会从原分组挪到收藏区（React 重挂载），必须重新取节点
+    window.__qa('.tools-card-fav.is-on')[0].click();
+    await sleep(250);
+    return { on, offCount: window.__qa('.tools-card-fav.is-on').length, secsAfter: window.__qa('.tools-sec-name').map((e) => e.textContent.trim()) };
+  })()`);
+  check(
+    '点星标收藏：墙顶出现「收藏」区，且不顺带打开工具',
+    fav.on.secs[0] === '收藏' && fav.on.onCount === 1 && fav.on.stillWall === true,
+    JSON.stringify(fav.on)
+  );
+  check('再点一次取消收藏，现场还原', fav.offCount === 0 && !fav.secsAfter.includes('收藏'), JSON.stringify(fav));
 
   // 有工具崩了就把原始堆栈打出来 —— 页面上只有一句 message，定位不了
   const crashes = cdp.console.filter((c) => c.text.includes('tool crash'));
@@ -674,22 +802,25 @@ async function main() {
   check('粘贴后即时重算：温度组按 T 自动分好（155 / 130 两组）', pasted.status.includes('已按 2 个温度组'), pasted.status);
   check('还原示例后回到 32 行', pasted.rowsBack === 32, `rows=${pasted.rowsBack}`);
 
-  /* ── 9. 桌面窗口感：顶栏页签与工具清单的几何关系 ────────────────────── */
+  /* ── 9. 桌面几何：卡片在网格单元里占满（整卡可点） ───────────────────── */
+  await goto('tools', 1280, 900);
   const geo = await evalJs(`(() => {
-    const nav = window.__q('.tools-nav');
-    const list = window.__q('.tools-list');
-    const item = window.__q('.tools-item');
-    const cs = getComputedStyle(list);
-    // 清单项要占满左栏的内容宽度（整行可点），而不是缩成内容宽度的小胶囊
-    const content = list.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const q = window.__q;
+    const grid = q('.tools-cards');
+    const card = q('.tools-card');
+    const cs = getComputedStyle(grid);
+    const cols = cs.gridTemplateColumns.split(' ').filter(Boolean).length;
+    const gap = parseFloat(cs.columnGap) || 0;
+    // 每列宽度 = (容器宽 - 列间距×(列数-1)) / 列数；卡片要正好占满这一列
+    const cellW = (grid.clientWidth - gap * (cols - 1)) / cols;
     return {
-      navW: Math.round(nav.getBoundingClientRect().width),
-      itemW: Math.round(item.getBoundingClientRect().width),
-      contentW: Math.round(content),
-      itemFills: item.getBoundingClientRect().width >= content - 2,
+      cols,
+      cardW: Math.round(card.getBoundingClientRect().width),
+      cellW: Math.round(cellW),
+      fills: Math.abs(card.getBoundingClientRect().width - cellW) <= 2,
     };
   })()`);
-  check('左栏清单项整行可点（桌面侧栏行为）', geo.itemFills === true, JSON.stringify(geo));
+  check('卡片占满所在网格单元（整卡可点，无缩水）', geo.fills === true, JSON.stringify(geo));
 
   /* ── 10. 暗色：画布必须按暗色令牌重画，不是浅底硬贴 ─────────────────── */
   await goto(`tools-${TOOL_LIST[0].id}`, 1280, 900, true);
@@ -715,44 +846,35 @@ async function main() {
   check('暗色 1280 宽下无横向溢出', darkRes.overflow <= 0, `overflow=${darkRes.overflow}`);
   if (WANT_SHOTS) await shot('tools-dark-1280.png');
 
-  /* ── 11. 窄屏：左栏转横向段控条，工作区不横向溢出 ───────────────────── */
+  /* ── 11. 窄屏：卡片单列大卡，无横向溢出 ─────────────────────────────── */
   await goto('tools', 390, 844);
   const narrow = await evalJs(`(() => {
     const q = window.__q;
-    const nav = q('.tools-nav');
-    const pane = q('.tool-pane');
-    const list = q('.tools-list');
+    const cards = window.__qa('.tools-card');
+    const first = cards[0];
+    const grid = q('.tools-cards');
     return {
       overflow: document.documentElement.scrollWidth - window.innerWidth,
-      // 横向条必须在工作区上方（而不是继续占着左边一列）
-      navAbove: nav.getBoundingClientRect().bottom <= pane.getBoundingClientRect().top + 2,
-      navHeight: Math.round(nav.getBoundingClientRect().height),
-      // 清单从竖列改成横排。看 flex 方向本身，而不是"能不能滚"
-      listRow: getComputedStyle(list).flexDirection === 'row',
-      navHeadHidden: getComputedStyle(q('.tools-nav-head')).display === 'none',
-      descHidden: getComputedStyle(q('.tools-item-desc')).display === 'none',
-      itemsVisible: window.__qa('.tools-item').every((b) => b.getBoundingClientRect().width > 0),
-      itemCount: window.__qa('.tools-item').length,
-      tabsVisible: window.__qa('.tool-tab').every((b) => b.getBoundingClientRect().width > 0),
-      pane: !!pane,
+      cols: grid ? getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length : 0,
+      cardCount: cards.length,
+      slotCount: window.__qa('.tools-slot').length,
+      itemsVisible: cards.every((b) => b.getBoundingClientRect().width > 0),
+      firstW: first ? Math.round(first.getBoundingClientRect().width) : 0,
+      wallW: q('.tools-wall') ? Math.round(q('.tools-wall').clientWidth) : 0,
+      searchW: q('.tools-wall-search') ? Math.round(q('.tools-wall-search').getBoundingClientRect().width) : 0,
+      pane: !!q('.tool-pane'),
     };
   })()`);
   check('390 宽下无横向溢出', narrow.overflow <= 0, `overflow=${narrow.overflow}`);
+  check('390 宽下卡片单列', narrow.cols === 1, `cols=${narrow.cols}`);
   check(
-    '390 宽下左栏转为横向段控条（在工具上方，高度是一条而非一列）',
-    narrow.navAbove === true && narrow.listRow === true && narrow.navHeight < 80,
-    JSON.stringify(narrow)
+    `390 宽下全部 ${TOOL_LIST.length} 张工具卡 + ${RESERVED_SLOTS} 张预留卡都还在`,
+    narrow.itemsVisible === true && narrow.cardCount === TOOL_LIST.length && narrow.slotCount === RESERVED_SLOTS,
+    `工具卡 ${narrow.cardCount} / 预留 ${narrow.slotCount}，期望 ${TOOL_LIST.length} / ${RESERVED_SLOTS}`
   );
-  check(
-    '390 宽下收起说明性文案（段控条 / 描述），保留工具本体',
-    narrow.navHeadHidden === true && narrow.descHidden === true && narrow.pane === true
-  );
-  check(
-    `390 宽下全部 ${TOOL_LIST.length} 个工具都还有入口（不折叠、不分组）`,
-    narrow.itemsVisible === true && narrow.itemCount === TOOL_LIST.length,
-    `可见 ${narrow.itemCount} / 期望 ${TOOL_LIST.length}`
-  );
-  check('390 宽下工具内页签仍可点', narrow.tabsVisible === true);
+  check('390 宽下卡片占满墙宽（单列大卡）', narrow.firstW >= narrow.wallW - 30, `card=${narrow.firstW} wall=${narrow.wallW}`);
+  check('390 宽下搜索框全宽', narrow.searchW >= narrow.wallW - 30, `search=${narrow.searchW} wall=${narrow.wallW}`);
+  check('390 宽下墙态仍不挂工作区', narrow.pane === false, `pane=${narrow.pane}`);
   if (WANT_SHOTS) await shot('tools-390.png');
 
   /* ── 12. 老页面没被这次改动带坏（对话 / 列表仍正常） ───────────────── */

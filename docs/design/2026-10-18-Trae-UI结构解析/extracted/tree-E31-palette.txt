@@ -1,0 +1,61 @@
+body .windows.theme-icube.icube-chat-next  1440x860
+  div .fixed-titlebar-container  822x40
+    div .part.titlebar  822x40
+      div .titlebar-left  822x40
+        div .action-toolbar-container  822x40
+            div .icube-mode-tab-container  104x24
+              div .icube-mode-tab-item.icube-mode-tab-item-solo  40x20
+                span .codicon.codicon-icube-SoloSwitch  16x16
+          div .menubar-container  485x28
+            div [menubar] .menubar  485x28
+              div [menuitem] .menubar-menu-button "文件"  59x28
+              div [menuitem] .menubar-menu-button "编辑"  60x28
+              div [menuitem] .menubar-menu-button "选择"  60x28
+              div [menuitem] .menubar-menu-button "查看"  61x28
+              div [menuitem] .menubar-menu-button "转到"  62x28
+              div [menuitem] .menubar-menu-button "运行"  61x28
+              div [menuitem] .menubar-menu-button "终端"  60x28
+              div [menuitem] .menubar-menu-button "帮助"  62x28
+  div [application] .file-icons-enabled.solo-extension-view-invisible.monaco-reduce-motion  1440x860
+      div .monaco-grid-branch-node  1440x860
+        div .monaco-split-view2.vertical  1440x860
+          div .sash-container  1440x860
+          div [presentation] .monaco-scrollable-element  1440x860
+            div .split-view-container  1440x860
+              div .split-view-view.visible  1440x40
+                div [none] #workbench.parts.titlebar .part.titlebar  1436x40
+                  div .titlebar-container.windows.has-navigator-control  1436x40
+              div .split-view-view.visible  1440x800
+                div .monaco-grid-branch-node  1440x800
+                  div .monaco-split-view2.horizontal  1440x800
+              div .split-view-view.visible  1440x20
+                footer [status] #workbench.parts.statusbar .part.statusbar  1442x20
+                  div .left-items.items-container  1343x20
+                  div .right-items.items-container  79x20
+    div .monaco-aria-container  214x18
+      div [alert] .monaco-alert  214x18
+      div .notification-toast-container  468x106
+          div .notifications-list-container  450x88
+            div [list] .monaco-list.list_id_2.mouse-support "信息: 已暂时禁用所有已安装的扩展。，通知"  450x88
+              div [presentation] .monaco-scrollable-element  450x88
+                  div [dialog] #list_id_2_0 .monaco-list-row "信息: 已暂时禁用所有已安装的扩展。，通知 使用 Alt+F2 检查辅助视图中的响应"  450x88
+    div .quick-input-widget-block.dimmed  1440x860
+      div .quick-input-widget.show-file-icons  602x368
+        div .quick-input-header  600x38
+          div .quick-input-and-message  588x26
+            div .quick-input-filter  588x26
+              div .quick-input-box  588x26
+                div .monaco-findInput  588x26
+                  div .monaco-inputbox.idle.synthetic-focus  588x26
+              div .quick-input-visible-count  66x20
+        div [progressbar] .monaco-progress-container.quick-input-progress.done  600x2
+        div .quick-input-list  600x326
+          div [listbox] #quickInput_list .monaco-list.list_id_3.mouse-support "键入要运行的命令的名称。"  600x326
+            div [presentation] .monaco-scrollable-element  600x39464
+                div [option] #list_id_3_0 .monaco-list-row.focused "“文件操作需要预览”的重置选项"  588x50
+                div [option] #list_id_3_1 .monaco-list-row "帮助: 帮助文档"  588x50
+                div [option] #list_id_3_2 .monaco-list-row "帮助: 报告问题, Control+K Control+R"  588x50
+                div [option] #list_id_3_3 .monaco-list-row "帮助: 个人资料"  588x50
+                div [option] #list_id_3_4 .monaco-list-row "帮助: 关于"  588x50
+                div [option] #list_id_3_5 .monaco-list-row "帮助: 交互式编辑器操场"  588x50
+                div [option] #list_id_3_6 .monaco-list-row "帮助: 进程浏览器"  588x50

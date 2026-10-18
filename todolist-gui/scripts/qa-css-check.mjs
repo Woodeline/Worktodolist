@@ -76,6 +76,8 @@ const RUNTIME_VALUES = [
   'status-dot-running', 'status-dot-ok', 'status-dot-fail',
   'tool-ok', 'tool-fail', 'tool-running',
   'row-overdue', 'row-readonly', 'priority-none', 'snapshot-prio-none',
+  // 对话头像：className={'msg-avatar msg-avatar-' + who}
+  'msg-avatar-agent', 'msg-avatar-user', 'msg-avatar-tool',
 ];
 const runtimeMissing = RUNTIME_VALUES.filter((c) => !cssClasses.has(c));
 console.log('\n运行时拼接值缺失:', runtimeMissing.join(', ') || '无');

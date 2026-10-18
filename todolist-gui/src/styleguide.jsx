@@ -30,9 +30,11 @@ import {
   ConflictModal,
   Footer,
   MainList,
+  Overview,
 } from './App.jsx';
 import TopBar from './components/TopBar.jsx';
 import Sidebar from './components/Sidebar.jsx';
+import QuickAdd from './components/QuickAdd.jsx';
 import EditDrawer from './components/EditDrawer.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
 import SettingsPage from './components/SettingsPage.jsx';
@@ -243,6 +245,7 @@ const VIEWS = [
   'icons',
   'list',
   'list-all',
+  'list-panel',
   'chat',
   'chatempty',
   'settings',
@@ -263,12 +266,13 @@ const VIEWS = [
 //   msedge --headless --dump-dom URL | grep sg-metrics
 // 就能拿到硬数据 —— 响应式布局不能靠肉眼看截图判断。
 const PROBES = {
-  rail: '.main > *',
+  rail: '.main',
   row: '.task-row',
   layout: '.layout',
   sidebar: '.sidebar',
   topbar: '.topbar',
   tabs: '.tabs',
+  overview: '.overview',
   statusbar: '.statusbar',
   stream: '.chat-stream',
   panel: '.chat-panel',
@@ -337,25 +341,44 @@ function Shell({ view, children }) {
   );
 }
 
-function AppShell({ store, tab, listView }) {
+function AppShell({ store, tab, listView, overviewOpen = false }) {
   const s = listView ? makeStore({ ...store, view: listView }) : store;
+  const isList = tab === 'list';
+  const count = isList
+    ? (s.view === 'done' ? s.doneEntries : s.todoEntries).filter((e) => e.kind === 'task').length
+    : null;
   return (
     <div className="app">
       <Tabs tab={tab} onChange={() => {}} store={s} onOpenSettings={() => {}} />
-      {tab === 'chat' ? (
-        <ChatPanel store={s} />
-      ) : (
-        <>
-          <TopBar store={s} />
-          <div className="layout">
-            <Sidebar store={s} />
-            <main className="main">
-              <MainList store={s} query="" />
-            </main>
-          </div>
-        </>
-      )}
-      <Footer store={s} />
+      <div className="workspace">
+        {/* 侧栏开关自 2026-10-18 起在页眉最左（仅列表页）。
+            styleguide 是静态舞台，折叠状态恒为展开、点击空转 ——
+            但要把它渲染出来，否则截图与 QA 量不到这个真实存在的控件。 */}
+        <TopBar
+          store={s}
+          tab={tab}
+          count={count}
+          sidebarCollapsed={false}
+          onToggleSidebar={() => {}}
+        />
+        <div className={'content' + (isList ? ' layout' : '')}>
+          {tab === 'chat' ? (
+            <ChatPanel store={s} onOpenList={() => {}} />
+          ) : (
+            <>
+              <Sidebar store={s} />
+              <main className="main">
+                <div className="quick-add-bar">
+                  <QuickAdd store={s} inputRef={s.quickAddRef} />
+                </div>
+                <MainList store={s} query="" />
+              </main>
+            </>
+          )}
+        </div>
+        {isList && <Overview store={s} open={overviewOpen} onToggle={() => {}} />}
+        <Footer store={s} />
+      </div>
       <EditDrawer store={s} />
       <Toast toast={s.toast} onClose={s.dismissToast} />
       {s.conflict && <ConflictModal store={s} />}
@@ -596,51 +619,56 @@ function ChatFlowStage() {
   return (
     <div className="app">
       <Tabs tab="chat" onChange={() => {}} store={store} onOpenSettings={() => {}} />
-      <div className="chat-panel">
-        <div className="chat-main">
-          <div className="chat-stream">
-            <MessageFlow />
-          </div>
-          <div className="chat-input-wrap">
-            <form className="chat-input" onSubmit={(e) => e.preventDefault()}>
-              <textarea
-                rows={1}
-                defaultValue=""
-                placeholder="说一句待办就行，例如：明天交周报（Enter 发送）"
-              />
-              <button className="btn btn-primary" type="submit">
-                发送
-              </button>
-            </form>
+      <div className="workspace">
+        <TopBar store={store} tab="chat" />
+        <div className="content">
+          <div className="chat-panel">
+            <div className="chat-main">
+              <div className="chat-stream">
+                <MessageFlow />
+              </div>
+              <div className="chat-input-wrap">
+                <form className="chat-input" onSubmit={(e) => e.preventDefault()}>
+                  <textarea
+                    rows={1}
+                    defaultValue=""
+                    placeholder="说一句待办就行，例如：明天交周报（Enter 发送）"
+                  />
+                  <button className="send" type="submit" title="发送（Enter）" aria-label="发送">
+                    <Icon name="upload" size={13} />
+                  </button>
+                </form>
+              </div>
+            </div>
+            <aside className="snapshot">
+              <div className="snapshot-head">任务快照 · 9</div>
+              {TODO_ENTRIES.filter((e) => e.kind === 'task')
+                .slice(0, 8)
+                .map((t, i) => (
+                  <div className="snapshot-item" key={t.id}>
+                    <span className="snapshot-num">{i + 1}</span>
+                    <span className={`snapshot-prio${t.priority ? '' : ' snapshot-prio-none'}`}>
+                      {t.priority || '中'}
+                    </span>
+                    <span className="snapshot-title">{t.title}</span>
+                    {t.dueDate && (
+                      <span className={`snapshot-due${t.dueDate < TODAY ? ' overdue' : ''}`}>
+                        {t.dueDate < TODAY ? '⚠ ' : ''}
+                        {dayjs(t.dueDate).format('M/D')}
+                      </span>
+                    )}
+                  </div>
+                ))}
+            </aside>
           </div>
         </div>
-        <aside className="snapshot">
-          <div className="snapshot-head">任务快照 · 9</div>
-          {TODO_ENTRIES.filter((e) => e.kind === 'task')
-            .slice(0, 8)
-            .map((t, i) => (
-              <div className="snapshot-item" key={t.id}>
-                <span className="snapshot-num">{i + 1}</span>
-                <span className={`snapshot-prio${t.priority ? '' : ' snapshot-prio-none'}`}>
-                  {t.priority || '中'}
-                </span>
-                <span className="snapshot-title">{t.title}</span>
-                {t.dueDate && (
-                  <span className={`snapshot-due${t.dueDate < TODAY ? ' overdue' : ''}`}>
-                    {t.dueDate < TODAY ? '⚠ ' : ''}
-                    {dayjs(t.dueDate).format('M/D')}
-                  </span>
-                )}
-              </div>
-            ))}
-        </aside>
+        <Footer store={store} />
       </div>
-      <Footer store={store} />
     </div>
   );
 }
 
-// 设置页：与产品同构（顶栏齿轮处于打开态 + 独立页面 + 底部状态栏）。
+// 设置页：与产品同构（活动栏齿轮处于打开态 + 独立页面 + 底部状态栏）。
 // 渲染的是真实组件（当前内容是只读的快捷键速查）。
 function SettingsStage() {
   const store = makeStore({ dirReady: false });
@@ -653,16 +681,22 @@ function SettingsStage() {
         onOpenSettings={() => {}}
         settingsOpen
       />
-      <SettingsPage onClose={() => {}} />
-      <Footer store={store} />
+      <div className="workspace">
+        <TopBar store={store} tab="chat" settingsOpen />
+        <div className="content">
+          <SettingsPage onClose={() => {}} />
+        </div>
+        <Footer store={store} />
+      </div>
     </div>
   );
 }
 
-// 工具集：与产品同构（顶栏选中「工具」+ 左栏工具清单 + 右栏工具工作区）。
+// 工具集：与产品同构（活动栏选中「工具」+ 目录态卡片墙 / 工作态工具区）。
 // 渲染的是真实工具组件，所以截图里就是真实的数据录入表与真实画布。
 // toolId 非空时直达该工具（?view=tools-<id>）—— ToolsPage 的首屏就认这个 request，
-// 所以不需要模拟"从对话页路由进来"，工具拿到的 params 仍是 null。
+// 所以不需要模拟"从对话页路由进来"，工具拿到的 params 仍是 null；
+// toolId 为空时首屏是卡片墙（目录态）。
 function ToolsStage({ toolId = null }) {
   const store = makeStore({ dirReady: true });
   // 工具页拿的是**只读投影**（与产品同一条链路），不是 store 本身
@@ -676,8 +710,13 @@ function ToolsStage({ toolId = null }) {
   return (
     <div className="app">
       <Tabs tab="tools" onChange={() => {}} store={store} onOpenSettings={() => {}} />
-      <ToolsPage snapshot={snapshot} store={store} request={request} />
-      <Footer store={store} />
+      <div className="workspace">
+        <TopBar store={store} tab="tools" />
+        <div className="content">
+          <ToolsPage snapshot={snapshot} store={store} request={request} />
+        </div>
+        <Footer store={store} />
+      </div>
     </div>
   );
 }
@@ -703,6 +742,9 @@ function Root() {
       return stage(<AppShell store={makeStore()} tab="list" listView="today" />);
     case 'list-all':
       return stage(<AppShell store={makeStore()} tab="list" listView="all" />);
+    case 'list-panel':
+      // 今日概览展开态：新组件，需要一个能对照的固定视图
+      return stage(<AppShell store={makeStore()} tab="list" listView="today" overviewOpen />);
     case 'chat':
       // 真实回放：dirReady=true + 假目录句柄 → useChatAgent 还原出真实消息
       return stage(<AppShell store={makeStore({ dirReady: true })} tab="chat" />);

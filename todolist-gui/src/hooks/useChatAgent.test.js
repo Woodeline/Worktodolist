@@ -456,3 +456,96 @@ describe('提议按钮化：proposal 消息 + confirmCreate', () => {
     expect(agent.pending.kind).toBe('create');
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('multi：一句话里两件事 → 先列清单，确认后才动手', () => {
+  const seed = () => [
+    { kind: 'task', id: 'm1', title: '给供应商对账', completed: false, contexts: [], projects: [] },
+    { kind: 'task', id: 'm2', title: '提交差旅报销', completed: false, contexts: [], projects: [] },
+  ];
+
+  it('只列出两件事，不产生任何 tool_call / store 写入', async () => {
+    const { store, fs } = makeStore(seed());
+    const render = makeRenderer(store);
+    let agent = render();
+
+    await agent.send('把对账删了顺便把报销延到下个月');
+    agent = render();
+
+    expect(store.deleteTask).not.toHaveBeenCalled();
+    expect(store.updateTask).not.toHaveBeenCalled();
+    expect(agent.pending.kind).toBe('multi');
+    expect(agent.pending.candidates.map((i) => i.intent)).toEqual(['delete', 'postpone']);
+
+    const texts = agentTexts(agent);
+    expect(texts).toContain('2 件事');
+    expect(texts).toContain('删除');
+    expect(texts).toContain('延期');
+    expect(readLog(fs).some((e) => e.type === 'tool_call')).toBe(false);
+  });
+
+  it('回「2」→ 只做第二条（延期），删除那条不动', async () => {
+    const { store } = makeStore(seed());
+    const render = makeRenderer(store);
+    let agent = render();
+
+    await agent.send('把对账删了顺便把报销延到下个月');
+    agent = render();
+    await agent.send('2');
+    agent = render();
+
+    expect(store.deleteTask).not.toHaveBeenCalled();
+    expect(store.updateTask).toHaveBeenCalledTimes(1);
+    expect(store.updateTask.mock.calls[0][0]).toBe('m2');
+    expect(agent.pending).toBeNull();
+  });
+
+  it('回「都做」→ 按用户说出的顺序依次执行，两条各留一份工具卡片', async () => {
+    const { store } = makeStore(seed());
+    const render = makeRenderer(store);
+    let agent = render();
+
+    await agent.send('把对账删了顺便把报销延到下个月');
+    agent = render();
+    await agent.send('都做');
+    agent = render();
+
+    expect(store.deleteTask).toHaveBeenCalledTimes(1);
+    expect(store.updateTask).toHaveBeenCalledTimes(1);
+    const order = agent.messages
+      .filter((m) => m.role === 'tool')
+      .map((m) => m.tool.name);
+    expect(order).toEqual(['todo.delete', 'todo.postpone']);
+  });
+
+  it('回「不」→ 明确收尾，两件事都没做', async () => {
+    const { store, fs } = makeStore(seed());
+    const render = makeRenderer(store);
+    let agent = render();
+
+    await agent.send('把对账删了顺便把报销延到下个月');
+    agent = render();
+    await agent.send('不是');
+    agent = render();
+
+    expect(store.deleteTask).not.toHaveBeenCalled();
+    expect(store.updateTask).not.toHaveBeenCalled();
+    expect(agentTexts(agent)).toContain('都没做');
+    expect(agent.pending).toBeNull();
+    expect(readLog(fs).some((e) => e.type === 'tool_call')).toBe(false);
+  });
+
+  it('说不清也 neither 序号 → 清单不消失，重新问一次', async () => {
+    const { store } = makeStore(seed());
+    const render = makeRenderer(store);
+    let agent = render();
+
+    await agent.send('把对账删了顺便把报销延到下个月');
+    agent = render();
+    await agent.send('嗯这个嘛');
+    agent = render();
+
+    expect(agent.pending && agent.pending.kind).toBe('multi');
+    expect(agentTexts(agent)).toContain('回「都做」');
+  });
+});

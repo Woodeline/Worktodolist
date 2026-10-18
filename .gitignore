@@ -1,6 +1,8 @@
 # ---- 运行状态（机器相关，不入库）----
 # .todolist-launch.log：Tauri 壳的 git 自动提交失败时留痕用（src-tauri/src/git.rs），仍在用。
 .todolist-launch.log
+# .todolist-backup.log：备份清理删不掉文件时留痕用（src-tauri/src/workspace.rs）。
+.todolist-backup.log
 # Tauri 版启动器（launch_todolist_tauri.py）的 PID 文件与日志。
 .todolist-tauri.pid
 .todolist-tauri-launch.log

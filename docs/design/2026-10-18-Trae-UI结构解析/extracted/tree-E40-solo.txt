@@ -1,0 +1,32 @@
+body .solo-lite.theme-icube.vs  1440x860
+    div #solo-lite-root  1440x860
+      div .soloLiteMenubar  1440x56
+        div .soloLiteMenubarActions  84x32
+          div [menubar] .menubar  262x56
+            div [menuitem] .menubar-menu-button "文件"  59x56
+            div [menuitem] .menubar-menu-button "编辑"  60x56
+            div [menuitem] .menubar-menu-button "查看"  61x56
+            div [menuitem] .menubar-menu-button "帮助"  62x56
+        div .task-list-base.task-list-panel  300x804
+          div .task-list-base-content  300x760
+            div .task-panel-entry-buttons.task-panel-entry-buttons-fixed  300x34
+              div .task-list-new-task-item.active  276x34
+                span .task-list-new-task-text  240x20
+            div .task-panel-slide-container  300x726
+              div .task-panel-slide-page.task-panel-slide-list  300x726
+                div .task-list-wrapper.icube-solo-scrollbar  300x726
+                  div .task-panel-entry-buttons.task-panel-entry-buttons-scrollable  300x120
+                  div .task-list  300x142
+                  div .task-list  300x137
+              div .task-panel-slide-page.task-panel-slide-tree  300x726
+              div .task-panel-slide-page.task-panel-slide-executions  300x726
+          div .task-list-base-footer  300x36
+                div .accountRoot-RH11Aa.accountVariantSidebar-zVnhmb.account-host-module__accountHostRoot___X7Cuc  276x28
+        div .solo-lite-sash.solo-lite-sash-left.task-list-panel-sash  4x804
+        div .panel-container  1139x804
+          div .panel-content.solo-lite-panel-box-shadow.solo-lite-panel-border  1131x796
+            div .index-module__container___B9Lsb.in-initial-page.index-module__dragRegion___LytwP  1129x48
+                button .solo-icon-btn.solo-common-button.solo-lite-titlebar-action-btn  32x32
+            div .initial-chat-panel  1129x746
+              div .initial-chat-panel-content  1129x539
+                  div .initial-chat-panel-input-wrapper  800x172

@@ -1,0 +1,6 @@
+# 取证素材只在本机保留，不入库：DOM/tokens JSON 体量大，PNG 也可由「复现」一节
+# 的 trae-cdp + cdp-capture 命令重新生成（见 ../README.md）。
+*.png
+*.dom.json
+*.tokens.json
+*.eval.json

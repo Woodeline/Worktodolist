@@ -60,8 +60,12 @@ const PROBES = {
   layout: '.layout',
   sidebar: '.sidebar',
   topbar: '.topbar',
+  // 页眉最左的侧栏开关（2026-10-18 左侧化）：只存在于列表页
+  panelToggle: '.ctx-btn-icon',
   tabs: '.tabs',
-  rail: '.main > *',
+  // 主区本体：原型 v2 起列表不再套"阅读栏宽上限"，--rail-max 只留给对话页
+  rail: '.main',
+  overview: '.overview',
   row: '.task-row',
   checkbox: '.task-row .checkbox',
   navitem: '.nav-item',
@@ -72,11 +76,14 @@ const PROBES = {
   toolcard: '.tool-card',
   editwin: '.edit-window',
   statusbar: '.statusbar',
-  // 工具集（第三个页签）：左栏清单 + 右侧工具工作区
-  toolsNav: '.tools-nav',
+  // 工具集（第三个页签）：目录态卡片墙 + 工作态工具区。
+  // 2026-10-17 卡片式改版：左栏清单（.tools-nav/.tools-list/.tools-item）已删除，
+  // 目录态改探 .tools-wall/.tools-cards/.tools-card；.tool-pane 只在工作态存在。
+  toolsWall: '.tools-wall',
+  toolsCards: '.tools-cards',
+  toolsCard: '.tools-card',
+  toolsSec: '.tools-sec',
   toolPane: '.tool-pane',
-  toolsList: '.tools-list',
-  toolsItem: '.tools-item',
   rtiTab: '.tool-tab',
   rtiRowDel: '.tool-row-del',
 };
@@ -97,6 +104,12 @@ const CASES = [
   { name: 'mobile-360', w: 360, h: 780, view: 'list', tier: 'small' },
   { name: 'mobile-320', w: 320, h: 640, view: 'list', tier: 'small', note: '最窄兜底' },
   { name: 'narrow-390-chat', w: 390, h: 844, view: 'chat', tier: 'small', note: '对话页小屏：快照列转底部条' },
+  // 桌面档的另外三个页面各留一张对照图：外壳换过之后它们的骨架同样要验
+  { name: 'desktop-1280-chat', w: 1280, h: 800, view: 'chat', tier: 'wide' },
+  { name: 'desktop-1280-tools', w: 1280, h: 800, view: 'tools', tier: 'wide' },
+  { name: 'desktop-1280-settings', w: 1280, h: 800, view: 'settings', tier: 'wide' },
+  { name: 'desktop-1280-panel', w: 1280, h: 800, view: 'list-panel', tier: 'wide', note: '今日概览展开态' },
+  { name: 'desktop-1280-all', w: 1280, h: 800, view: 'list-all', tier: 'wide' },
   { name: 'narrow-390-drawer', w: 390, h: 844, view: 'drawer', tier: 'small', note: '编辑浮窗小屏：占满可用宽度' },
   { name: 'coarse-390', w: 390, h: 844, view: 'list', tier: 'small', coarse: true, note: '触屏命中区 ≥44px' },
   { name: 'dark-1440', w: 1440, h: 900, view: 'list', tier: 'wide', dark: true },
@@ -104,9 +117,10 @@ const CASES = [
   { name: 'dark-390-chat', w: 390, h: 844, view: 'chat', tier: 'small', dark: true },
   // 工具集（第三个页签）也必须在断点上过一遍 —— 它是最大的一块新表面
   { name: 'mid-1080-tools', w: 1080, h: 800, view: 'tools', tier: 'mid' },
-  { name: 'narrow-768-tools', w: 768, h: 900, view: 'tools', tier: 'narrow', note: '断点线上，清单转横向条' },
+  { name: 'narrow-768-tools', w: 768, h: 900, view: 'tools', tier: 'narrow', note: '断点线上，卡片网格收窄' },
   { name: 'mobile-390-tools', w: 390, h: 844, view: 'tools', tier: 'small' },
-  { name: 'coarse-390-tools', w: 390, h: 844, view: 'tools', tier: 'small', coarse: true, note: '触屏：页签与清单项命中区 ≥44px' },
+  { name: 'coarse-390-tools', w: 390, h: 844, view: 'tools', tier: 'small', coarse: true, note: '触屏：卡片与星标命中区 ≥44px' },
+  { name: 'coarse-390-tools-work', w: 390, h: 844, view: 'tools-rti', tier: 'small', coarse: true, note: '触屏：工作态页签命中区 ≥44px' },
   { name: 'dark-1280-tools', w: 1280, h: 800, view: 'tools', tier: 'wide', dark: true },
 ];
 
@@ -271,6 +285,13 @@ const MEASURE_FN = `(() => {
   };
   for (const [k, sel] of Object.entries(PROBES)) out[k] = pick(sel);
 
+  // 卡片墙的网格列数：auto-fill 的实际列数只能从计算样式读
+  // （split 后是 "318.3px 318.3px …" 这样的 used value）
+  const cardsEl = document.querySelector('.tools-cards');
+  if (cardsEl) {
+    out.cardsCols = getComputedStyle(cardsEl).gridTemplateColumns.split(' ').filter(Boolean).length;
+  }
+
   // 命中区实测 —— getBoundingClientRect 只给元素盒，
   // 触屏档的外扩是 ::before 伪元素，必须用 elementFromPoint 探出来。
   const hitBox = (sel) => {
@@ -302,7 +323,8 @@ const MEASURE_FN = `(() => {
     navitem: hitBox('.nav-item'),
     iconbtn: hitBox('.icon-btn'),
     tab: hitBox('.tab'),
-    toolsitem: hitBox('.tools-item'),
+    toolscard: hitBox('.tools-card'),
+    toolsfav: hitBox('.tools-card-fav'),
     rtitab: hitBox('.tool-tab'),
     rtidel: hitBox('.tool-row-del'),
   };
@@ -368,57 +390,63 @@ function assertions(c, m) {
   // 只有列表页有 .layout / .sidebar / .topbar / 主区 rail；对话页是另一套骨架，
   // 拿列表页的断言去套对话页只会产出噪音，所以显式分流。
   const isList = m.layout != null;
-  // 工具集有自己的骨架（左栏清单 + 右侧工作区），跟列表页那套不通用
-  const isTools = m.toolsNav != null;
+  // 工具集两态：目录态有 .tools-wall（无 .tool-pane），工作态反之。
+  // 断言按态分流，别拿一态的探针去套另一态。
+  const isTools = m.toolsWall != null || m.toolPane != null;
 
   ok('无横向溢出', !m.overflowX, `docW=${m.docW} vw=${m.vw}`);
 
   if (isList && c.tier === 'wide') {
-    ok('侧栏为竖向列', g('sidebar')?.disp === 'block' || g('sidebar')?.dir === 'column', JSON.stringify({ disp: g('sidebar')?.disp, dir: g('sidebar')?.dir }));
+    ok('侧栏为竖向列', g('sidebar')?.disp === 'flex' || g('sidebar')?.dir === 'column', JSON.stringify({ disp: g('sidebar')?.disp, dir: g('sidebar')?.dir }));
     ok('布局为横向 row', g('layout')?.dir === 'row', `layout.dir=${g('layout')?.dir}`);
-    ok('侧栏宽度 = --sidebar-w(224)', g('sidebar')?.w === 224, `w=${g('sidebar')?.w}`);
+    ok('侧栏宽度 = --sidebar-w(176)', g('sidebar')?.w === 176, `w=${g('sidebar')?.w}`);
     ok('侧栏高度撑满主区', (g('sidebar')?.h ?? 0) > 300, `h=${g('sidebar')?.h}`);
-    ok('--rail-max = 900px', m.railMax === '900px', m.railMax);
-    ok('rail 宽度 ≤ 900', (g('rail')?.w ?? 0) <= 900, `w=${g('rail')?.w}`);
-    ok('主区未被挤压（rail ≥ 560）', (g('rail')?.w ?? 0) >= 560, `w=${g('rail')?.w}`);
+    ok('--rail-max = 900px（留给对话页阅读栏）', m.railMax === '900px', m.railMax);
+    ok('主区占满剩余宽度（≥ 560）', (g('rail')?.w ?? 0) >= 560, `w=${g('rail')?.w}`);
+    ok('上下文条为单行 36px', (g('topbar')?.h ?? 0) >= 30 && (g('topbar')?.h ?? 0) <= 44, `h=${g('topbar')?.h}`);
+    ok('活动栏为 46px 竖轨', g('tabs')?.w === 46 && (g('tabs')?.h ?? 0) > 300, JSON.stringify(g('tabs')));
+    // 页眉左侧化（2026-10-18）：侧栏开关必须在页眉最左，紧贴左内边距
+    ok('侧栏开关在页眉最左', (g('panelToggle')?.x ?? 1e9) - (g('topbar')?.x ?? 0) <= 24, `toggle.x=${g('panelToggle')?.x} topbar.x=${g('topbar')?.x}`);
   }
 
   if (isList && c.tier === 'mid') {
     ok('侧栏仍为竖向', g('sidebar')?.dir !== 'row' || (g('sidebar')?.h ?? 0) > 300, `dir=${g('sidebar')?.dir} h=${g('sidebar')?.h}`);
-    ok('--sidebar-w 收紧为 196', m.sidebarVar === '196px', m.sidebarVar);
+    ok('--sidebar-w 收紧为 156', m.sidebarVar === '156px', m.sidebarVar);
     ok('--rail-max 放开为 100%', m.railMax === '100%', m.railMax);
     ok('布局仍为横向', g('layout')?.dir === 'row', `layout.dir=${g('layout')?.dir}`);
   }
 
   if (isList && (c.tier === 'narrow' || c.tier === 'small')) {
     ok('布局转纵向 column', g('layout')?.dir === 'column', `layout.dir=${g('layout')?.dir}`);
+    // 窄屏页眉更挤，开关位置更不能跑（它和面包屑在同一行）
+    ok('侧栏开关仍在页眉最左', (g('panelToggle')?.x ?? 1e9) - (g('topbar')?.x ?? 0) <= 20, `toggle.x=${g('panelToggle')?.x} topbar.x=${g('topbar')?.x}`);
     ok('侧栏转横向 flex 条', g('sidebar')?.disp === 'flex' && g('sidebar')?.dir === 'row', JSON.stringify({ disp: g('sidebar')?.disp, dir: g('sidebar')?.dir }));
     ok('侧栏高度塌成条（<80）', (g('sidebar')?.h ?? 999) < 80, `h=${g('sidebar')?.h}`);
     ok('侧栏占满宽度', Math.abs((g('sidebar')?.w ?? 0) - m.docW) <= 20, `w=${g('sidebar')?.w} docW=${m.docW}`);
     ok('侧栏在内容上方', (g('sidebar')?.y ?? 1e9) < (g('rail')?.y ?? -1), `sidebar.y=${g('sidebar')?.y} rail.y=${g('rail')?.y}`);
-    ok('顶栏换行（高度 > 80）', (g('topbar')?.h ?? 0) > 80, `h=${g('topbar')?.h}`);
+    ok('活动栏转横向（在内容上方）', (g('tabs')?.h ?? 999) <= 48 && (g('tabs')?.w ?? 0) > m.docW * 0.9, JSON.stringify(g('tabs')));
+    ok('上下文条仍是单行', (g('topbar')?.h ?? 0) >= 30 && (g('topbar')?.h ?? 0) <= 48, `h=${g('topbar')?.h}`);
     ok('rail 占满内容宽', (g('rail')?.w ?? 0) > m.docW * 0.9, `w=${g('rail')?.w} docW=${m.docW}`);
     ok('任务行未溢出', (g('row')?.w ?? 0) <= m.docW, `w=${g('row')?.w}`);
   }
 
-  // 工具集：宽中档左右并排，窄小档清单转横向段控条
+  // 工具集：目录态卡片网格（宽中档多列、窄小档单列），工作态占满宽度
   if (isTools) {
-    ok('工具集已渲染（清单 + 工作区）', g('toolsNav') != null && g('toolPane') != null);
-    if (c.tier === 'wide' || c.tier === 'mid') {
-      ok('清单为竖向列', g('toolsList')?.dir === 'column', `dir=${g('toolsList')?.dir}`);
-      ok('清单在左、工作区在右（并排）',
-        (g('toolsNav')?.x ?? 1e9) < (g('toolPane')?.x ?? -1)
-          && (g('toolPane')?.x ?? 0) >= (g('toolsNav')?.x ?? 0) + (g('toolsNav')?.w ?? 0) - 2,
-        JSON.stringify({ nav: g('toolsNav'), pane: g('toolPane') }));
-      ok('清单占满侧栏内容宽（整行可点）',
-        (g('toolsItem')?.w ?? 0) >= (g('toolsNav')?.w ?? 0) - 30, `item=${g('toolsItem')?.w} nav=${g('toolsNav')?.w}`);
-      ok('清单是高的（竖列侧栏，非一条）', (g('toolsNav')?.h ?? 0) > 300, `h=${g('toolsNav')?.h}`);
-    } else {
-      ok('清单转横向条', g('toolsList')?.dir === 'row', `dir=${g('toolsList')?.dir}`);
-      ok('清单塌成条（高度 <80）', (g('toolsNav')?.h ?? 999) < 80, `h=${g('toolsNav')?.h}`);
-      ok('清单占满宽度', Math.abs((g('toolsNav')?.w ?? 0) - m.docW) <= 20, `w=${g('toolsNav')?.w} docW=${m.docW}`);
-      ok('清单在工具上方', (g('toolsNav')?.y ?? 1e9) < (g('toolPane')?.y ?? -1), `nav.y=${g('toolsNav')?.y} pane.y=${g('toolPane')?.y}`);
-      ok('工具工作区占满内容宽', (g('toolPane')?.w ?? 0) > m.docW * 0.9, `w=${g('toolPane')?.w} docW=${m.docW}`);
+    if (m.toolsWall != null) {
+      ok('卡片墙已渲染（墙 + 网格 + 分区）', g('toolsCards') != null && g('toolsSec') != null, JSON.stringify({ cards: g('toolsCards'), sec: g('toolsSec') }));
+      if (c.tier === 'wide' || c.tier === 'mid') {
+        ok('卡片网格多列（宽档 ≥4，中档 ≥3）', (m.cardsCols ?? 0) >= (c.tier === 'wide' ? 4 : 3), `cols=${m.cardsCols}`);
+        ok('卡片宽度 ≥200', (g('toolsCard')?.w ?? 0) >= 200, `w=${g('toolsCard')?.w}`);
+        ok('墙铺满内容宽', (g('toolsWall')?.w ?? 0) > m.docW * 0.9, `w=${g('toolsWall')?.w} docW=${m.docW}`);
+      } else {
+        ok('卡片网格单列', (m.cardsCols ?? 0) === 1, `cols=${m.cardsCols}`);
+        ok('卡片占满墙宽（单列大卡）', (g('toolsCard')?.w ?? 0) >= (g('toolsWall')?.w ?? 0) - 30, `card=${g('toolsCard')?.w} wall=${g('toolsWall')?.w}`);
+        ok('卡片在视口内', (g('toolsCard')?.x ?? -1) >= 0 && (g('toolsCard')?.w ?? 0) <= m.vw, JSON.stringify(g('toolsCard')));
+      }
+    }
+    if (m.toolPane != null) {
+      ok('工作态已渲染（页头 + 工作区）', g('toolPane') != null);
+      ok('工作区占满内容宽', (g('toolPane')?.w ?? 0) > m.docW * 0.9, `w=${g('toolPane')?.w} docW=${m.docW}`);
       ok('工具内页签仍在（窄屏可切换页面）', (g('rtiTab')?.w ?? 0) > 0 && (g('rtiTab')?.disp !== 'none'), JSON.stringify(g('rtiTab')));
     }
   }
@@ -428,6 +456,8 @@ function assertions(c, m) {
   }
 
   if (c.view === 'chat' && m.panel) {
+    // 对话页没有侧栏，页眉最左不该出现侧栏开关（左侧化只发生在列表页）
+    ok('对话页页眉无侧栏开关', g('panelToggle') == null, `toggle=${JSON.stringify(g('panelToggle'))}`);
     if (c.tier === 'wide' || c.tier === 'mid') {
       ok('对话页横排', g('panel')?.dir === 'row', `panel.dir=${g('panel')?.dir}`);
     } else {
@@ -461,8 +491,15 @@ function assertions(c, m) {
       ok('复选框不被遮挡', h.checkbox != null, `hit=${JSON.stringify(h.checkbox)}`);
     }
     if (isTools) {
-      ok('工具清单项命中高 ≥44', (h.toolsitem?.h ?? 0) >= 44, `hit=${JSON.stringify(h.toolsitem)}`);
-      ok('工具内页签命中高 ≥44', (h.rtitab?.h ?? 0) >= 44, `hit=${JSON.stringify(h.rtitab)}`);
+      // 目录态：整卡天然是大命中区；星标 24px 视觉、命中区靠 ::before 外扩
+      if (m.toolsWall != null) {
+        ok('工具卡片命中高 ≥44', (h.toolscard?.h ?? 0) >= 44, `hit=${JSON.stringify(h.toolscard)}`);
+        ok('收藏星标命中区 ≥44（::before 外扩）', (h.toolsfav?.h ?? 0) >= 44 && (h.toolsfav?.w ?? 0) >= 44, `hit=${JSON.stringify(h.toolsfav)}`);
+      }
+      // 工作态：工具内页签的命中区（页签只有 22px 高，靠 coarse 段撑到 44）
+      if (m.toolPane != null) {
+        ok('工具内页签命中高 ≥44', (h.rtitab?.h ?? 0) >= 44, `hit=${JSON.stringify(h.rtitab)}`);
+      }
     }
   } else {
     // 桌面档反证：没有触屏媒体查询时，命中区应当就是视觉盒本身

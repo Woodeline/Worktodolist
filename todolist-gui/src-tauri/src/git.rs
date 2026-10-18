@@ -1,8 +1,12 @@
 //! git 自动提交：把旧 `scripts/git_autocommit.py` 的能力搬进壳里（该脚本已随之移除）。
 //!
-//! 语义与 Python 版逐条对齐：只 add 数据路径（todo.txt / done.txt / backup），
+//! 语义与 Python 版逐条对齐：只 add 数据路径（todo.txt / done.txt），
 //! 绝不碰代码；没有 git、不是仓库、没有变更、提交失败——一律**静默降级**，
 //! 因为 git 化是增强而不是依赖。
+//!
+//! 刻意**不含 `backup/`**：备份文件就是 todo.txt 每日的整份副本，而 todo.txt
+//! 本身已在版本控制里——跟踪它等于把同一份历史存两遍，且每天新增一份、历史
+//! 永不回收，仓库会无上限膨胀。要回溯历史看 todo.txt 的提交记录即可。
 
 use std::fs;
 use std::io::Write;
@@ -17,8 +21,8 @@ use crate::workspace::Workspace;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-/// 提交范围：与 Python 版的 DATA_PATHS 完全一致。
-const DATA_PATHS: [&str; 3] = ["todo.txt", "done.txt", "backup"];
+/// 提交范围：只有数据本体，不含 backup/（理由见文件头注释）。
+const DATA_PATHS: [&str; 2] = ["todo.txt", "done.txt"];
 
 #[derive(Serialize)]
 pub struct CommitReport {

@@ -208,30 +208,44 @@ export default function TaskRow({ task, store, query = '', readonly = false }) {
       <span className="task-title">
         <Highlight text={task.title} query={query} />
       </span>
-      {task.starValue ? (
-        <span className="star" title="星标">
-          <Icon name="star" size={13} fill="currentColor" />
-        </span>
-      ) : null}
-      {task.priority ? (
-        <span className={`priority ${priorityClass(task.priority)}`}>
-          {PRIORITY_LABELS[task.priority] || task.priority}
-        </span>
-      ) : (
-        // UI 展示约定：无优先级任务显示弱化的“中”，与 (A)/(B)/(C) 实心标签区分。
-        <span className="priority priority-none" title="无优先级（默认显示为中）">
-          中
-        </span>
-      )}
-      {task.dueDate ? (
-        <span className={`due${overdue ? ' overdue' : ''}`}>{dueLabel(task.dueDate, today)}</span>
-      ) : null}
-      {task.completedAt ? <span className="due">{task.completedAt} 完成</span> : null}
-      {task.contexts.map((c) => (
-        <span key={c} className="context">
-          @{c}
-        </span>
-      ))}
+      {/* 元信息收进一个右对齐的簇：优先级与截止日各占固定宽度，
+          于是整列右边缘是一条直线 —— 扫列表时不用逐行找日期在哪。 */}
+      <span className="task-meta">
+        {task.contexts.map((c) => (
+          <span key={c} className="context">
+            @{c}
+          </span>
+        ))}
+        {task.starValue ? (
+          <span className="star" title="星标">
+            <Icon name="star" size={13} fill="currentColor" />
+          </span>
+        ) : null}
+        {task.priority ? (
+          <span className={`priority ${priorityClass(task.priority)}`}>
+            {PRIORITY_LABELS[task.priority] || task.priority}
+          </span>
+        ) : (
+          // UI 展示约定：无优先级任务显示弱化的“中”，与 (A)/(B)/(C) 实心标签区分。
+          <span className="priority priority-none" title="无优先级（默认显示为中）">
+            中
+          </span>
+        )}
+        {task.completedAt ? <span className="due">{task.completedAt} 完成</span> : null}
+        {task.dueDate ? (
+          // 今天到期 / 逾期各带一层浅底：这两种状态需要在扫视时"跳出来"，
+          // 而一行里只允许一处强色，所以底色只给这两个状态。
+          <span className="due">
+            <span
+              className={
+                'due-chip' + (overdue ? ' overdue' : task.dueDate === today ? ' now' : '')
+              }
+            >
+              {dueLabel(task.dueDate, today)}
+            </span>
+          </span>
+        ) : null}
+      </span>
     </div>
   );
 }

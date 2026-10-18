@@ -8,10 +8,11 @@ import { useTodoSnapshot } from './hooks/useTodoSnapshot';
 import useDebounce from './hooks/useDebounce';
 import useHotkeys from './hooks/useHotkeys';
 import { useContextMenu } from './hooks/useContextMenu.jsx';
-import { displayOrder, todayGroups, viewTasks } from './lib/sortFilter';
+import { displayOrder, isVisibleToday, todayGroups, viewTasks } from './lib/sortFilter';
 import TopBar from './components/TopBar.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import TaskRow from './components/TaskRow.jsx';
+import QuickAdd from './components/QuickAdd.jsx';
 import EditDrawer from './components/EditDrawer.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
 import SettingsPage from './components/SettingsPage.jsx';
@@ -19,12 +20,15 @@ import ToolsPage from './components/tools/ToolsPage.jsx';
 import Icon from './components/Icon.jsx';
 
 // 三个页签是同一层级的"工作区"：对话（说）、列表（看）、工具（算）。
-// 顺序即 Ctrl+1 / 2 / 3 的绑定顺序。
+// 顺序即 Ctrl+1 / 2 / 3 的绑定顺序，也是左侧活动栏自上而下的顺序。
 export const TABS = [
   ['chat', '对话'],
   ['list', '列表'],
   ['tools', '工具'],
 ];
+
+// 活动栏是纯图标：图标只负责"认出是哪个区"，文字交给悬停提示。
+const TAB_ICONS = { chat: 'message-square', list: 'list', tools: 'toolbox' };
 
 
 export function UnsupportedPage() {
@@ -175,11 +179,22 @@ export function Footer({ store }) {
         <Icon name={dotIcon} size={11} />
       </span>
       <span>{statusText}</span>
-      <span>上次保存：{savedLabel}</span>
+      <span>上次保存 {savedLabel}</span>
       <span className="spacer" />
       <button onClick={store.manualReload}>手动重载</button>
       <button onClick={store.pickDirectory}>切换目录</button>
     </footer>
+  );
+}
+
+// 分组头：等宽小标签 + 左侧色条 + 右端计数（原型里的 .group）。
+// 不再画"延伸到底的规则线" —— 列表本身没有行分隔线，标题也不需要再画一条。
+function GroupHead({ label, count, tone }) {
+  return (
+    <div className={'group-title' + (tone === 'overdue' ? ' group-overdue' : '')}>
+      <span>{label}</span>
+      {count != null && <em>{count}</em>}
+    </div>
   );
 }
 
@@ -205,7 +220,7 @@ export function MainList({ store, query }) {
     if (doneTasks.length === 0) return <div className="empty-state">还没有已完成的任务</div>;
     return (
       <div>
-        <div className="group-title">已完成 · done.txt（只读）</div>
+        <GroupHead label="已完成 · done.txt（只读）" count={doneTasks.length} />
         {doneTasks.map((task) => (
           <TaskRow key={task.id} task={task} store={store} query={query} readonly />
         ))}
@@ -216,7 +231,7 @@ export function MainList({ store, query }) {
   const renderRawSection = () =>
     rawSection ? (
       <>
-        <div className="group-title group-overdue">未识别行（只读，已原样保留）</div>
+        <GroupHead label="未识别行 · 原样保留" count={rawEntries.length} tone="overdue" />
         {rawEntries.map((e) => (
           <div key={e.id} className="task-row row-readonly raw-line">
             <span className="raw-flag">
@@ -239,20 +254,18 @@ export function MainList({ store, query }) {
     return (
       <div>
         {groups.overdue.length > 0 && (
-          <div className="group-title group-overdue">逾期 · {groups.overdue.length}</div>
+          <GroupHead label="逾期" count={groups.overdue.length} tone="overdue" />
         )}
         {groups.overdue.map((t) => (
           <TaskRow key={t.id} task={t} store={store} query={query} />
         ))}
         {groups.dueToday.length > 0 && (
-          <div className="group-title">今天到期 · {groups.dueToday.length}</div>
+          <GroupHead label="今天到期" count={groups.dueToday.length} />
         )}
         {groups.dueToday.map((t) => (
           <TaskRow key={t.id} task={t} store={store} query={query} />
         ))}
-        {groups.noDate.length > 0 && (
-          <div className="group-title">无日期 · {groups.noDate.length}</div>
-        )}
+        {groups.noDate.length > 0 && <GroupHead label="无日期" count={groups.noDate.length} />}
         {groups.noDate.map((t) => (
           <TaskRow key={t.id} task={t} store={store} query={query} />
         ))}
@@ -262,6 +275,7 @@ export function MainList({ store, query }) {
 
   return (
     <div>
+      <GroupHead label={store.view === 'inbox' ? '收集箱' : '全部任务'} count={visible.length} />
       {visible.map((t) => (
         <TaskRow key={t.id} task={t} store={store} query={query} />
       ))}
@@ -270,8 +284,13 @@ export function MainList({ store, query }) {
   );
 }
 
-// 页签条 = 应用工具条：左边是应用菜单（原生菜单栏的位置），中间是页签，
-// 右边是设置入口（齿轮）—— 与「☰ 菜单 / Ctrl+,」三个入口指向同一张设置页。
+// ---------------------------------------------------------------------------
+// 活动栏 —— 原型把页签从"顶部横向条"改成"左侧 46px 纵向轨道"。
+//
+// 保留的契约：
+//   · 三个页签仍在 .tabs-group .tab 里，且文字内容就是页签名（QA 依赖这一条）；
+//   · 应用菜单 / 置顶 / 设置三个入口一个不少，只是从顶栏右端搬到了轨道底部。
+// ---------------------------------------------------------------------------
 export function Tabs({ tab, onChange, store, onOpenSettings, settingsOpen, alwaysOnTop, onToggleTop }) {
   const { openAt } = useContextMenu();
   const menuBtnRef = useRef(null);
@@ -294,7 +313,7 @@ export function Tabs({ tab, onChange, store, onOpenSettings, settingsOpen, alway
     const btn = menuBtnRef.current;
     if (!btn || !store) return;
     const r = btn.getBoundingClientRect();
-    openAt(r.left, r.bottom + 3, [
+    openAt(r.right + 3, r.top, [
       { type: 'item', label: '新建任务', accel: 'N', onClick: () => focusAfterSwitch(store.quickAddRef) },
       { type: 'item', label: '搜索', accel: '/', onClick: () => focusAfterSwitch(store.searchRef) },
       { type: 'item', label: '撤销上一步', accel: 'Ctrl+Z', onClick: store.undo },
@@ -364,56 +383,145 @@ export function Tabs({ tab, onChange, store, onOpenSettings, settingsOpen, alway
   };
 
   return (
-    <div className="tabs">
-      {store && (
-        <button
-          type="button"
-          className="appmenu-btn"
-          ref={menuBtnRef}
-          onClick={openAppMenu}
-          title="应用菜单"
-          aria-haspopup="menu"
-        >
-          <Icon name="menu" size={15} />
-        </button>
-      )}
+    <nav className="tabs" aria-label="工作区">
       <div className="tabs-group" role="tablist">
         {TABS.map(([id, label]) => (
           <button
             key={id}
             type="button"
-            className={`tab${tab === id ? ' active' : ''}`}
+            className={'tab' + (tab === id ? ' active' : '')}
             role="tab"
             aria-selected={tab === id}
             onClick={() => onChange(id)}
           >
-            {label}
+            <Icon name={TAB_ICONS[id]} size={17} />
+            <span className="tip">{label}</span>
           </button>
         ))}
       </div>
+
+      <span className="rail-sep" />
+
+      {store && (
+        <button
+          type="button"
+          className="tab"
+          ref={menuBtnRef}
+          onClick={openAppMenu}
+          aria-haspopup="menu"
+        >
+          <Icon name="menu" size={17} />
+          <span className="tip">应用菜单</span>
+        </button>
+      )}
+
       <span className="spacer" />
+
       {onToggleTop && (
         <button
           type="button"
-          className={'appmenu-btn' + (alwaysOnTop ? ' is-on' : '')}
+          className={'tab' + (alwaysOnTop ? ' is-on' : '')}
           onClick={onToggleTop}
           title={alwaysOnTop ? '取消窗口置顶' : '窗口置顶（总在最前）'}
           aria-pressed={Boolean(alwaysOnTop)}
         >
-          <Icon name="pin" size={15} />
+          <Icon name="pin" size={17} />
+          <span className="tip">{alwaysOnTop ? '取消置顶' : '窗口置顶'}</span>
         </button>
       )}
       {onOpenSettings && (
         <button
           type="button"
-          className={'appmenu-btn' + (settingsOpen ? ' is-on' : '')}
+          className={'tab' + (settingsOpen ? ' is-on' : '')}
           onClick={onOpenSettings}
           title="设置（Ctrl+,）"
         >
-          <Icon name="settings" size={15} />
+          <Icon name="settings" size={17} />
+          <span className="tip">设置 · Ctrl+,</span>
         </button>
       )}
-    </div>
+    </nav>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 今日概览：贴在状态栏上方的可折叠统计条（原型里的 .panel）。
+//
+// 只读派生：四个数字全部由现有 entries 现算，不写回、不改动任何任务状态。
+// ---------------------------------------------------------------------------
+export function Overview({ store, open, onToggle }) {
+  const today = dayjs().format('YYYY-MM-DD');
+
+  const stats = useMemo(() => {
+    const doneToday = store.doneEntries.filter(
+      (e) => e.kind === 'task' && e.completedAt === today
+    ).length;
+    const todayTasks = store.todoEntries.filter(
+      (e) => e.kind === 'task' && isVisibleToday(e, today)
+    );
+    const overdue = todayTasks.filter((t) => t.dueDate && t.dueDate < today).length;
+    const pool = todayTasks.length + doneToday;
+
+    // 近 7 天日均完成：窗口 [today-6, today]，分母固定 7 天 —— 今天才过半天，
+    // 用"有记录的天数"当分母会把均值得意地抬高。
+    const from = dayjs().subtract(6, 'day').format('YYYY-MM-DD');
+    const week = store.doneEntries.filter(
+      (e) => e.kind === 'task' && e.completedAt && e.completedAt >= from && e.completedAt <= today
+    ).length;
+    const highPrio = store.todoEntries.filter(
+      (e) => e.kind === 'task' && !e.completed && e.priority === 'A'
+    ).length;
+
+    return {
+      doneToday,
+      pool,
+      overdue,
+      avg: (week / 7).toFixed(1),
+      highPrio,
+    };
+  }, [store.todoEntries, store.doneEntries, today]);
+
+  return (
+    <section className={'overview' + (open ? ' is-open' : '')} aria-label="今日概览">
+      <button
+        type="button"
+        className="overview-handle"
+        onClick={onToggle}
+        aria-expanded={open}
+      >
+        <Icon name="chevron-down" size={12} className="overview-chev" />
+        <span>今日概览</span>
+        <span className="overview-meta">
+          完成 {stats.doneToday} / {stats.pool} · 逾期 {stats.overdue}
+        </span>
+      </button>
+      <div className="overview-body">
+        <div className="overview-stats">
+          <div className="stat">
+            <div className="stat-k">今日完成</div>
+            <div className="stat-v stat-ok">
+              {stats.doneToday}
+              <small>/ {stats.pool}</small>
+            </div>
+          </div>
+          <div className="stat">
+            <div className="stat-k">逾期</div>
+            <div className="stat-v stat-bad">{stats.overdue}</div>
+          </div>
+          <div className="stat">
+            <div className="stat-k">近 7 天</div>
+            <div className="stat-v">
+              {stats.avg}
+              <small>项/天</small>
+            </div>
+          </div>
+          <div className="stat">
+            <div className="stat-k">高优先级</div>
+            <div className="stat-v">{stats.highPrio}</div>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -426,6 +534,10 @@ export default function App() {
   const { onTop: alwaysOnTop, toggle: toggleAlwaysOnTop } = useAlwaysOnTop();
   const query = useDebounce(store.search, 150);
   const [tab, setTab] = useState('chat');
+  // 侧栏折叠只是"看不看目录"，不影响任何数据 —— 因此不进 store，也不落盘。
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // 今日概览默认收起：列表页首屏优先给任务行本身。
+  const [overviewOpen, setOverviewOpen] = useState(false);
   // 列表页键盘导航用的顺序：与主列表实际渲染顺序同源（displayOrder 是唯一排布口径）。
   // 只读视图（已完成）没有可选行，返回空数组让 ↑↓ 自然失效。
   const orderedIds = useMemo(() => {
@@ -433,6 +545,11 @@ export default function App() {
     const today = dayjs().format('YYYY-MM-DD');
     return displayOrder(store.todoEntries, store.view, store.sortMode, query, today).map((t) => t.id);
   }, [store.todoEntries, store.view, store.sortMode, query]);
+  // 面包屑右侧的"共 N 项"：与列表同源，已完成视图没有可选行所以单独数。
+  const listCount = useMemo(() => {
+    if (store.view === 'done') return store.doneEntries.filter((e) => e.kind === 'task').length;
+    return orderedIds.length;
+  }, [store.view, store.doneEntries, orderedIds]);
   // 设置是独立页面，不占页签：打开时主内容整体让位，Esc / 「返回」退出。
   const [settingsOpen, setSettingsOpen] = useState(false);
   // 工具页的只读投影：派生逻辑全在 lib/todoSnapshot.js（纯函数、可单测）。
@@ -537,14 +654,20 @@ export default function App() {
     onUndo: store.undo,
   });
 
-  // 设置页的全局快捷键：Ctrl+, 打开、Esc 退出；Ctrl+1/2/3 在三个页签之间切换。
-  // 这三条与页签无关（对话页里也能直接开设置、直接跳页）。
+  // 设置页的全局快捷键：Ctrl+, 打开、Esc 退出；Ctrl+1/2/3 在三个页签之间切换；
+  // Ctrl+B 折叠 / 展开侧栏（只在列表页有意义）。
+  // 这几条与页签无关（对话页里也能直接开设置、直接跳页）。
   useEffect(() => {
     const onKey = (e) => {
       if (e.ctrlKey || e.metaKey) {
         if (e.key === ',') {
           e.preventDefault();
           setSettingsOpen(true);
+          return;
+        }
+        if (e.key.toLowerCase() === 'b') {
+          e.preventDefault();
+          setSidebarCollapsed((v) => !v);
           return;
         }
         const idx = '123'.indexOf(e.key);
@@ -577,24 +700,44 @@ export default function App() {
         alwaysOnTop={alwaysOnTop}
         onToggleTop={toggleAlwaysOnTop}
       />
-      {settingsOpen ? (
-        <SettingsPage onClose={() => setSettingsOpen(false)} />
-      ) : tab === 'chat' ? (
-        <ChatPanel store={store} onOpenList={() => setTab('list')} onOpenTool={openTool} />
-      ) : tab === 'tools' ? (
-        <ToolsPage snapshot={snapshot} store={store} request={toolRequest} />
-      ) : (
-        <>
-          <TopBar store={store} />
-          <div className="layout">
-            <Sidebar store={store} />
-            <main className="main" onContextMenu={handleMainContextMenu}>
-              <MainList store={store} query={query} />
-            </main>
-          </div>
-        </>
-      )}
-      <Footer store={store} />
+
+      <div className="workspace">
+        <TopBar
+          store={store}
+          tab={tab}
+          settingsOpen={settingsOpen}
+          count={listCount}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
+        />
+
+        <div className={'content' + (!settingsOpen && tab === 'list' ? ' layout' : '')}>
+          {settingsOpen ? (
+            <SettingsPage onClose={() => setSettingsOpen(false)} />
+          ) : tab === 'chat' ? (
+            <ChatPanel store={store} onOpenList={() => setTab('list')} onOpenTool={openTool} />
+          ) : tab === 'tools' ? (
+            <ToolsPage snapshot={snapshot} store={store} request={toolRequest} />
+          ) : (
+            <>
+              <Sidebar store={store} collapsed={sidebarCollapsed} />
+              <main className="main" onContextMenu={handleMainContextMenu}>
+                <div className="quick-add-bar">
+                  <QuickAdd store={store} inputRef={store.quickAddRef} />
+                </div>
+                <MainList store={store} query={query} />
+              </main>
+            </>
+          )}
+        </div>
+
+        {!settingsOpen && tab === 'list' && (
+          <Overview store={store} open={overviewOpen} onToggle={() => setOverviewOpen((v) => !v)} />
+        )}
+
+        <Footer store={store} />
+      </div>
+
       <EditDrawer store={store} />
       <Toast toast={store.toast} onClose={store.dismissToast} />
       {store.conflict && <ConflictModal store={store} />}

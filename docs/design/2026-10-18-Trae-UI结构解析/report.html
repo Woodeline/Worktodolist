@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trae UI 结构解析（取证版）· 2026-10-18</title>
+<style>
+:root{
+  /* 令牌层：与 docs/design/2026-10-17-工具页卡片式改造方案.html §1 同口径（示波器青 · 仪器面板） */
+  --font-ui:"Segoe UI","Microsoft YaHei UI",system-ui,-apple-system,sans-serif;
+  --font-mono:"Cascadia Mono",Consolas,"JetBrains Mono",monospace;
+  --bg:#ececee; --surface:#f9f9fa; --surface-2:#ffffff;
+  --ink:#1b1d1f; --ink-2:#4a4f55; --ink-3:#767c84;
+  --line:#d6d7db; --line-2:#e6e7ea;
+  --accent:#0e7490; --accent-soft:rgba(14,116,144,.10);
+  --danger:#b3261e; --warn:#8a5a00; --ok:#146b41;
+  --ring:0 0 0 2px rgba(14,116,144,.4);
+  /* 本文专用：证据分级色 */
+  --t-measured:#0e7490; --t-static:#5b4bb5; --t-guess:#8a5a00; --t-todo:#b3261e;
+}
+*{box-sizing:border-box}
+body{margin:0;padding:32px 20px 96px;background:var(--bg);color:var(--ink);
+  font:15px/1.72 var(--font-ui);}
+main{max-width:1080px;margin:0 auto;background:var(--surface);border:1px solid var(--line);
+  border-radius:10px;padding:34px 40px 48px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+h1{font-size:27px;line-height:1.3;margin:0 0 6px;letter-spacing:.2px}
+h2{font-size:20px;margin:44px 0 12px;padding-bottom:8px;border-bottom:2px solid var(--accent-soft);
+  scroll-margin-top:16px}
+h3{font-size:16px;margin:26px 0 8px;color:var(--ink-2)}
+h4{font-size:14px;margin:18px 0 6px;color:var(--ink-2)}
+p{margin:10px 0}
+ul,ol{margin:10px 0;padding-left:24px}
+li{margin:5px 0}
+code{font:12.5px/1.5 var(--font-mono);background:#eef0f2;border:1px solid var(--line-2);
+  border-radius:3px;padding:1px 5px;color:#1f2a2e;word-break:break-all}
+pre{background:#1b1d1f;color:#e6e7ea;border-radius:6px;padding:12px 14px;overflow:auto;
+  font:12px/1.6 var(--font-mono);border:1px solid #2c2f33}
+pre code{background:none;border:none;color:inherit;padding:0}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px;background:var(--surface-2)}
+th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+th{background:#f1f2f4;font-weight:600;white-space:nowrap}
+tbody tr:nth-child(even){background:#fbfbfc}
+.meta{color:var(--ink-3);font-size:13px;margin:0 0 22px}
+.toc{background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--accent);
+  border-radius:6px;padding:14px 18px;font-size:13.5px}
+.toc ol{margin:6px 0 0;padding-left:20px;columns:2;column-gap:28px}
+.toc li{margin:3px 0;break-inside:avoid}
+a{color:var(--accent);text-decoration:none;border-bottom:1px dotted var(--accent)}
+a:hover{background:var(--accent-soft)}
+.tag{display:inline-block;font:11px/1.5 var(--font-mono);border-radius:3px;padding:0 6px;
+  border:1px solid currentColor;white-space:nowrap;margin-right:4px;vertical-align:1px}
+.t-measured{color:var(--t-measured)} .t-static{color:var(--t-static)}
+.t-guess{color:var(--t-guess)} .t-todo{color:var(--t-todo)}
+.ev{font:11.5px/1.4 var(--font-mono);color:var(--ink-3)}
+.callout{border-left:3px solid var(--accent);background:var(--accent-soft);padding:12px 16px;
+  border-radius:0 6px 6px 0;margin:16px 0}
+.callout.warn{border-color:var(--danger);background:rgba(179,38,30,.07)}
+.callout.note{border-color:var(--warn);background:rgba(138,90,0,.07)}
+.kv{font-size:13px} .kv td:first-child{white-space:nowrap;color:var(--ink-2);width:190px}
+.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.strike{text-decoration:line-through;color:var(--ink-3)}
+hr{border:none;border-top:1px solid var(--line);margin:34px 0}
+figure{margin:16px 0;padding:0}
+figure img{max-width:100%;border:1px solid var(--line);border-radius:6px;display:block}
+figcaption{font-size:12.5px;color:var(--ink-3);margin-top:6px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12.5px;margin:8px 0 0}
+.skel{background:repeating-linear-gradient(45deg,#f6f6f8,#f6f6f8 8px,#eff0f3 8px,#eff0f3 16px);
+  border:1px dashed var(--line);border-radius:6px;padding:12px 16px;font-size:13px;color:var(--ink-2)}
+</style>
+</head>
+<body>
+<main>
+
+<h1>Trae UI 结构解析（取证版）</h1>
+<p class="meta">
+  日期 2026-10-18 ｜ 采样对象 Trae 1.107.1（<code>Electron/39.2.7</code> · <code>Chrome/142.0.7444.235</code> · commit <code>77f41624</code>）
+  ｜ 方法 运行时 CDP 截图 + DOM 快照 + 截图像素测距 + 明文 CSS 反查 ｜ 产出形态 <strong>结构解析报告，不含 React 复刻代码</strong>
+  ｜ 阶段 <strong>v0.2</strong>：<span class="tag t-static">静态</span>A9 / <span class="tag t-measured">实测</span>A11 离线补证已完成，剩 6 格需探针窗口的证据（见 §13）
+</p>
+
+<div class="callout warn">
+  <strong>本页所有数字的来源纪律。</strong>每条结论后挂证据分级标签：<br>
+  <div class="legend">
+    <span><span class="tag t-measured">实测·DOM</span>CDP <code>Runtime.evaluate</code> 取到的真实节点尺寸</span>
+    <span><span class="tag t-measured">实测·像素</span>对已存 PNG 做零依赖解码 + 众数色分层测距（<code>tools/png-measure.mjs</code>）</span>
+    <span><span class="tag t-static">静态</span>反查安装目录明文 CSS / JS bundle，未在运行时验证</span>
+    <span><span class="tag t-guess">推测</span>由证据外推，未验证</span>
+    <span><span class="tag t-todo">待补</span>骨架位，缺证据，附了取数命令</span>
+  </div>
+  <p style="margin:8px 0 0"><strong>冲突时以截图与 DOM 为准</strong>，静态 CSS 只用于结构类名与规则统计（原因见 §9.1）。</p>
+</div>
+
+<nav class="toc">
+  <strong>目录</strong>
+  <ol>
+    <li><a href="#s1">目标 · 非目标 · 约束</a></li>
+    <li><a href="#s2">结论速览（15 条）</a></li>
+    <li><a href="#s3">取证环境与方法</a></li>
+    <li><a href="#s4">运行时架构：4 个渲染目标</a></li>
+    <li><a href="#s5">章一 · 工作台（IDE 外壳）</a></li>
+    <li><a href="#s6">章二 · SOLO / Agent 窗口</a></li>
+    <li><a href="#s7">章三 · 首次引导页</a></li>
+    <li><a href="#s8">章四 · 悬浮球</a></li>
+    <li><a href="#s9">令牌体系：三层 · 双通道 · 多份拷贝</a></li>
+    <li><a href="#s10">主题矩阵与视图矩阵覆盖度</a></li>
+    <li><a href="#s11">可迁移性评估（对 Worktodolist）</a></li>
+    <li><a href="#s12">风险 · 坑 · 工程约定</a></li>
+    <li><a href="#s13">待补证据与验证动作</a></li>
+    <li><a href="#s14">附录 · 工具与复现</a></li>
+  </ol>
+</nav>
+
+<h2 id="s1">1. 目标 · 非目标 · 约束</h2>
+<table class="kv">
+  <tr><td>目标</td><td>把 Trae 的界面拆到「分区—组件—令牌—状态」四层可核对的粒度，产出能直接指导 Worktodolist UI 决策的结构解析报告。</td></tr>
+  <tr><td>非目标</td><td>① 不做 React 复刻、不产出可运行组件代码；② 不做像素级视觉还原验收；③ 不评测算力/模型效果；④ 不涉及 Trae 的后端、账号、协议。</td></tr>
+  <tr><td>证据来源</td><td>运行中的 Trae：CDP 截图 + DOM 快照 + 运行时 CSS 变量；辅以安装目录明文 CSS 反查。<strong>不接受</strong>「看官方介绍页」。</td></tr>
+  <tr><td>落点</td><td><code>docs/design/2026-10-18-Trae-UI结构解析/</code>（本报告 <code>report.html</code> + <code>notes/</code> + <code>tools/</code> + <code>evidence/</code> + <code>extracted/</code>）。</td></tr>
+  <tr><td>硬约束（用户已定）</td><td>① <strong>不重启、不干扰用户真实 Trae 实例</strong>（走独立 profile 路线）；② 不碰用户登录凭据；③ 不改动 <code>todolist-gui/src</code> 与 27 个未提交文件；④ 不把 Trae 的 CSS/字体/图标资产复制进产品；⑤ 大体积原始 dump 不进 git。</td></tr>
+  <tr><td>采样偏差（必读）</td><td>全部证据来自<strong>探针 profile</strong>：未登录、扩展被 <code>--disable-extensions</code> 禁用、fixture 工作区、窗口 1440×900（引导页 1000×680）。因此「已暂时禁用所有已安装的扩展」通知、「登录」入口、SOLO 登录引导等<strong>是探针造成的，不是 Trae 默认状态</strong>。<span class="ev">notes/00 §4 · notes/01 §5</span></td></tr>
+</table>
+
+<h2 id="s2">2. 结论速览（15 条）</h2>
+<table>
+  <thead><tr><th>#</th><th>结论</th><th>分级 / 证据</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Trae 的 UI 不是单页应用，而是 <strong>4 个独立渲染目标</strong>：workbench、solo-lite（Agent 窗口）、setup（引导）、floatingButton（悬浮球）。任何「在主窗口 DOM 里找 AI 面板」的尝试都是错的。</td><td><span class="tag t-measured">实测·DOM</span><code>/json/list</code> target 表 <span class="ev">notes/00 §2</span></td></tr>
+    <tr><td>2</td><td>「Agent 是独立窗口」指独立 <code>BrowserWindow</code> + 独立渲染进程，<strong>不是独立设计体系</strong>：三份 CSS 的规则块只差裁剪量（9978 / 9379 / 7143），布局类几乎同量。</td><td><span class="tag t-static">静态</span><code>extracted/*.json</code> + <span class="ev">notes/02 §3</span></td></tr>
+    <tr><td>3</td><td>工作台纵向骨架实测：<strong>标题栏 40 / 主体 800 / 状态栏 20</strong>，横向 <strong>活动栏 44 / 侧栏 294 / 编辑器 516 / 右侧辅助栏 574</strong>，sash 固定 4px。</td><td><span class="tag t-measured">实测·DOM</span><span class="tag t-measured">实测·像素</span>E30 · E34 · <a href="#s5">§5.1</a></td></tr>
+    <tr><td>4</td><td>像素测距与运行时令牌<strong>双向对账成功</strong>：实测活动栏底色 <code>#222427</code> = <code>--vscode-activityBar-background</code>，实测内容区 <code>#1a1b1d</code> = <code>--vscode-editor-background</code>。说明测距结果可信，也说明 Trae 未在此层做渐变/纹理。</td><td><span class="tag t-measured">实测·像素</span>+<span class="tag t-measured">实测·DOM</span>E30/E34 · <a href="#s9">§9.3</a></td></tr>
+    <tr><td>5</td><td>令牌表<strong>不可能从 CSS 反查得到</strong>：静态 CSS 只有 61（工作台）/47（SOLO）个自定义属性名，运行时 <code>:root</code> 上有 3919 / 4388 个。<code>--vscode-*</code> 由主题服务运行时生成。</td><td><span class="tag t-measured">实测·DOM</span>+<span class="tag t-static">静态</span><span class="ev">notes/02 §1</span></td></tr>
+    <tr><td>6</td><td>Trae 自研令牌通过<strong>两条通道</strong>下发：SOLO/React 层吃裸名 <code>--bg-bg-*</code>，工作台层吃镜像 <code>--vscode-icube--bg-bg-*</code>。<strong>机制已在明文 bundle 里坐实（A9）</strong>：主题贡献注册 <strong>102</strong> 个 <code>icube--*</code> 颜色 id + <strong>5</strong> 条字面量定义（渐变/滚动阴影，颜色注册表不收非颜色）= <strong>107</strong>，与运行时快照的 107 条镜像<strong>双向差集为 0（覆盖率 100%）</strong>；全量检索<strong>没有任何字符串拼接点</strong> → 前缀是<strong>打包期命名</strong>，不是运行时生成。同名 94 条中 90 条取值不同，原因是两个窗口当时分别处于暗/亮主题。</td><td><span class="tag t-measured">实测·DOM</span>E30 × E40 对账 + <span class="tag t-static">静态</span><code>tools/a9-mirror-hunt.mjs</code> · <a href="#s9">§9.2</a></td></tr>
+    <tr><td>7</td><td>按裸名统计，自研令牌 SOLO 601 条 vs 工作台 101 条（6 倍）；但把注入 <code>--vscode-</code> 命名空间的 <code>icube</code> 部分算进来后是 1597 vs 1099。<strong>结论修正：AI 层不是「另建一套」，而是在同一套之上用了更多细粒度令牌。</strong></td><td><span class="tag t-measured">实测·DOM</span><a href="#s9">§9.1</a>（含对 notes/02 的更正）</td></tr>
+    <tr><td>8</td><td>Trae 没有自建图标字体，沿用 <code>codicon</code>（1094 个类名，704 条 <code>--vscode-icon-icube-*</code> 只是往 codicon 私有区加字形）。</td><td><span class="tag t-static">静态</span>+<span class="tag t-measured">实测·DOM</span><span class="ev">notes/02 §4</span></td></tr>
+    <tr><td>9</td><td>字体只有两套：<code>SF Pro Text</code>（UI）与 <code>JetBrains Mono</code>（代码）；代码字重 <code>450</code>（非整百，是为该字体做的微调）。</td><td><span class="tag t-measured">实测·DOM</span><code>--font-family-*</code> · <code>--font-weight-code</code></td></tr>
+    <tr><td>10</td><td>同一产品里存在<strong>两套界面语言</strong>：工作台是直角分栏（sash 4px、无投影），SOLO 是圆角卡片（<strong>radius 16px + 投影</strong>、四周 8px 画布留白）。这是给本项目参考时最需要主动取舍的一点。</td><td><span class="tag t-measured">实测·DOM</span><span class="tag t-measured">实测·像素</span>E30 vs E40 · <a href="#s6">§6.2</a></td></tr>
+    <tr><td>11</td><td>引导页全程<strong>无需登录</strong>即可进入工作台，登录只影响 AI 功能。这是本次能在独立 profile 里拿到真实外壳 UI 的前提，也意味着<strong>不需要碰用户凭据</strong>。</td><td><span class="tag t-measured">实测·DOM</span><span class="ev">notes/00 §3</span></td></tr>
+    <tr><td>12</td><td><strong>主题不跨渲染目标同步</strong>：引导页选暗色 → 工作台 <code>vs-dark</code>，SOLO 窗口仍是 <code>vs</code>（亮）。所以主题矩阵必须按 target 分别设置与验证，不能假设一个开关管全局。</td><td><span class="tag t-measured">实测·DOM</span><code>body.class</code> 比对 · <span class="ev">notes/00 §3</span></td></tr>
+    <tr><td>13</td><td>主题信息写在 <code>body.className</code>（<code>vs-dark</code> / <code>vs</code> / <code>theme-icube</code> / <code>solo-lite</code>），<strong>不在</strong> <code>data-vscode-theme-name</code>。读错位置会得到「产品未暴露主题」的假结论。</td><td><span class="tag t-measured">实测·DOM</span><span class="ev">notes/02 §6</span></td></tr>
+    <tr><td>14</td><td>取证方法本身有可复用产出：<strong>「连续多格 PNG 字节数/DOM 节点数完全相同 ⇒ 该格无效」</strong>。本轮靠这条查出模态「工作区信任」对话框吞掉了 6 格输入。</td><td><span class="tag t-measured">实测·DOM</span><span class="ev">notes/01 §3</span></td></tr>
+    <tr><td>15</td><td><strong>同一族裸名令牌在 Trae 装机包里至少有 9 个文件、两套互不相同的取值</strong>：如 <code>--bg-bg-base-secondary</code> 的亮色档，一份拷贝是 <code>#edeff2</code>（钩子 <code>body.icube-chat-next.light</code>），另一份是 <code>#f5f5f5</code>（钩子 <code>.vs.solo-lite</code>）；暗色档分别是 <code>#222427</code> 与 <code>#262626</code>；而 <code>dark-blue</code> 主题在 <code>solo-lite</code> 那份里<strong>根本没实现</strong>，直接回落成与 <code>dark</code> 同值。这解释了 §9.3 里「E40 实测 <code>#f5f5f5</code> 对不上 ai-modules-chat 的 <code>#edeff2</code>」——<strong>不是测错，是产品内部有多份拷贝</strong>。</td><td><span class="tag t-static">静态</span><code>tools/a9-mirror-hunt.mjs … --copies --bg-bg-base-secondary</code> · <a href="#s9">§9.2.1</a></td></tr>
+  </tbody>
+</table>
+
+<h2 id="s3">3. 取证环境与方法</h2>
+<table class="kv">
+  <tr><td>宿主</td><td>Trae 1.107.1（VS Code fork），安装于 <code>%LOCALAPPDATA%\Programs\Trae</code></td></tr>
+  <tr><td>运行时</td><td><code>@aha-kit/electron@39.2.7</code> → Electron 39 / Chrome 142.0.7444.235 / V8 14.2 <span class="tag t-static">静态</span>package.json</td></tr>
+  <tr><td>注入方式</td><td><code>--remote-debugging-port=9333</code> + 独立 <code>--user-data-dir=%TEMP%\trae-cdp-probe</code>。<strong>Chromium 136+ 对默认 profile 忽略调试端口的限制未触发</strong>，正因用了独立 profile。<span class="tag t-measured">实测·DOM</span></td></tr>
+  <tr><td>客户端</td><td>Node v26.7.0 自带全局 <code>WebSocket</code> + <code>fetch</code>，零依赖。<span class="tag t-measured">实测</span>已跑通</td></tr>
+  <tr><td>被采样工作区</td><td><code>%TEMP%\trae-ui-fixture</code>（1 次提交 / 1 个已改文件 <code>src/util/format.js</code> / 1 个未跟踪 <code>CHANGELOG.md</code>）——故意造出「有 git、有改动、有未跟踪」三种状态，用来把 SCM 视图的各分支采全，同时保证真实仓库不被打开。</td></tr>
+  <tr><td>门禁判据</td><td>不看 <code>/json/version</code> 是否可达（它约 0.5s 就应答，但 <code>/json/list</code> 仍是 <code>[]</code>），必须<strong>轮询到 <code>"type":"page"</code> 出现</strong>。否则所有 DOM 采样拿到空树。<span class="tag t-measured">实测</span><span class="ev">notes/00 §1</span></td></tr>
+  <tr><td>采样命令</td><td><pre><code>node tools/cdp-capture.mjs --name E34-terminal --match workbench.html \
+     --press "Control+grave" --settle 1500 --max-nodes 400 --max-depth 24</code></pre>
+     一次产出 <code>evidence/&lt;name&gt;.png</code> + <code>.dom.json</code> + <code>.tokens.json</code>（+ 可选 <code>.eval.json</code>）。</td></tr>
+  <tr><td>像素测距</td><td><pre><code>node tools/png-measure.mjs evidence/E34-terminal.png \
+     --cuts row:430 --cuts col:700 --from 40 --win 400 --threshold 4</code></pre>
+     自写零依赖 PNG 解码（IHDR/IDAT + zlib + 5 种滤波还原），取<strong>每列/每行的众数色</strong>再找跳变点；用众数而非单像素，是为了不被文字/图标的抗锯齿边缘制造假边界。校准过程：单像素 + 阈值 30 在 <code>y=400</code> 切出 <strong>9 段</strong>（多为文字造成的假段）；改为列众数色 + 阈值 4 后得到 <strong>6 个切点 44 / 338 / 342 / 858 / 862 / 1436</strong>，逐一与真实 sash（4px）和窗口边框对应，且 E30/E34/E37/E38/E39 五帧位置一致。<span class="tag t-measured">实测·像素</span></td></tr>
+</table>
+
+<h2 id="s4">4. 运行时架构：4 个渲染目标</h2>
+<table>
+  <thead><tr><th>target title</th><th>入口 HTML</th><th>对应明文 CSS 包</th><th>body 主题类</th><th>本报告章节</th></tr></thead>
+  <tbody>
+    <tr><td><code>TRAE</code></td><td><code>out/vs/code/electron-browser/workbench/workbench.html</code></td><td><code>workbench.desktop.main.css</code> 1.26MB</td><td><code>windows theme-icube icube-chat-next vs-dark</code></td><td><a href="#s5">§5 工作台</a></td></tr>
+    <tr><td><code>Agent</code></td><td><code>out/vs/code/electron-browser/solo/solo-lite.html</code></td><td><code>workbench.desktop.main.solo-lite.css</code> 1.18MB（另有 <code>-slim</code> 0.88MB）</td><td><code>solo-lite theme-icube vs windows icube-simple-style light</code></td><td><a href="#s6">§6 SOLO</a></td></tr>
+    <tr><td><code>setup</code>（引导）</td><td><code>setup.html</code></td><td>React + styled-components 打包</td><td>无 <code>vs</code> 类；<code>#app</code> 单根</td><td><a href="#s7">§7 引导页</a></td></tr>
+    <tr><td><code>floatingButton.html</code></td><td><code>out/vs/platform/iCubeFloatingChat/electron-main/media/</code></td><td>—</td><td>—</td><td><a href="#s8">§8 悬浮球</a> <span class="tag t-todo">待补</span></td></tr>
+  </tbody>
+</table>
+<p>另有第 5 个 target <code>worker</code>（service worker），无 UI，不在解析范围。<span class="ev">notes/00 §2</span></p>
+<div class="callout">
+  <strong>架构判读。</strong>workbench 走 VS Code 的 <code>electron-browser</code> 目录，SOLO 也走同一目录下的 <code>solo/</code>；而悬浮球挂在 <code>electron-main/platform</code> 下——
+  说明它是<strong>主进程直接持有的无边框置顶小窗</strong>，不是 workbench 的一部分。<span class="tag t-guess">推测</span>（依据仅为路径，未取 DOM）
+</div>
+
+<h2 id="s5">5. 章一 · 工作台（IDE 外壳）</h2>
+<p>证据：E10（空工作区）· E30（fixture + 已信任）· E31（命令面板）· E32（搜索）· E33（源代码管理）· E34（终端）· E35（设置）· E37（侧栏收起）· E38（编辑器打开）· E39（顶栏 Agent 入口）。视口 1440×860，暗色。</p>
+
+<h3>5.1 布局分区表（实测几何）</h3>
+<table>
+  <thead><tr><th>分区</th><th>选择器 / DOM id</th><th class="num">几何（x→ 或 y→）</th><th class="num">尺寸</th><th>底色（像素 ↔ 令牌）</th><th>来源</th></tr></thead>
+  <tbody>
+    <tr><td>标题栏</td><td><code>#workbench.parts.titlebar</code></td><td class="num">y 0→40</td><td class="num">1436×40</td><td><code>#222427</code> = <code>--vscode-titleBar-activeBackground</code></td><td><span class="tag t-measured">实测·DOM</span><span class="tag t-measured">像素</span>E30/E34</td></tr>
+    <tr><td>活动栏</td><td><code>.part.activitybar</code>（像素定位，DOM 未取到）</td><td class="num">x 0→44</td><td class="num">44×800</td><td><code>#222427</code> = <code>--vscode-activityBar-background</code></td><td><span class="tag t-measured">像素</span>E34/E38/E39<span class="ev">（E10/E37 测得 42）</span></td></tr>
+    <tr><td>侧栏</td><td><code>.part.sidebar</code>（像素定位）</td><td class="num">x 44→338</td><td class="num">294×800</td><td><code>#1a1b1d</code> = <code>--vscode-sideBar-background</code></td><td><span class="tag t-measured">像素</span>E34</td></tr>
+    <tr><td>分隔条</td><td><code>.sash</code>（<code>.sash-container</code> 已在 DOM）</td><td class="num">x 338→342</td><td class="num">4</td><td>露出下层 <code>#222427</code></td><td><span class="tag t-measured">像素</span>E30/E34/E37/E38/E39 一致</td></tr>
+    <tr><td>编辑器组</td><td><code>.part.editor</code>（像素定位）</td><td class="num">x 342→858 · y 40→549（带面板时）</td><td class="num">516×509</td><td><code>#1a1b1d</code> = <code>--vscode-editor-background</code></td><td><span class="tag t-measured">像素</span>E34</td></tr>
+    <tr><td>分隔条</td><td><code>.sash</code></td><td class="num">x 858→862</td><td class="num">4</td><td><code>#222427</code></td><td><span class="tag t-measured">像素</span></td></tr>
+    <tr><td>右侧辅助栏（TRAE 对话）</td><td><code>.part.auxiliarybar</code> / <code>soloaisidebar</code> <span class="tag t-guess">归属推测</span></td><td class="num">x 862→1436</td><td class="num">574×800</td><td><code>#1a1b1d</code>（<code>--vscode-auxiliaryBar-background</code> <strong>未定义</strong> → 继承）</td><td><span class="tag t-measured">像素</span>E34/E38/E39</td></tr>
+    <tr><td>面板（终端）</td><td><code>.part.panel</code></td><td class="num">y 553→836</td><td class="num">516×283</td><td><code>#1a1b1d</code> = <code>--vscode-panel-background</code></td><td><span class="tag t-measured">像素</span>E34</td></tr>
+    <tr><td>状态栏</td><td><code>footer#workbench.parts.statusbar[role=status]</code></td><td class="num">y 840→860</td><td class="num">1442×20</td><td>像素 <code>#2b2e31</code>；令牌 <code>--vscode-statusBar-background = rgba(0,0,0,0)</code> → 实测值是叠加结果</td><td><span class="tag t-measured">DOM</span><span class="tag t-measured">像素</span>E30</td></tr>
+    <tr><td>窗口右/下边界</td><td>—</td><td class="num">x 1436→1440 / y 836→840</td><td class="num">4</td><td><code>#222427</code></td><td><span class="tag t-measured">像素</span>E34</td></tr>
+  </tbody>
+</table>
+<p class="ev">注：DOM 快照只采到 titlebar / statusbar / grid 顶层，<strong>根因是 <code>cdp-capture.mjs</code> 的 <code>--max-depth</code> 默认 9</strong>（不是节点预算——默认 1400 没用满，<code>visited</code> 仅 78；<code>.monaco-split-view2.horizontal</code> 在第 8 层，其子节点第 9 层起被裁掉）。因此侧栏、编辑器、面板、辅助栏的尺寸目前来自像素测距，两者在 titlebar(40)、statusbar(20)、主体(800) 三处完全吻合。<strong>用 <code>--max-depth 40</code> 重采可以把整棵分区树搬进 DOM 证据</strong>（见 §13 A1）。</p>
+
+<h4>浮层与弹层（同一 target 内的独立层）</h4>
+<table>
+  <thead><tr><th>浮层</th><th>选择器</th><th class="num">实测</th><th>备注</th><th>来源</th></tr></thead>
+  <tbody>
+    <tr><td>左上角固定标题条</td><td><code>.fixed-titlebar-container</code></td><td class="num">822×40</td><td>叠在 titlebar 之上；含模式 tab + 菜单栏</td><td><span class="tag t-measured">DOM</span>E30</td></tr>
+    <tr><td>模式切换容器</td><td><code>.icube-mode-tab-container</code></td><td class="num">104×24</td><td>其中 solo tab <code>40×20</code>，内 <code>codicon-icube-SoloSwitch</code> 图标 <code>16×16</code></td><td><span class="tag t-measured">DOM</span>E30/E31/E40</td></tr>
+    <tr><td>应用菜单栏</td><td><code>div[role=menubar].menubar</code></td><td class="num">485×28；8 个 <code>[menuitem]</code> 各 59–62×28</td><td>文件 / 编辑 / 选择 / 查看 / 转到 / 运行 / 终端 / 帮助</td><td><span class="tag t-measured">DOM</span>E30</td></tr>
+    <tr><td>命令面板遮罩</td><td><code>.quick-input-widget-block.dimmed</code></td><td class="num">1440×860（全屏）</td><td>遮罩为独立兄弟节点，不在 widget 内</td><td><span class="tag t-measured">DOM</span>E31</td></tr>
+    <tr><td>命令面板主体</td><td><code>.quick-input-widget</code></td><td class="num">602×368</td><td>header 600×38、input 588×26、progress 600×<strong>2</strong>、list 600×326、行高 <strong>50</strong></td><td><span class="tag t-measured">DOM</span>E31</td></tr>
+    <tr><td>命令列表虚拟高度</td><td><code>.monaco-scrollable-element</code>（list 内）</td><td class="num">600×<strong>39464</strong></td><td>Monaco 虚拟滚动，DOM 只挂可见行</td><td><span class="tag t-measured">DOM</span>E31</td></tr>
+    <tr><td>通知容器</td><td><code>.notification-toast-container</code></td><td class="num">468×106 @ x969,y729</td><td>右下；单条 <code>450×88</code>，视觉 <code>452×90</code>，radius 4，底 <code>#2a2d31</code></td><td><span class="tag t-measured">DOM</span><span class="tag t-measured">像素</span>E30</td></tr>
+    <tr><td>无障碍告警</td><td><code>.monaco-aria-container</code> &gt; <code>[role=alert]</code></td><td class="num">214×18 @ x<strong>-12987</strong>,y860</td><td>被推到屏幕外（负坐标），但仍有尺寸 → 分区/布局解析必须显式忽略，否则会当成一个真实浮层</td><td><span class="tag t-measured">DOM</span>E30</td></tr>
+  </tbody>
+</table>
+
+<h3>5.2 组件树（骨架，按实测层级）</h3>
+<pre><code>body.windows.theme-icube.icube-chat-next.vs-dark      1440×860  bg rgb(34,36,39)  font 14/21
+├─ div.fixed-titlebar-container                        822×40   ← 浮于 titlebar 之上
+│  └─ .part.titlebar &gt; .titlebar-left &gt; .action-toolbar-container
+│     ├─ .icube-mode-tab-container        104×24   → .icube-mode-tab-item-solo 40×20 → codicon 16×16
+│     └─ .menubar-container               485×28   → [menubar] → 8 × [menuitem].menubar-menu-button
+├─ div[role=application].file-icons-enabled.solo-extension-view-invisible.monaco-reduce-motion   1440×860
+│  └─ .monaco-grid-branch-node
+│     └─ .monaco-split-view2.vertical            ← 纵向三段
+│        ├─ .sash-container
+│        ├─ .monaco-scrollable-element[role=presentation]
+│        │  └─ .split-view-container
+│        │     ├─ .split-view-view.visible       1440×40   → #workbench.parts.titlebar
+│        │     ├─ .split-view-view.visible       1440×800  → .monaco-grid-branch-node
+│        │     │                                  → .monaco-split-view2.horizontal   ← 横向四段（侧栏/编辑器/辅助栏）
+│        │     └─ .split-view-view.visible       1440×20   → footer#workbench.parts.statusbar[role=status]
+│        │                                        → .left-items.items-container 1343×20 · .right-items 79×20
+│        └─ （浮层与 application 同级）
+├─ .monaco-aria-container                          214×18 @ x-12987（被推到屏幕外）
+└─ .notification-toast-container                   468×106  右下
+</code></pre>
+<p class="ev">来源 <code>extracted/tree-E30-workbench.txt</code>（结构节点过滤：part|split-view|composite|activitybar|sidebar|editor|panel|statusbar|titlebar|auxiliary|banner|solo|chat|input|toolbar|tabs|breadcrumb，depth 14）。</p>
+
+<h3>5.3 视图差异（同一外壳内的分区变化）</h3>
+<table>
+  <thead><tr><th>视图</th><th>证据</th><th>可核对的结构事实</th><th>分级</th></tr></thead>
+  <tbody>
+    <tr><td>空工作区（欢迎）</td><td>E10</td><td>无侧栏；辅助栏 <strong>436px</strong>（x 1000→1436）比有项目时的 574px 窄；DOM 78 节点，<code>titlebar 1436×40 / statusbar 1442×20</code> 不变</td><td><span class="tag t-measured">像素</span><span class="tag t-measured">DOM</span></td></tr>
+    <tr><td>资源管理器 + 文件树</td><td>E30</td><td>侧栏 294px 出现，编辑器组被压回 516px；辅助栏 574px</td><td><span class="tag t-measured">像素</span></td></tr>
+    <tr><td>侧栏收起</td><td>E37</td><td>侧栏消失后编辑器区从 42 起，宽 816px（= 294+4+516 合并）；辅助栏 574 不变</td><td><span class="tag t-measured">像素</span></td></tr>
+    <tr><td>搜索视图</td><td>E32</td><td>同侧栏容器内换视图，分区尺寸不变 <span class="ev">（细节待逐节点核对）</span></td><td><span class="tag t-todo">待补</span></td></tr>
+    <tr><td>源代码管理</td><td>E33</td><td>提交框 + 变更计数 + <code>U</code>/<code>M</code> 状态字母 + <strong>git graph 区块</strong>（分支名 <code>main</code> 直接画在提交行上）</td><td><span class="tag t-measured">像素</span>目视核对 <span class="ev">notes/01 §4</span></td></tr>
+    <tr><td>终端面板</td><td>E34</td><td>面板 283px 高，页签组「问题/输出/调试控制台/终端」，编辑器被压到 509px</td><td><span class="tag t-measured">像素</span></td></tr>
+    <tr><td>设置页</td><td>E35</td><td>由 <code>Ctrl+,</code> 打开（VK 修正后才拿到）；单格 PNG 124KB，信息密度最高</td><td><span class="tag t-measured">像素</span><span class="tag t-todo">结构待解析</span></td></tr>
+    <tr><td>编辑器打开文件</td><td>E38</td><td>窗口标题变为 <code>README.md - trae-ui-fixture - TRAE</code>；出现标签 + 面包屑</td><td><span class="tag t-measured">DOM</span>title 字段</td></tr>
+    <tr><td>命令面板</td><td>E31</td><td>条目<strong>双语</strong>（中文标题 + 英文副标题），键位以右对齐 chip 呈现；行高 50px</td><td><span class="tag t-measured">DOM</span></td></tr>
+    <tr><td>Agent 入口</td><td>E39 → E40</td><td>点击顶栏 <code>Agent</code> 后新起独立窗口（target 从 <code>TRAE</code> 变为 <code>Agent</code>），主窗口 DOM 不出现 AI 面板</td><td><span class="tag t-measured">DOM</span></td></tr>
+  </tbody>
+</table>
+
+<h3>5.4 活动栏与 Trae 差异项</h3>
+<p>活动栏 7 项：资源管理器 / 搜索 / 源代码管理 / <strong>预览</strong> / 运行和调试 / <strong>远程资源管理器</strong> / 扩展。其中「预览」「远程资源管理器」是 Trae 相对 VS Code 的差异项。<span class="tag t-measured">像素</span>目视核对 E10/E30 <span class="ev">notes/01 §4</span></p>
+<p>空编辑器区直接印 Trae 自己的键位提示：<code>与 AI 对话 Ctrl+U</code>、<code>Editor 内 AI 编码 Ctrl+I</code>。<span class="tag t-measured">像素</span>E10/E30</p>
+
+<h3>5.5 工作台侧实际取值（运行时快照，节选）</h3>
+<table>
+  <thead><tr><th>令牌</th><th>值</th><th>对上了什么</th></tr></thead>
+  <tbody>
+    <tr><td><code>--vscode-editor-background</code> / <code>sideBar-background</code> / <code>panel-background</code></td><td><code>#1a1b1d</code></td><td>像素测到的三块内容区完全同色 → 外壳是「一块底 + 4px 分隔」而非多色分区</td></tr>
+    <tr><td><code>--vscode-activityBar-background</code> / <code>titleBar-activeBackground</code></td><td><code>#222427</code></td><td>= <code>body</code> 底色 <code>rgb(34,36,39)</code>；sash 处露出的就是这一层</td></tr>
+    <tr><td><code>--vscode-foreground</code> / <code>button-background</code></td><td><code>#d1d3db</code></td><td>按钮与正文同色（反色按钮）；引导页 E02 亮色胶囊实测 <code>#d1d3db</code> 一致 → <strong>跨 target 取色对账成功</strong></td></tr>
+    <tr><td><code>--vscode-list-hoverBackground</code> / <code>tab-activeBackground</code></td><td><code>rgba(224,226,242,.05)</code></td><td>悬停/激活一律用同一 5% 白叠加，不引入新色相</td></tr>
+    <tr><td><code>--vscode-input-background</code></td><td><code>rgba(224,226,242,.03)</code></td><td>输入框比 hover 更淡一档（3% vs 5%）</td></tr>
+    <tr><td><code>--vscode-focusBorder</code></td><td><code>rgba(0, 0, 0, 0)</code></td><td><strong>焦点边框被设为全透明</strong>。工作台靠色块对比表达焦点 → 可访问性存疑，见 §11.2 不借鉴清单</td></tr>
+    <tr><td><code>--vscode-widget-shadow</code></td><td><code>rgba(0,0,0,.16)</code></td><td>浮层投影基色，与 SOLO 侧 <code>--shadow-elevation-*</code>（rgba(24,24,24,α)）不是同一族</td></tr>
+    <tr><td><code>--vscode-scrollbarSlider-background</code></td><td><code>rgba(121,121,121,.4)</code></td><td>而 Trae 自己的 <code>--prop-color-icube-scrollbar-thumb = rgba(0,0,0,0)</code>（隐藏滚动条滑块）——<strong>两套滚动条策略并存</strong></td></tr>
+  </tbody>
+</table>
+
+<h2 id="s6">6. 章二 · SOLO / Agent 窗口</h2>
+<p>证据：E11、E40（同一 target 的两轮）。独立 <code>BrowserWindow</code>，<code>solo-lite.html</code>，视口 1440×860，<strong>亮色</strong>（body class 含 <code>vs</code> + <code>light</code>）。</p>
+
+<h3>6.1 布局分区表（实测几何）</h3>
+<table>
+  <thead><tr><th>分区</th><th>选择器</th><th class="num">几何</th><th class="num">尺寸</th><th>视觉</th><th>来源</th></tr></thead>
+  <tbody>
+    <tr><td>画布</td><td><code>body.solo-lite.theme-icube.vs</code> → <code>#solo-lite-root</code></td><td class="num">1440×860</td><td class="num">—</td><td><code>#f5f5f5</code>（令牌 <code>--bg-bg-base-secondary</code> 实测同值）</td><td><span class="tag t-measured">DOM</span><span class="tag t-measured">像素</span></td></tr>
+    <tr><td>菜单栏</td><td><code>.soloLiteMenubar</code></td><td class="num">y 0→56</td><td class="num">1440×56</td><td>透明于画布；仅 <strong>4</strong> 个 menuitem（文件/编辑/查看/帮助）各 59–62×<strong>56</strong>；<code>.soloLiteMenubarActions</code> 84×32</td><td><span class="tag t-measured">DOM</span>E40</td></tr>
+    <tr><td>任务列表</td><td><code>.task-list-base.task-list-panel</code></td><td class="num">x 0→301</td><td class="num">300×804</td><td>画布色，无卡片底</td><td><span class="tag t-measured">DOM</span><span class="tag t-measured">像素</span></td></tr>
+    <tr><td>分隔条</td><td><code>.solo-lite-sash.solo-lite-sash-left</code></td><td class="num">x 301→302</td><td class="num">4×804（像素仅 1px 显色）</td><td>—</td><td><span class="tag t-measured">DOM</span></td></tr>
+    <tr><td>主面板卡片</td><td><code>.panel-content.solo-lite-panel-box-shadow.solo-lite-panel-border</code></td><td class="num">x 302→1431 · y 57→851</td><td class="num">1131×796（像素 1129×794）</td><td><code>#ffffff</code> + <strong>radius 16px</strong> + 投影</td><td><span class="tag t-measured">DOM</span><span class="tag t-measured">像素</span></td></tr>
+    <tr><td>画布留白</td><td>—</td><td class="num">x 1432→1440 · y 852→860</td><td class="num">8 / 9</td><td>卡片四周各留 ~8px 透明带 → 圆角卡片「浮」在窗口上</td><td><span class="tag t-measured">像素</span></td></tr>
+    <tr><td>拖拽标题带</td><td><code>.index-module__container___B9Lsb.in-initial-page.…dragRegion</code></td><td class="num">—</td><td class="num">1129×48</td><td>内含 <code>.solo-icon-btn.solo-common-button.solo-lite-titlebar-action-btn</code> <strong>32×32</strong></td><td><span class="tag t-measured">DOM</span></td></tr>
+    <tr><td>对话主体</td><td><code>.initial-chat-panel</code> → <code>-content</code></td><td class="num">—</td><td class="num">1129×746 → 1129×539</td><td>—</td><td><span class="tag t-measured">DOM</span></td></tr>
+    <tr><td>输入框外壳</td><td><code>.initial-chat-panel-input-wrapper</code></td><td class="num">—</td><td class="num"><strong>800×172</strong>（居中）</td><td>面板 1129 宽时输入框固定 800 → <strong>正文列宽被刻意限宽</strong>，不随窗口铺满</td><td><span class="tag t-measured">DOM</span><span class="ev">+像素 hairline 佐证</span></td></tr>
+  </tbody>
+</table>
+
+<h3>6.2 内部节奏（像素测距得到的行高 / 分隔线 / 投影带）</h3>
+<pre><code>x=700 纵向（窗口右半，落在白色卡片内）
+  y   0→ 56  #f5f5f5  菜单栏带（画布色）
+  y     56→ 57  #eeeeee  1px  · 卡片上边缘
+  y   57→322  #ffffff  265px  首屏内容块
+  y    322→323  #cccccc 1px   ← hairline 分隔线
+  y  323→449  #ffffff  126px  第二块
+  y  449→450  #cccccc 1px
+  y  450→494  #dcdcdc→#f0f0f0 渐变带 44px   ← 滚动遮罩/投影过渡，非实色分区
+  y  494→526  #ffffff  32px   ← 一行（与 DOM 里 .task-list-new-task-item 276×34 同量级，但此点在卡片内，非任务列表）
+  y    526→527  #cccccc 1px
+  y  527→563  #ffffff  36px   ← 下一行
+  y    563→564  #cccccc 1px
+  y  564→851  #ffffff  287px
+  y    851→852  #eeeeee 1px  · 卡片下边缘
+</code></pre>
+<p><strong>读出来的设计约定：</strong>亮色卡片内分隔线是 <strong>1px hairline</strong>（E40 该点众数 <code>#cccccc</code>，E11 同位置 <code>#e6e6e6</code> — 差在采样窗口内的内容覆盖，不是两条不同的线）；列表行节奏 <strong>32 / 36px</strong>；被截断处不用硬边框，用 ~44px 的<strong>渐变遮罩带</strong>表达「下面还有内容」。<span class="tag t-measured">像素</span>E40/E11（两帧在同一 x 上测到<strong>同一组 hairline 位置</strong>：322/323、449/450、494、526/527、563/564、851/852，可重复）</p>
+
+<h3>6.3 组件树（骨架）</h3>
+<pre><code>body.solo-lite.theme-icube.vs          1440×860  bg #f5f5f5
+└─ #solo-lite-root
+   ├─ .soloLiteMenubar                  1440×56
+   │  ├─ .soloLiteMenubarActions         84×32
+   │  └─ [menubar].menubar              262×56 → 4 × [menuitem] 59–62×56
+   ├─ .task-list-base.task-list-panel    300×804
+   │  ├─ .task-list-base-content        300×760
+   │  │  ├─ .task-panel-entry-buttons(-fixed) 300×34
+   │  │  │   └─ .task-list-new-task-item.active 276×34 → span 240×20
+   │  │  └─ .task-panel-slide-container 300×726        ← 三页滑动（列表 / 树 / 执行）
+   │  │     ├─ .task-panel-slide-page.task-panel-slide-list       300×726
+   │  │     │   └─ .task-list-wrapper.icube-solo-scrollbar 300×726
+   │  │     │       ├─ .task-panel-entry-buttons(-scrollable) 300×120
+   │  │     │       ├─ .task-list 300×142 · .task-list 300×137   ← 项目分组
+   │  │     ├─ .task-panel-slide-page.task-panel-slide-tree      300×726
+   │  │     └─ .task-panel-slide-page.task-panel-slide-executions 300×726
+   │  └─ .task-list-base-footer         300×36
+   │      └─ .accountRoot-RH11Aa…       276×28   ← 哈希类名，只能按文案定位
+   ├─ .solo-lite-sash.solo-lite-sash-left  4×804
+   └─ .panel-container                  1139×804
+      └─ .panel-content（卡片）         1131×796  radius16 + shadow
+         ├─ .index-module__container__…dragRegion 1129×48 → 按钮 32×32
+         └─ .initial-chat-panel         1129×746
+            └─ .initial-chat-panel-content 1129×539
+               └─ .initial-chat-panel-input-wrapper 800×172
+</code></pre>
+<p class="ev">来源 <code>extracted/tree-E40-solo.txt</code>。信息架构（E40 目视）：新建任务 / 插件市场 / 自动化 / 我的产物 四个入口 + 项目分组 + 输入框。<span class="ev">notes/01 §1</span></p>
+
+<div class="callout note">
+<strong>本章取证手段的边界。</strong>SOLO 面板<strong>内容层</strong>大量使用构建期哈希类名（<code>accountRoot-RH11Aa</code>、<code>index-module__container___B9Lsb</code>、<code>sc-fhfEft dXhqLu</code>）。
+意味着：类名<strong>不可作为跨版本的结构锚点</strong>，只能靠「截图 + 可见文案 + 计算样式 + 令牌取值」定位（工具里对应 <code>--click-text</code> 的最小可见元素寻址）。
+而<strong>外壳层</strong>（<code>.soloLiteMenubar</code> / <code>.task-list-*</code> / <code>.panel-content</code>）是语义化类名，可用。<span class="tag t-guess">判读</span><span class="ev">notes/02 §7</span>
+</div>
+
+<h2 id="s7">7. 章三 · 首次引导页</h2>
+<p>证据：E00（欢迎）· E01（进入）· E02（主题选择，暗）。视口 1000×680。<code>setup.html</code>，React + styled-components，<code>#app</code> 单根。
+<strong>本页 DOM 未被深度裁切</strong>（<code>maxDepth</code> 仅 5–6，共 15–19 个节点，<span class="tag t-measured">实测·DOM</span>）——即引导页本身就是一棵很浅的树；
+但类名全哈希（<code>sc-fhfEft dXhqLu</code>）使这棵树<strong>没有可用的结构锚点</strong>：取到了也认不出「这是主题卡片」，所以本章仍以像素测距 + 目视为主，是全文最薄的一章。</p>
+<table>
+  <thead><tr><th>步骤</th><th>内容</th><th class="num">实测</th><th>分级</th></tr></thead>
+  <tbody>
+    <tr><td>1 欢迎</td><td>整幅白底，下方一条深色块</td><td class="num">画布 <code>#ffffff</code> 0→440；<code>#31353a</code> 块 y440→468（<strong>高 28</strong>）</td><td><span class="tag t-measured">像素</span>E00</td></tr>
+    <tr><td>2 主题</td><td>候选：暗色 / 亮色 / 深蓝；选中态为描边卡片</td><td class="num">画布 <code>#1a1b1d</code>；卡片 <code>#2a2d31</code> 高 <strong>34</strong>（y225→260），描边 <code>#3a3c42</code> 1px；动作胶囊 <code>#d1d3db</code> 高 <strong>28</strong>（y311→339）</td><td><span class="tag t-measured">像素</span>E02</td></tr>
+    <tr><td>3 快捷键方案</td><td>VS Code / IntelliJ IDEA</td><td class="num">未测距</td><td><span class="tag t-guess">目视</span>E02 后续帧缺失</td></tr>
+    <tr><td>4–5</td><td>（引导共 5 步）</td><td class="num">—</td><td><span class="tag t-todo">待补</span></td></tr>
+  </tbody>
+</table>
+<p><strong>跨 target 对账：</strong>引导页动作胶囊实测 <code>#d1d3db</code>，与工作台 <code>--vscode-button-background / --vscode-foreground = #d1d3db</code> 同值 → 引导页与工作台共享同一套「主操作色 = 前景色」的反色按钮策略，尽管它们的 CSS 体系完全不同。<span class="tag t-measured">像素</span>+<span class="tag t-measured">DOM</span></p>
+<p><strong>关键前提：</strong>引导全程无需登录即可走到工作台。这是本次能在隔离 profile 中采到真实外壳 UI 的原因，也是「不碰用户凭据」这条约束能守住的原因。<span class="ev">notes/00 §3</span></p>
+
+<h2 id="s8">8. 章四 · 悬浮球（iCubeFloatingChat）</h2>
+<div class="skel">
+  <span class="tag t-todo">待补 · 本章目前只有架构位，没有任何 UI 实测数据</span><br>
+  已知：target 清单里存在 <code>floatingButton.html</code>，路径 <code>out/vs/platform/iCubeFloatingChat/electron-main/media/</code>（<span class="tag t-measured">实测</span><code>/json/list</code>）。
+  <span class="tag t-guess">推测</span>主进程持有的无边框置顶小窗。<br><br>
+  需要拿到的东西（命令已备好，见 §13）：① 窗口尺寸与是否 <code>transparent</code>（截屏看是否带圆角外透明区）；② 内部 DOM 骨架与类名是否哈希；③ 展开对话时的第二形态尺寸；④ 它用哪套令牌（<code>--vscode-</code> 还是裸名族）。<br>
+  <strong>在拿到之前，本报告不允许出现任何关于悬浮球布局的数值或结论。</strong>
+</div>
+
+<h2 id="s9">9. 令牌体系：三层 · 双通道 · 多份拷贝</h2>
+
+<h3>9.1 数量账（本轮修正）</h3>
+<table>
+  <thead><tr><th>层</th><th class="num">工作台 E30</th><th class="num">SOLO E40</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td><code>:root</code> 变量总数</td><td class="num"><strong>3919</strong></td><td class="num"><strong>4388</strong></td><td><span class="tag t-measured">DOM</span>运行时快照实测</td></tr>
+    <tr><td>纯 VS Code 血统（<code>--vscode-*</code>，去掉 icube）</td><td class="num">2820</td><td class="num">2791</td><td>两边几乎相等 → 外壳同源</td></tr>
+    <tr><td>Trae 注入 codicon 字形：<code>--vscode-icon-icube-*</code></td><td class="num">704</td><td class="num">702</td><td>两窗口一致 → 来自同一主题包</td></tr>
+    <tr><td>Trae 注入颜色/尺寸：<code>--vscode-icube*</code></td><td class="num">294</td><td class="num">294</td><td>同上</td></tr>
+    <tr><td>Trae 裸名自研族</td><td class="num"><strong>101</strong></td><td class="num"><strong>601</strong></td><td>SOLO 多 6 倍</td></tr>
+    <tr><td>合计「Trae 自己写的」</td><td class="num">1099（28%）</td><td class="num">1597（36%）</td><td>—</td></tr>
+    <tr><td class="strike">旧记法：VS Code 3818 / 自研 101</td><td class="num">—</td><td class="num">—</td><td>notes/02 §2 的分组把 icube 误并进 VS Code 桶，<strong>本节为更正版</strong></td></tr>
+  </tbody>
+</table>
+
+<h3>9.2 双通道镜像：机制已坐实（A9 结题）</h3>
+<pre><code>工作台 E30                         SOLO E40
+--vscode-icube--bg-bg-base-secondary = #222427   ←镜像→   --bg-bg-base-secondary = #f5f5f5
+--vscode-icube--border-border-neutral-l2 = rgba(224,226,242,.13)   --border-border-neutral-l2 = rgba(115,115,115,.18)
+--vscode-icube--status-alert-surface-l3 = rgba(194,168,87,.36)     --status-alert-surface-l3 = rgba(254,169,0,.36)
+</code></pre>
+<table class="kv">
+  <tr><td>镜像条目（运行时快照）</td><td class="num">107 条 <code>--vscode-icube--&lt;name&gt;</code>（工作台 E30）</td></tr>
+  <tr><td>静态解释：主题贡献注册 id</td><td class="num"><strong>102</strong> 条 <code>icube--&lt;family&gt;-&lt;name&gt;</code>（出现在 <code>workbench.desktop.main.js</code>，作为字符串实参传给注册函数）</td></tr>
+  <tr><td>静态解释：字面量定义</td><td class="num"><strong>5</strong> 条 <code>--vscode-icube--*: …</code> —— <code>gradient-text-shimmer</code> / <code>gradient-brand</code> / <code>gradient-golden</code> / <code>solo-title-bar-left-scroll-shadow</code> / <code>…-right-scroll-shadow</code>；<strong>颜色注册表只接受颜色</strong>，渐变与阴影只能走 CSS 字面量，这正好解释了这 5 条为何特殊</td></tr>
+  <tr><td>并集 vs 快照 双向差集</td><td class="num"><strong>0 / 0 → 覆盖率 100.0%</strong> <span class="tag t-static">静态</span><span class="tag t-measured">实测·DOM</span></td></tr>
+  <tr><td>运行时拼接点</td><td class="num"><strong>0</strong>：14 种拼接写法（<code>"--vscode-icube--" +</code>、<code>`--vscode-icube--${`</code> 等）在 <code>out/</code> 全量 JS/JSON/CSS 中<strong>一次都没命中</strong> → 前缀是<strong>打包期命名</strong>，不是运行时字符串运算</td></tr>
+  <tr><td>注册家族分布（102 条）</td><td><code>status 30 · bg 17 · text 12 · icon 12 · accent 9 · cue 9 · code 5 · border 5 · special 3</code> —— 与 §9.4 的自研族同名，说明镜像不是另起一族而是<strong>同一族的第二个命名空间</strong></td></tr>
+  <tr><td>镜像的消费量（明文 CSS）</td><td class="num">workbench <strong>463</strong> 次前缀命中 / <strong>344</strong> 个 <code>var()</code> / <strong>58</strong> 个不同令牌；solo-lite <strong>305 / 217 / 52</strong>；slim <strong>229 / 176 / 46</strong>。三份 CSS 里<strong>定义式均为 0</strong> → CSS 只消费、不定义，定义确实来自 JS 侧注册</td></tr>
+  <tr><td>JS 生成的规则也吃镜像</td><td class="num">workbench JS 内 47 次 <code>var(--vscode-icube--*)</code> / 20 个不同令牌（Monaco 列表 hover/active 等规则是 JS 拼字符串注入的）→ <strong>同一族令牌要跨「静态 CSS」与「JS 生成 CSS」两种消费者，这正是它必须挂到 <code>:root</code> 的原因</strong></td></tr>
+  <tr><td>只在镜像层出现的 13 条</td><td><code>--cue-tr1</code>、<code>--cue-diff-add/remove</code>、<code>--solo-title-bar-left/right-scroll-shadow</code>、<code>--gradient-text-shimmer</code>、<code>--bg-bg-menu-tr0</code> —— 全是<strong>只有工作台 CSS 需要、SOLO React 不需要</strong>的条目</td></tr>
+</table>
+<p><strong>判读：</strong>上一版把「同一批令牌编译两遍」标为推测，现在<strong>升为静态实证</strong>：一条设计系统源 → ① 通过 <em>颜色注册表</em>（102 id + 5 CSS 字面量）以 <code>--vscode-icube--</code> 前缀灌进工作台 <code>:root</code>，② 同时以裸名 <code>--bg-bg-*</code> 打进 React 侧的 CSS 包。90/94 取值不同<strong>不是设计不一致，而是两套通道各自按主题求值</strong>（工作台暗、SOLO 亮）。<span class="ev">tools/a9-mirror-hunt.mjs · notes/04 §1–2</span></p>
+
+<h4>9.2.1 但「两条通道」其实是「多份拷贝」——本轮最有价值的反面证据</h4>
+<p>顺着裸名层往下查，发现同一个令牌在装机包里被定义了<strong>不止一份，且取值互不相同</strong>。以 <code>--bg-bg-base-secondary</code> 为例（<code>… --copies --bg-bg-base-secondary</code> 实测，命中 <strong>9 个文件</strong>）：</p>
+<table>
+  <thead><tr><th>拷贝</th><th>亮色档</th><th>暗色档</th><th>深蓝档</th><th>主题钩子写法</th><th>出现的文件</th></tr></thead>
+  <tbody>
+    <tr><td>Set A（<code>icube-chat-next</code> 世代）</td><td class="num"><code>#edeff2</code></td><td class="num"><code>#222427</code></td><td class="num"><code>#232a35</code></td><td><code>[data-theme=dark] body.icube-chat-next, body.icube-chat-next.dark</code></td><td><code>@byted-icube/ai-modules-chat/dist/index.css</code>（2857KB / 1520 个去重自定义属性）、<code>solo-lite/dist/2038.css</code>、<code>9739.css</code>（钩子改成 <code>.solo-theme[data-theme=…]</code>）</td></tr>
+    <tr><td>Set B（<code>solo-lite</code> 世代）</td><td class="num"><code>#f5f5f5</code></td><td class="num"><code>#262626</code></td><td class="num"><code>#262626</code>（<strong>与 dark 同值 = 深蓝未实现</strong>）</td><td><code>[data-theme='light'], .vs.solo-lite</code> / <code>[data-theme='dark'], .vs-dark.solo-lite</code></td><td><code>@byted-icube/solo-lite/dist/index.mjs</code>、<code>floating-chat-entry.mjs</code>、<code>desktop-modules/dist/9913.css</code>、<code>solo-lite/dist/1660.css</code>、<code>trae-browser-inspect/dist/file-preview.mjs</code></td></tr>
+  </tbody>
+</table>
+<p>（9 个文件里上面两行覆盖了 8 个；第 9 个是 <code>solo-lite/dist/3268.f14d4633.css</code>，它把该令牌定义成 <code>var(--bg-bg-tooltip)</code> —— <strong>第三种「转手指向别的令牌」写法</strong>，同一名字因此有三种语义。计数口径：命中 = 文件内出现过 <code>--bg-bg-base-secondary:</code> 定义形态。）</p>
+<p>三条推论，都直接影响我们怎么读 §9 前面的数字：</p>
+<ol>
+  <li><strong>§9.3 的「E40 画布实测 <code>#f5f5f5</code>」不是测量误差</strong>——SOLO 窗口加载的是 Set B 那份拷贝；而工作台镜像的 <code>#222427</code> 与 Set A 的暗色档<strong>逐字节相同</strong>。同一个令牌名，两个窗口落在不同拷贝上。</li>
+  <li><strong>「双通道」的代价已经显形</strong>：Set B 里 <code>dark-blue</code> 只是复制了 <code>dark</code> 的值（<code>#262626</code>），说明多份拷贝之一<strong>没有跟着主题演进</strong>。这是「同一族令牌手写/打包多份」的可观测漂移，比任何理论论证都有力。</li>
+  <li><strong>主题钩子有两代写法并存</strong>：属性选择器 <code>[data-theme=…]</code> 与 body class <code>body.&lt;theme&gt;</code> / <code>.vs-dark.solo-lite</code> 用逗号并联在<strong>同一条规则</strong>里（各 85 / 75 / 75 次，另有 <code>[data-theme="dark"]</code> 带引号写法 1 次）——是在兼容两个注入点，不是设计选择。</li>
+</ol>
+<p>另：明文层里 <code>--bg-bg-card</code> 有 3 份定义（<code>#fafafa</code> / <code>#1f2021</code> / 深蓝复用 <code>#1f2021</code>），且裸名消费<strong>普遍带兜底字面量</strong>：仅 <code>ai-modules-chat/dist/index.css</code> 一个文件里，<code>var()</code> 共 <strong>13740</strong> 次，其中 <strong>4608 次（33.5%）带逗号兜底值</strong>；<code>#f5f5f5</code> 在该文件共出现 <strong>22</strong> 次（其中 <code>var(--bg-bg-base-secondary,#f5f5f5)</code> 精确 20 次）→ <strong>静态 CSS 里看到的十六进制很可能是兜底而不是生效值</strong>。这条把 §9.1 的「静态 CSS 对令牌无效」从「数量不够」升级为「<strong>数量与取值都不够</strong>」。<span class="tag t-static">静态</span></p>
+<div class="callout">
+<strong>顺带解掉 A4 的一半。</strong><code>dark-blue</code> 主题的令牌取值现已从明文拿到：Set A 的 <code>--bg-bg-base-default #181d27 / base-secondary #232a35 / base-tertiary #2e3743 / menu #1e242f</code>。仍是<span class="tag t-static">静态</span>级——运行时截图（A4）才能确认哪份拷贝生效、以及工作台侧的深蓝档。
+</div>
+
+<h3>9.3 像素 ↔ 令牌 对账（校验测距是否可信）</h3>
+<table>
+  <thead><tr><th>位置</th><th class="num">像素测得</th><th>令牌</th><th class="num">令牌值</th><th>结论</th></tr></thead>
+  <tbody>
+    <tr><td>E34 x 0→44（活动栏）</td><td class="num"><code>#222427</code></td><td><code>--vscode-activityBar-background</code></td><td class="num"><code>#222427</code></td><td>一致</td></tr>
+    <tr><td>E34 x 44→338 / 342→858 / 862→1436</td><td class="num"><code>#1a1b1d</code></td><td><code>--vscode-editor-background</code> 等</td><td class="num"><code>#1a1b1d</code></td><td>一致</td></tr>
+    <tr><td>E34 y 840→860（状态栏）</td><td class="num"><code>#2b2e31</code></td><td><code>--vscode-statusBar-background</code></td><td class="num"><code>rgba(0,0,0,0)</code></td><td><strong>不一致 → 说明状态栏有叠加层</strong>（半透明 + 上层内容），令牌值本身不足以预测最终色</td></tr>
+    <tr><td>E40 卡片内</td><td class="num"><code>#ffffff</code></td><td><code>--vscode-sideBar-background</code>（SOLO 快照）</td><td class="num"><code>#ffffff</code></td><td>一致</td></tr>
+    <tr><td>E40 画布</td><td class="num"><code>#f5f5f5</code></td><td><code>--bg-bg-base-secondary</code></td><td class="num"><code>#f5f5f5</code></td><td>一致<span class="ev">（对的是 <strong>Set B</strong> 那份拷贝）</span></td></tr>
+    <tr><td>E40 画布 × 另一份拷贝</td><td class="num"><code>#f5f5f5</code></td><td><code>--bg-bg-base-secondary</code>（<code>ai-modules-chat</code> 亮色档）</td><td class="num"><code>#edeff2</code></td><td><strong>差一档灰</strong> → 曾以为测错；A9 反查后确认是产品内<strong>多份拷贝</strong>，SOLO 窗口命中的是 <code>.vs.solo-lite</code> 那份（§9.2.1）</td></tr>
+    <tr><td>E30 工作台镜像 <code>--vscode-icube--bg-bg-base-secondary</code></td><td class="num">—</td><td>Set A 暗色档 <code>#222427</code></td><td class="num"><code>#222427</code></td><td><strong>逐字节相同</strong> → 通道与拷贝的归属可静态判定</td></tr>
+  </tbody>
+</table>
+<p class="ev">方法学结论（本轮加强）：单靠令牌值<strong>不能</strong>预测最终像素——① 半透明叠加与上下层混合（状态栏那行已证），② <strong>同名令牌可能有多份定义、按选择器作用域各自生效</strong>（§9.2.1），③ 消费点可能落在兜底字面量上（33.5% 的 <code>var()</code> 带兜底）。所以两套证据都要留；若冲突，先查「哪份拷贝 / 哪个作用域 / 是否兜底」，再怀疑测距参数。</p>
+
+<h3>9.4 Trae 自研族清单（SOLO 快照）</h3>
+<table>
+  <thead><tr><th>族</th><th class="num">条数</th><th>真实样例</th><th>对我们的意义</th></tr></thead>
+  <tbody>
+    <tr><td><code>brand-*</code></td><td class="num">93</td><td><code>brand-blue-700=#3792e6</code>、<code>brand-blue-grey-900=#404a4f</code>、<code>brand-yellow-200=#ffeccc</code>、<code>brand-red-1000=#4d0000</code></td><td>10 级阶梯的品牌色板（含 grey 支线）</td></tr>
+    <tr><td><code>bg-*</code></td><td class="num">47</td><td><code>bg-bg-card=#fafafa</code>、<code>bg-primary-item=rgba(86,99,119,.15)</code>、<code>bg-primary-item-hover=…(.22)</code>、<code>bg-bg-overlay-l1=rgba(115,115,115,.08)</code></td><td>「同一族名 + 强度档位」，交互态只改 alpha</td></tr>
+    <tr><td><code>status-*</code></td><td class="num">30</td><td><code>status-primary-default=#2f74ff</code>、<code>status-primary-active=#1759dd</code>、<code>status-alert-default=#fea900</code>、<code>status-success-surface-l2=rgba(64,176,139,.18)</code>、<code>status-warning-surface-l1=rgba(226,121,0,.12)</code></td><td><strong>每个状态色都有 default/active/surface-l1/surface-l2</strong>，比我们的单值 ok/warn/danger 完整一级</td></tr>
+    <tr><td><code>Radius-*</code> / <code>radius-*</code></td><td class="num">32</td><td><code>2 / 4 / 8 / 10 / 16 / 20 / full=9999px</code>、<code>radius-sm=4px</code>、<code>radius-xl=20px</code></td><td>数值族 + 语义别名并存</td></tr>
+    <tr><td><code>Spacer-*</code> / <code>spacer-*</code></td><td class="num">13</td><td><code>0 / 4 / 12 / 16 / 20 / 24 / 28 / 48 / 64</code></td><td>非严格 8 倍数（有 12/28），是按实际版面回填的</td></tr>
+    <tr><td><code>z-*</code></td><td class="num">32</td><td><code>z-above-2=2</code>、<code>z-dropdown=1000</code>、<code>z-modal=1100</code>、<code>z-gtm-modal=2147483647</code>、<code>z-index-notebook-*=25/26/29</code></td><td>命名族正例；<code>z-gtm-modal</code> 用 int32 上限是<strong>反面教材</strong>（营销弹窗压过一切）</td></tr>
+    <tr><td><code>body-*</code></td><td class="num">28</td><td><code>body-body-xs=10px/1.5 'SF Pro Text',…</code>、<code>body-body-base=14px/1.5</code>、<code>body-md-strong-lineHeight=18px</code>、<code>body-sm-strong-fontWeight=500</code></td><td><strong>复合令牌</strong>：一个名字绑「字号+行高+字体栈」</td></tr>
+    <tr><td><code>heading-*</code></td><td class="num">27</td><td><code>heading-3xs-fontSize=11px</code>、<code>heading-sm=14px</code>、<code>heading-lg=22px/30px</code>、<code>heading-2xl=28px</code>、<code>heading-xl-lineHeight=32px</code></td><td>标题阶梯 3xs→2xl，尺寸与行高分开可覆写</td></tr>
+    <tr><td><code>code-*</code></td><td class="num">21</td><td><code>code-editor-fontWeight=450</code>、<code>code-editor-lineHeight=20px</code>、<code>code-code-attribute=#c99100</code>、<code>code-code-instruction=#b15ef2</code>、<code>code-code-editor=#17181a</code></td><td>代码配色独立成族，不混进 <code>status-</code></td></tr>
+    <tr><td><code>font-*</code></td><td class="num">15</td><td><code>font-family-default='SF Pro Text',-apple-system,…,'PingFang SC','Microsoft YaHei',…</code>、<code>font-family-mono='JetBrains Mono','SF Mono',Monaco,Consolas,…</code>、<code>font-size-sm=11px</code>、<code>font-size-lg=16px</code>、<code>font-weight-medium=500</code></td><td>中文回退明确写了 PingFang SC / 雅黑</td></tr>
+    <tr><td><code>shadow-*</code></td><td class="num">15</td><td><code>shadow-elevation-50=0 1px 2px -1px rgba(24,24,24,.08)</code>、<code>…100-float=0 -3px 9px rgba(24,24,24,.06)</code>、<code>…200-menu-panel=0 6px 24px -1px rgba(24,24,24,.06)</code>、<code>…300-modal-panel</code>、<code>shadow-chat-input=0 2px 8px rgba(24,24,24,.06)</code></td><td><strong>elevation 数字阶 + 场景别名</strong>；基色统一 rgba(24,24,24,α)，只改高度/模糊</td></tr>
+    <tr><td><code>border-*</code></td><td class="num">12</td><td><code>border-neutral-l1/l2/l3 = rgba(115,115,115,.12/.18/.36)</code>、<code>border-focus=#4b3fe3</code>、<code>border-error=#e8463a</code>、<code>border-brand-sub=#0FDC78</code>、<code>border-angle=0deg</code></td><td>三级中性描边 + 焦点/错误/品牌各自固定</td></tr>
+    <tr><td>其它</td><td class="num">235</td><td><code>--motion-duration-medium-2=.333s</code>、<code>--solo-tooltip-border-radius=6px</code>、<code>--chat-radius-lg=16px</code>、<code>--solo-grid-gap=4px</code>、<code>--text-text-error=#e8463a</code>、<code>--ul-mask-3=url("data:image/svg+xml,…")</code></td><td>动效时长、局部尺寸、内联 SVG 遮罩也进了令牌层</td></tr>
+  </tbody>
+</table>
+<p><strong>命名有两代并存</strong>（如实记录，不替它整理）：<code>--Spacers-spacer-28</code> 与 <code>--spacer-12</code>、<code>--Radius-radius-8</code> 与 <code>--radius-4</code> 同时挂在 <code>:root</code> 上 → Trae 自身处在令牌系统迁移中途。<span class="tag t-measured">实测·DOM</span><span class="ev">notes/02 §2</span></p>
+<p>另有 1 条 <code>--unset---vscode-panel-border-color</code>：用 <code>unset</code> 覆盖上游变量 → 它是在 VS Code 变量之上做覆盖层，而不是替换整套。<span class="tag t-measured">实测·DOM</span></p>
+
+<h3>9.5 静态 CSS 能给的（只此一类用途）</h3>
+<table>
+  <thead><tr><th>包</th><th class="num">体积</th><th class="num">规则块</th><th class="num">类名</th><th class="num"><code>icube-*</code></th><th>独有前缀</th></tr></thead>
+  <tbody>
+    <tr><td><code>workbench.desktop.main.css</code></td><td class="num">1.26MB</td><td class="num">9978</td><td class="num">4657</td><td class="num">423 名 / 1937 次</td><td><code>cue=51</code>、<code>setting=55</code>、<code>profile=43</code></td></tr>
+    <tr><td><code>…solo-lite.css</code></td><td class="num">1.18MB</td><td class="num">9379</td><td class="num">4348</td><td class="num">252 名 / 1553 次</td><td><code>inline=41</code></td></tr>
+    <tr><td><code>…solo-lite-slim.css</code></td><td class="num">0.88MB</td><td class="num">7143</td><td class="num">3449</td><td class="num">198 名 / 1101 次</td><td><code>quick=40</code>、<code>xterm=29</code></td></tr>
+    <tr><td class="strike">上面三份是「外壳 CSS」。</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td>本轮（A9）另外挖到<strong>设计系统本体的 CSS</strong>，见下一行</td></tr>
+    <tr><td><code>node_modules/@byted-icube/ai-modules-chat/dist/index.css</code><br><em>裸名层的主要出处之一</em></td><td class="num"><strong>2.80MB</strong></td><td class="num">—</td><td class="num">类名多为哈希</td><td class="num">—</td><td><strong>1520 个去重自定义属性</strong>（含 <code>--bg-bg-*</code> 等裸名族）；<code>var()</code> 13740 次、其中 <strong>4608 次带兜底字面量</strong>；主题钩子 <code>[data-theme=dark|light|dark-blue]</code>（85/75/75 次）——<span class="tag t-static">静态</span>结论：SOLO 快照里那 601 条裸名<strong>不是运行时生成的</strong>，而是打包进 <code>@byted-icube/*</code> 各包的静态 CSS（同一令牌至少落在 9 个文件上 → §9.2.1）</td></tr>
+  </tbody>
+</table>
+<p>布局类计数三份几乎一致（<code>editor×627 / titlebar×206 / auxiliarybar×80 / statusbar×79 / sidebar×61 / panel×41</code>）→ <strong>差异只在裁剪量，不在体系</strong>。<code>.part.*</code> 骨架清单：<code>editor 627</code>、<code>titlebar 206</code>、<code>auxiliarybar 80</code>、<code>statusbar 79</code>、<code>sidebar 61</code>、<code>panel 41</code>、<code>soloaisidebar 16</code>、<code>basepanel 12</code>、<code>banner 12</code>、<code>solo-mode 7</code>、<code>activitybar 3</code>、<code>pane-composite-part 2</code>。<span class="tag t-static">静态</span><span class="ev">notes/02 §3–4</span></p>
+
+<h2 id="s10">10. 主题矩阵与视图矩阵覆盖度</h2>
+<table>
+  <thead><tr><th>维度</th><th>已覆盖（有证据）</th><th>缺口</th></tr></thead>
+  <tbody>
+    <tr><td>渲染目标</td><td>workbench（10 格）、solo-lite（2 格）、setup（3 格）</td><td>floatingButton（0 格）</td></tr>
+    <tr><td>主题 × target</td><td>工作台暗（E30–E39）、SOLO 亮（E11/E40）、引导暗（E02）、引导亮/白（E00/E01）；<strong>深蓝与亮色的令牌取值已从明文拿到</strong>（§9.2.1 附注，<span class="tag t-static">静态</span>）</td><td><strong>工作台亮</strong>、SOLO 暗的<strong>运行时截图</strong>，深蓝主题截图（A3 / A4：值已知，生效的那份拷贝与工作台侧档位未知）</td></tr>
+    <tr><td>视图</td><td>欢迎 / 资源管理器 / 搜索 / SCM / 终端 / 设置 / 侧栏收起 / 编辑器 / 命令面板</td><td>QuickOpen（<code>Ctrl+P</code>）、右键上下文菜单、通知进度浮层、Agent 面板展开态</td></tr>
+    <tr><td>窗口尺寸</td><td>1440×860（工作台/SOLO）、1000×680（引导）</td><td><strong>窄窗</strong>（分栏退化断点、最小宽）——目前所有尺寸结论都只在 1440 宽下成立</td></tr>
+    <tr><td>状态</td><td>未登录、扩展禁用、工作区已信任 / 受限（E27 污染记录）</td><td>登录后、SOLO 会话进行中（有 diff / 有执行日志）、错误态、更新弹窗</td></tr>
+    <tr><td>证据形态</td><td>16 帧 PNG（982,649 B ≈ 0.98MB）+ 每帧 DOM/tokens 快照 + 3 份明文 CSS 挖掘 + 4 份结构树 + 像素测距</td><td><strong>13 帧工作台/SOLO 快照全部触顶</strong>（<code>maxDepth=9</code>，截止处各有 10–23 个分支被裁）→ 视图内部结构目前只有截图目视 + 像素测距。<strong>引导 3 帧未被裁</strong>（<code>maxDepth</code> 5–6，15–19 节点），即引导页 DOM 确实就这么浅 <span class="tag t-measured">实测·DOM</span></td></tr>
+  </tbody>
+</table>
+<div class="callout warn">
+<strong>本报告尺寸结论的适用边界。</strong>§5.1 / §6.1 的所有宽高均在 <strong>1440×860 视口、dpr=1</strong> 下测得。
+分栏宽度（294 / 516 / 574）是<strong>用户可拖、可存回话的状态</strong>，不是产品常量；只有 <strong>标题栏 40 / 状态栏 20 / sash 4 / 行高节奏</strong> 这类才是设计常量。
+对外引用时不要把前者当 Trae 规范。<span class="tag t-guess">判读</span>
+</div>
+
+<h2 id="s11">11. 可迁移性评估（对 Worktodolist）</h2>
+<p>本项目现状：React 18.3 + Vite + Tauri 2，<code>todolist-gui/src</code>，单窗口桌面应用，<strong>没有 Monaco、没有扩展宿主、没有多 BrowserWindow、没有 VS Code 主题服务</strong>。评估口径：一条设计若要借鉴，必须「我们也有对应问题」且「搬过来不附带我们不需要的基础设施」。</p>
+
+<h3>11.1 十二条候选 + A11 对账结果</h3>
+<p>下表最后一列是 <strong>A11 的实测结论</strong>：拿 <code>todolist-gui/src/index.css</code>（<strong>只读</strong>，<code>tools/a11-token-audit.mjs</code>）逐条比。清点结果：<strong>定义语句 167 条 / 去重令牌 104 个</strong>；<code>src/components</code> 下 27 个文件里<strong>硬写 hex = 0、硬写 <code>rgba()</code> = 0</strong> → 我们的令牌纪律本来就成立，「借鉴」不能拿「补纪律」当收益。</p>
+<table>
+  <thead><tr><th>#</th><th>Trae 做法（证据）</th><th>为什么值得</th><th>落到我们的哪一处（改动面）</th><th class="num">成本</th><th>A11 对账</th></tr></thead>
+  <tbody>
+    <tr><td>M1</td><td><strong>状态色带表面分层</strong>：<code>status-*</code> 每色有 <code>default / active / surface-l1 / surface-l2</code>（§9.4）</td><td>任务卡片的「进行中/逾期/完成」现在只有单色，徽标、浅底行、hover 三处只能靠手调 alpha，已经出现不一致</td><td><code>src/index.css</code> 令牌层给 <code>--ok/--warn</code> 补 <code>-line</code>、给全族补 <code>-active</code>；组件只改 var 引用</td><td class="num">低</td><td><strong>部分</strong>方法<strong>已有</strong>：<code>--accent</code> 已是 5 档（<code>default/hover/fg/soft/line</code>）。真正缺的只有一格：<code>--ok</code>/<code>--warn</code> 各只有 2 档（<code>default/soft</code>，无 <code>line</code>），<code>--danger</code> 3 档，且<strong>四族全无 <code>-active</code></strong> → 是「补齐两个族」而不是「新建一套」</td></tr>
+    <tr><td>M2</td><td><strong>复合字体令牌</strong>：<code>--body-body-xs=10px/1.5 'SF Pro Text',…</code>（§9.4）</td><td>字号/行高/字体分开写必然漂移；一个名字绑三件，审查看名字即可</td><td>新增 <code>--text-*</code> 族，替换散落的 <code>font-size</code>+<code>line-height</code>；<strong>注意</strong>复合值不能进 <code>calc</code></td><td class="num">中</td><td><strong>不借鉴</strong>我们是 <code>--fs-*</code>（8 档）× <code>--lh-*</code>（4 档）<strong>正交分离</strong>，且文件头 §约束 明写「完全离线，不加载任何 webfont」——复合令牌把字体栈焊进值里，与我们的前提冲突。<strong>改借「成对审查」这个动作</strong>，不借它的形式</td></tr>
+    <tr><td>M3</td><td><strong>elevation 数字阶 + 场景别名</strong>：<code>shadow-elevation-50/100/200-menu-panel/300-modal-panel</code>，基色统一 <code>rgba(24,24,24,α)</code>（§9.4）</td><td>投影层级用「谁浮在谁上面」表达，而不是每个组件自定义模糊半径</td><td>只补<strong>场景别名</strong>：定义 <code>--shadow-menu/modal/popover/tooltip</code> 指向现有 <code>--sh-1/2/3</code></td><td class="num">低</td><td><strong>已有 · 且我们更对</strong>三级梯子 <code>--sh-1/2/3</code> 已在，<code>--sh-2</code> 还含 <code>0 0 0 1px</code> 双线分量。<strong>关键差异：暗色下我们整体换基色</strong>（<code>rgba(10,14,20,·)</code> → <code>rgba(0,0,0,.5)</code> 并加白色发丝 inset），Trae 的暗块仍是 <code>rgba(24,24,24,.08/.12)</code>——比 <code>#1a1b1d</code> 底还浅，<strong>在暗色下近似不可见</strong>。缺的只有别名层</td></tr>
+    <tr><td>M4</td><td><strong>中性描边三级</strong>：<code>border-neutral-l1/l2/l3 = rgba(115,115,115,.12/.18/.36)</code>（§9.4）</td><td>我们现在的边框色在不同页面已出现 3 种写法；三级 + 「越靠前越实」的规则一次性消除</td><td>—（无需引入）</td><td class="num">—</td><td><strong>已有 · 且更严</strong><code>--border / --border-strong / --control-line</code> 三档齐；且我们<strong>把「交互控件边界」与「装饰发丝线」显式分开</strong>（<code>--control-line</code> 带 WCAG 1.4.11 ≥3:1 约束），Trae 的三级只是同一基色改 alpha、<strong>没有这条语义区分</strong>。此条应反过来当作我们自己的卖点</td></tr>
+    <tr><td>M5</td><td><strong>hairline 与行节奏</strong>：亮色卡片内 <code>#cccccc</code> 1px 分隔 + <strong>32/36px</strong> 行高（§6.2，像素实测、两帧可复现）</td><td>与我们的列表/卡片信息密度最接近，是可直接抄的「排版节拍」</td><td>—（数值不改）</td><td class="num">—</td><td><strong>数值冲突</strong>「行间发丝线 + 固定行高」<strong>我们已经这么做了</strong>：<code>.task-row</code> = <code>height: var(--row-h)=42px</code> + <code>border-bottom:1px solid var(--border)</code>（L1255–1265）。<strong>42 与 32/36 是不同密度取向，不是谁对谁错</strong>；我们一行要放三栏（复选框/标题/元信息），Trae 不放。<strong>改判为不借鉴数值</strong>。附带发现见 §11.4 文档债</td></tr>
+    <tr><td>M6</td><td><strong>正文列限宽</strong>：面板 1129 宽时输入框固定 <code>800×172</code>（§6.1）</td><td>宽窗口下不让文本行长失控，比整页 <code>max-width</code> 更精细</td><td>—（已有）</td><td class="num">—</td><td><strong>已有</strong><code>--rail-max:900px</code>（阅读栏）+ <code>--tool-rail:1120px</code>（工具区）——<strong>比 Trae 更进一步</strong>：我们按「内容密度」给了两档上限，Trae 只有一个固定值</td></tr>
+    <tr><td>M7</td><td><strong>渐变遮罩代替硬边框</strong>：截断处 44px <code>#dcdcdc→#f0f0f0</code> 过渡带（§6.2）</td><td>「下面还有内容」的暗示比一条实线更轻，适合我们的滚动列表</td><td>可滚动区（任务列表 / 概览 / 抽屉）底部加 <code>mask-image: linear-gradient(…)</code>；值走 <code>--surface</code>，<strong>不写死灰</strong></td><td class="num">低</td><td><strong>缺失（唯一真缺口）</strong>全 <code>src</code> 内 <code>mask-image</code> 命中 <strong>0</strong>；<code>mask</code> 仅 1 处且用途是复选勾选图标（L1377–1380 的 SVG 遮罩），<strong>不是滚动渐隐</strong>。这条是 12 项里唯一一个「Trae 有、我们完全没有、且补起来不动逻辑」的</td></tr>
+    <tr><td>M8</td><td><strong>圆角数值族</strong>：<code>2/4/8/10/16/20/full=9999px</code>（§9.4）；卡片 <code>radius 16</code>、tooltip <code>6</code>、通知 <code>4</code></td><td>档位少而固定 + <code>full=9999px</code> 免算半径</td><td>只做一件事：删 <code>--r-xs</code>/<code>--r-sm</code> 的同值冗余（都是 <code>2px</code>）</td><td class="num">低</td><td><strong>冲突（不改）</strong>我们是 <code>2/2/3/4/6/999</code>，文件头明写「圆角收紧一档」是 2026-10-07 的<strong>刻意裁决</strong>；Trae 的 8/16 会直接把我们的调性换掉。<strong>唯一可动</strong>：清点查出 <code>--r-xs</code> 与 <code>--r-sm</code> <strong>同值 2px</strong>，属无意义别名</td></tr>
+    <tr><td>M9</td><td><strong>交互态只改 alpha</strong>：<code>bg-primary-item=.15</code> → <code>-hover=.22</code>、<code>list-hover=.05</code>、<code>input=.03</code>（§5.5/§9.4）</td><td>一套底色 + 叠加层做全部态，主题切换零成本</td><td>—（已有）</td><td class="num">—</td><td><strong>已有</strong><code>--sel: rgba(86,99,119,.09)</code> / <code>--sel-strong: .14</code>，暗色镜像 <code>rgba(255,255,255,.06)</code> / <code>.10</code>——同一手法，且我们亮暗各写一档，比 Trae 单靠基色更可控</td></tr>
+    <tr><td>M10</td><td><strong>双通道暴露令牌</strong>：同一族既有裸名也有 <code>--vscode-icube--*</code> 镜像（§9.2）</td><td>（原写法）将来把组件塞进第三方容器时的低成本桥法</td><td>—（不做）</td><td class="num">—</td><td><strong>不借鉴</strong> <span class="tag t-static">静态实证</span>原本只标「暂不做」。<strong>A9 之后有实证</strong>：同一族在装机包里 <strong>9 个文件、两套互不相同的取值</strong>，其中一份的 <code>dark-blue</code> 直接回落成 <code>dark</code> 值（§9.2.1）。多命名空间 = 多拷贝 = <strong>已经观测到的漂移</strong>。我们若真要桥，只允许<strong>构建期从单一源生成</strong>，禁止第二份手写</td></tr>
+    <tr><td>M11</td><td><strong>主题钩子</strong>：<code>body.className</code>（<code>vs-dark</code>/<code>vs</code>/<code>theme-icube</code>）+ 裸名层 <code>[data-theme=…] body.icube-chat-next, body.icube-chat-next.dark</code>（§2 #13 · §9.2.1）</td><td>若要做「设置里手动切主题」，双钩子并联是现成范式</td><td><strong>仅在需求出现时</strong>：<code>:root</code> 的暗色块从 media query 改挂到 <code>html[data-theme=dark]</code>，media query 只负责写那个属性</td><td class="num">中</td><td><strong>缺失 · 但是刻意的</strong>更正上一版的「已有」：<code>src</code> 里主题入口<strong>只有 1 个</strong> <code>@media (prefers-color-scheme: dark)</code>（L204），<strong>没有任何 class/属性钩子</strong>；<code>styleguide.jsx</code> L430 明写「暗色跟随系统偏好」，<code>RtiCompare.jsx</code> L42 只是监听它取图表色。<strong>没有手动切换开关，不是漏做，是还没做这个需求</strong></td></tr>
+    <tr><td>M12</td><td><strong>两套界面语言的自觉</strong>：工作台直角分栏、SOLO 圆角卡片 + 8px 画布留白（§2 #10）</td><td>Trae 是「按任务性质切换界面语言」，而不是全站强行统一</td><td>—（已有裁决）</td><td class="num">—</td><td><strong>已有</strong>我们对应的裁决已写在文件头与 <code>docs/design/2026-10-17-工具页卡片式改造方案.html</code>：列表扁平（L995「行不是卡片」）/ 工具页卡片化（L3022 起）。<strong>此条的价值是「互相印证 + 给了外部对照样本」，不是新决策</strong></td></tr>
+  </tbody>
+</table>
+<p><strong>对账净结果：</strong>12 条里<strong>已有 6 条</strong>（M3 主体 / M4 / M6 / M9 / M12 / M1 的方法）、<strong>真缺 1 条</strong>（M7 渐变遮罩）、<strong>小补 2 条</strong>（M1 缺档、M3 缺别名）、<strong>数值冲突而改判不借鉴 3 条</strong>（M2 / M5 / M8）、<strong>证据反向而删掉 1 条</strong>（M10）、<strong>缺但属需求未定 1 条</strong>（M11）。<span class="ev">tools/a11-token-audit.mjs · notes/04 §4</span></p>
+
+<h3>11.2 明确不借鉴（附「为什么不」）</h3>
+<table>
+  <thead><tr><th>不借鉴项</th><th>原因（我们的约束）</th></tr></thead>
+  <tbody>
+    <tr><td><strong>A11 复判进来的三项数值</strong>：M2 复合字体令牌、M5 的 32/36px 行节奏、M8 的 8/16px 圆角档</td><td>三条都是「<strong>做法我们已有、只有数值不同</strong>」，而且不同处源于我们自己的公开裁决（离线不加载 webfont / 一行放三栏 / 圆角收紧一档）。<strong>借数值等于推翻 2026-10-07 与 2026-10-17 两次拍板</strong>，那不是解析报告的产出，是新的设计决策，得由重构的人自己做。</td></tr>
+    <tr><td><strong>同一族令牌发两个命名空间</strong>（M10，A9 复判）</td><td>不再当作「将来可低成本桥」。<span class="tag t-static">静态</span>实证：Trae 装机包里 <code>--bg-bg-base-secondary</code> 有 <strong>9 个文件、两套取值</strong>，其中一份 <code>dark-blue</code> 没跟着演进（§9.2.1）。多命名空间的漂移<strong>已经发生</strong>，不是理论风险。</td></tr>
+    <tr><td><strong>暗色下的阴影基色</strong>（沿用 <code>rgba(24,24,24,α)</code>）</td><td><span class="tag t-static">静态</span>暗块里 Trae 只把 alpha 从 .08 提到 .12，基色没换。<code>#181818</code> 落在 <code>#1a1b1d</code> 上≈不可见。我们 L235–236 已整体换 <code>rgba(0,0,0,.5)</code> + 白色发丝 inset——<strong>这条是我们比样本做得对的地方，别反向对齐</strong>。</td></tr>
+    <tr><td><code>.part.*</code> + <code>monaco-grid-branch-node</code> + <code>monaco-split-view2</code> 布局树</td><td>为「IDE 多栏可拖拽 + 视图可插拔」服务。我们是单栏卡片流，这套树只带来 DOM 深度与 sash 逻辑成本。要借的是<strong>分区命名思路</strong>，不是它的 DOM。</td></tr>
+    <tr><td>整套 <code>--vscode-*</code> 语义令牌（2800+ 条）</td><td>99% 的键（notebook / debug / scm / merge-editor …）我们根本没有对应 UI。引入就是死令牌。<strong>只借 §11.1 的分层方法。</strong></td></tr>
+    <tr><td>codicon 图标字体（1094 类名 / 私有区码点）</td><td>字体资产 + 码点映射表 + 无法多色。我们保持 SVG/组件图标；<code>\4f5b</code> 这类内容码点更不该抄。</td></tr>
+    <tr><td>「令牌由主题服务运行时生成」</td><td>那是 VS Code 主题服务的能力（一份主题 JSON → 几千个变量）。我们 <code>:root</code> + class 切换完全够用，运行时生成只会让首屏与调试都变复杂。</td></tr>
+    <tr><td>多 <code>BrowserWindow</code> / 多渲染目标架构</td><td>Trae 把 Agent 做成独立窗口是 Electron 习惯 + AI 会话隔离需要。Tauri 侧要付出窗口管理与焦点协调成本，我们当前没有这个需求。<strong>悬浮球尤其不要碰</strong>（见下）。</td></tr>
+    <tr><td><code>iCubeFloatingChat</code> 悬浮球</td><td>依赖 OS 级置顶无边框小窗 + 跨平台差异（macOS/Windows 行为不一致）+ 焦点管理。且本报告对它<strong>零实测</strong>（§8），照抄等于抄一个自己没看懂的东西。</td></tr>
+    <tr><td>Monaco 虚拟滚动（<code>scrollable-element</code> 600×39464）</td><td>是 Monaco 内部实现，不是可借的设计。我们列表千行级用普通渲染 + 分页即可。</td></tr>
+    <tr><td><code>--unset---vscode-*</code> 覆盖手法</td><td>这是「在别人的变量之上打补丁」，前提是你有上游。我们没有。</td></tr>
+    <tr><td><code>--vscode-focusBorder = rgba(0,0,0,0)</code>（透明焦点框）</td><td><span class="tag t-guess">评估推测</span>Trae 靠色块对比表达焦点，代价是键盘可达性弱化。我们是工具型应用、必须保留可见 focus ring（现有 <code>--ring</code> 是资产，别丢）。</td></tr>
+    <tr><td><code>z-gtm-modal = 2147483647</code></td><td>反面教材：营销/引导弹窗占满 int32 上限，之后任何层级都压不过它。我们的 <code>z</code> 族保持小整数 + 明确分层。</td></tr>
+    <tr><td>哈希类名（<code>accountRoot-RH11Aa</code> / <code>sc-fhfEft dXhqLu</code>）</td><td>CSS Modules / styled-components 的产物，跨版本即失效。我们保持语义类名，这也是本次 Trae 内容层取证的最大阻力，别再给自己制造同样的问题。</td></tr>
+    <tr><td>品牌色 <code>#0FDC78</code> / <code>status-primary #2f74ff</code> 等具体取值</td><td>直接搬色值会与 Trae 视觉混淆且和我们现有 <code>--accent:#0e7490</code> 冲突。<strong>借结构（层级、命名、档位），不借取值。</strong></td></tr>
+  </tbody>
+</table>
+
+<h3>11.3 A11 之后重排的「若只做三件事」</h3>
+<p>上一版这三件事是按「Trae 有什么我们没有」排的，A11 对账后<strong>顺序变了</strong>——因为 6 条已经在了，真正的缺口只剩一个：</p>
+<ol>
+  <li><strong>补状态色的缺档</strong>（M1，唯一有产品痛点的补法）：<code>--ok</code>/<code>--warn</code> 各补 <code>-line</code>，全族补 <code>-active</code>。<em>为什么第一</em>：徽标/浅底行/描边三处不一致是用户能看见的，而方法（5 档）<code>--accent</code> 已经验证过，纯增量、不动逻辑、可用现有 <code>scripts/ui-rebase-token-validate.py</code> 复验对比度。</li>
+  <li><strong>补滚动渐隐遮罩</strong>（M7，唯一真缺失）：可滚动区底部 <code>mask-image: linear-gradient()</code>，颜色走 <code>--surface</code> 不写死。<em>为什么第二</em>：12 项里只有它是「Trae 有 / 我们 0 命中 / 与现有裁决不冲突」的；单独可验证（截图对比截断处），失败可整体回退。</li>
+  <li><strong>给投影加场景别名</strong>（M3 的别名层）：<code>--shadow-menu/--shadow-modal/--shadow-popover</code> 指向已有 <code>--sh-1/2/3</code>。<em>为什么第三</em>：纯可读性收益，把「谁浮在谁上面」写进名字；不改任何一个像素值，所以零视觉风险。</li>
+</ol>
+<p><strong>被删掉的原第一、二件事：</strong>「令牌分层收敛」和「排版节拍对齐」——对账显示 <code>--sel</code> 双档、三档描边、三档投影、双档限宽、发丝线 + 固定行高<strong>全都已存在</strong>，剩下的只是数值取向之争（见 §11.2 第一行）。<strong>继续做就等于用外部样本否定我们自己的两次拍板，而没有拿到新证据。</strong></p>
+
+<h4>11.3.1 顺带查出的两处「我们自己的」小账</h4>
+<ul>
+  <li><code>--r-xs</code> 与 <code>--r-sm</code> <strong>同值 2px</strong>（清点直接命中）——无意义别名，二选一删掉即可，属令牌表卫生，不是设计变更。</li>
+  <li><code>--fs-md=13px</code> 与 <code>--fs-sm=13px</code> 同值。<span class="tag t-measured">实测</span>这类同值档在 Trae 那边就是「两代命名并存」的成因（§9.4 <code>Spacer-/spacer-</code>）；我们不打算扩字号族，所以更该在此处收干净，别留给别人猜。</li>
+</ul>
+
+<h4>11.3.2 文档债（只报告，不动 <code>src</code>）</h4>
+<div class="callout warn">
+<p><strong>发现：产品文件内的注释口径与实现不一致。</strong><code>todolist-gui/src/index.css</code></p>
+<table>
+  <thead><tr><th>位置</th><th>说的是什么</th><th>与实现的关系</th></tr></thead>
+  <tbody>
+    <tr><td>L20（文件头）</td><td>「列表行改为 <strong>38px、无行分隔线</strong>」</td><td rowspan="2"><strong>已过时</strong>：L1251–1254 的实现注释写的是「<strong>42px 行高 + 行间发丝线 + 稳定三栏</strong>」，且 <code>.task-row</code> 实测为 <code>height: var(--row-h)</code>（L150 <code>--row-h: 42px</code>）+ <code>border-bottom: 1px solid var(--border)</code>（L1261/L1265）。窄屏/触屏块内另有 L5156 <code>--row-h: 44px</code> 覆写。</td></tr>
+    <tr><td>L995（章注释）</td><td>「行不是卡片：固定 <strong>38px</strong> 行高 + 整行高亮，<strong>没有</strong>行间发丝线」</td></tr>
+  </tbody>
+</table>
+<p style="margin:6px 0 0"><strong>我没有改它，也不打算改</strong>——<code>src</code> 在本次任务的硬约束里是只读的（27 个未提交文件正被人重构）。记录理由是：<em>这条漂移恰好是 §11.1 M5 的判读依据来源</em>，如果按文件头注释写报告，会把「我们已经用了发丝线 + 固定行高」误判成「缺失」，从而把 Trae 的 32/36px 当成缺口去借。<strong>建议</strong>：由正在重构的人把 L20 / L995 两处口径更新到 42px + 发丝线，或在 L20 标注「已被 §任务行 覆写」。</p>
+</div>
+<div class="callout">
+<strong>本节边界声明。</strong>以上是「哪些值得借」的判断，<strong>不是实施方案</strong>。A11 已完成 ①，剩下两条仍然有效：
+① <del>与 <code>todolist-gui/src</code> 现有令牌表逐条比对</del> → <strong>已做完</strong>，结果就是 §11.1 最后一列（<code>tools/a11-token-audit.mjs</code>，只读，167 条定义 / 104 个令牌）；
+② 亮/暗两套主题下各自验算叠加后的最终色（§9.3 已证明令牌值 ≠ 像素值，且 §9.2.1 新增「多份拷贝 / 兜底字面量」两种冲突来源）；
+③ 由正在重构的人确认不冲突——<strong>27 个未提交文件仍在动，本报告的对账结论有有效期</strong>，PR 前请重跑 <code>a11-token-audit.mjs</code>（10 秒）。
+当前阶段<strong>不动产品代码</strong>：本轮对 <code>src</code> 的全部操作都是读。
+</div>
+
+<h2 id="s12">12. 风险 · 坑 · 工程约定</h2>
+<h3>12.1 工具/环境坑（都已复现并修掉）</h3>
+<table>
+  <thead><tr><th>坑</th><th>现象</th><th>正解</th></tr></thead>
+  <tbody>
+    <tr><td>PowerShell 5.1 按 ANSI 读 UTF-8 无 BOM 的 <code>.ps1</code></td><td>中文注释导致「表达式或语句中包含意外的标记」</td><td>工具脚本一律 ASCII（<code>.mjs</code> 不受影响）</td></tr>
+    <tr><td>调试端口就绪判据错</td><td><code>/json/version</code> 0.5s 应答但 <code>/json/list</code> 为 <code>[]</code>，后续采样全空树</td><td>轮询到 <code>"type":"page"</code> 才算就绪</td></tr>
+    <tr><td><code>windowsVirtualKeyCode</code> 用字符 ASCII</td><td>字母恰好相等（P=80）能开命令面板，<strong>掩盖了标点全错</strong>：<code>`</code> 应 192 不是 96，<code>,</code> 应 188 不是 44</td><td>建 <code>PUNCT_VK</code>/<code>NAMED_VK</code> 表；<code>code</code> 用 UI Events 规范名（<code>Backquote</code>/<code>Comma</code>）</td></tr>
+    <tr><td>命令行写 <code>Control+comma</code></td><td>兜底成 <code>vk=67</code> = <strong>Ctrl+C</strong>（静默走偏，采到的是错误状态）</td><td>键名用真实字符 <code>,</code>；未知键名兜底时必须打日志暴露</td></tr>
+    <tr><td>页面侧函数用 <code>${fn()}</code> 插值</td><td>在 Node 侧立即求值，<code>document</code> 未定义 → 模块崩</td><td>只用 <code>fn.toString()</code> 序列化，Node 变量当参数传</td></tr>
+    <tr><td><code>--eval-file</code> 包成 <code>(${expr})</code></td><td>返回函数值，序列化成 <code>{}</code></td><td>包成 <code>(${expr})()</code></td></tr>
+    <tr><td><code>--click-text</code> 未命中即抛</td><td>整次采集崩溃，E36 因此丢失</td><td><code>CLICK=MISS</code> 记录后继续（采证工具不许因单点失败丢全格）</td></tr>
+    <tr><td>位置参数吞掉 <code>--runtime</code> 的值</td><td>把 JSON 路径当 CSS 文件挖</td><td>解析时跳过选项值；用户路径按 <code>cwd</code>、工具路径按脚本目录解析；MSYS <code>/c/…</code> 对 Node 无效</td></tr>
+    <tr><td>DOM 采样「看起来成功」其实被裁</td><td><code>visited</code>=78 且树非空，容易被当成「页面就这么点节点」；实际默认 <code>--max-depth 9</code> 把第 9 层以下全砍了，workbench 分区树停在第 8 层</td><td>读 <code>meta.visited</code> 与截图信息量对照；采深树必须显式 <code>--max-depth 40</code>（节点预算反而是次要的）</td></tr>
+    <tr><td>单像素测距造出假边界</td><td>沿 y=400 取单像素、阈值 30 → 切出 9 段，多数是文字/图标抗锯齿造成的假段</td><td>改用「列众数色 + 阈值 4」→ 6 个切点，逐一与真实 sash / 窗口边框对应</td></tr>
+    <tr><td>Bash 双引号展开</td><td>fixture 里 <code>${String(v).toUpperCase()}</code> 被 shell 吃掉</td><td>含 <code>$</code>/{backtick} 的文件内容一律用单引号写</td></tr>
+    <tr><td><strong>把静态 CSS 里的十六进制当生效值</strong>（本轮 A9）</td><td><code>ai-modules-chat/dist/index.css</code> 的 13740 次 <code>var()</code> 里 <strong>4608 次带逗号兜底字面量</strong>；<code>#f5f5f5</code> 出现 22 次，其中 <strong>20 次是 <code>var(--bg-bg-base-secondary,#f5f5f5)</code> 的兜底写法</strong> → 照抄会得到「亮色档 = #f5f5f5」的错误结论（真值按拷贝不同是 <code>#edeff2</code> 或 <code>#f5f5f5</code>）</td><td>取值只认<strong>运行时快照</strong>；静态 CSS 用于<strong>机制</strong>与<strong>数量</strong>，不用于取值。同一令牌先用 <code>--copies</code> 数一遍有几份</td></tr>
+    <tr><td><strong>内联 <code>node -e</code> 写复杂检索逻辑</strong>（本轮踩 3 次）</td><td>全角括号 / <code>'…'+'];</code> / <code>&lt;</code> 触发 shell 或 JS 语法错，报错位置还指在下一行，排查成本高于写文件</td><td>超过一行的取证逻辑一律写成 <code>tools/*.mjs</code> 再跑——顺带天然可复现（§14.2）</td></tr>
+  </tbody>
+</table>
+
+<h3>12.2 采证卫生规则（方法论产出，可复用到任何运行时取证）</h3>
+<ol>
+  <li><strong>画面字节相同 = 证据无效。</strong>每格采完比对 PNG 字节数与 DOM 节点数；连续多格完全相同即判定「未进入目标状态」，必须排查而非记录。</li>
+  <li><strong>进视图前先查模态层。</strong>对话框、通知、信任提示、更新弹窗会静默吞掉全部输入。本轮 6 格就是被「工作区信任」模态框吃掉的（E27 保留为污染形态记录）。<code>--press</code> 前置 <code>Escape|</code> 是卫生项不是优化项。</li>
+  <li><strong>事件是否送达要看 DOM 监听器计数</strong>，不能靠截图猜。且 <code>window</code> 捕获阶段能收到、<code>document</code> 捕获阶段可能收不到——监听点选错会得出「0 事件」的假结论。</li>
+  <li><strong>工具报「未暴露」时先怀疑探针读错位置</strong>，而不是记录成「产品没提供」（主题属性那次就是我自己的测量错误）。</li>
+  <li><strong>杀进程只按命令行标记</strong>（<code>trae-cdp-probe</code>），绝不按进程名全杀。</li>
+  <li><strong>断言「某令牌 = 某值」之前，先数它有几份定义。</strong>本轮 <code>--bg-bg-base-secondary</code> 一名有 <strong>9 个文件 / 2 套取值</strong>，两处「像素与令牌冲突」最后都被这条解释掉（§9.2.1、§9.3）。同理适用于我们自己：<code>--r-xs</code>/<code>--r-sm</code> 同值、<code>--fs-sm</code>/<code>--fs-md</code> 同值，说明<strong>别名比数值更容易骗人</strong>。</li>
+  <li><strong>「机制」可以静态定，「取值」必须运行时定。</strong>A9 的全部价值是把 §9.2 从推测升为静态实证；而它同时证明静态层<strong>不能</strong>用来取值（兜底字面量 + 多拷贝）。这两句不矛盾，别混用。</li>
+</ol>
+
+<h3>12.3 事故记录与我的流程失误</h3>
+<div class="callout warn">
+<p><strong>事实：</strong>2026-10-18 11:59:35，用户真实 Trae 实例（PID 15120 + 14 进程）退出。</p>
+<p><strong>不是探针杀的</strong>（证据链）：① 探针 11:53 启动后真实实例继续正常写日志到 11:58:19，共存约 5 分钟 → 无单实例接管；② 退出是<strong>优雅关窗</strong>链（<code>onBeforeCloseWindow → window.on('closed') → window-all-closed → onWillShutdown → app.quit()</code>），被 <code>Stop-Process -Force</code> 强杀的进程写不出这条链；③ 那次 <code>stop</code> 输出<strong>没有任何 <code>KILL=</code> 行</strong>（只有 <code>STOP_LEFT=0</code>）。</p>
+<p><strong>最可能解释：</strong>桌面凭空多出陌生的 Trae 窗口，人工把探针窗口和自己的窗口一起关掉了。</p>
+<p><strong>流程失误是我的：启动会抢焦点、会在桌面产生陌生窗口的探针之前应先打招呼，而不是默认「独立 profile 所以无害」。</strong>此后每轮：跑之前明说屏幕上会出现什么，跑之后验证用户实例仍在（<code>MAIN_ALIVE=True</code> / <code>TRAE_PROCS=13</code>）。</p>
+</div>
+
+<h3>12.4 剩余风险</h3>
+<table>
+  <thead><tr><th>风险</th><th>影响</th><th>处置</th></tr></thead>
+  <tbody>
+    <tr><td>探针窗口对用户是打扰（已发生一次）</td><td>用户工作中断；本项目对「不干扰」有硬约束</td><td>补格（§13）需 <strong>3–4 分钟可见窗口</strong>，必须由用户挑时机。离线队列<strong>已清空</strong>（A9 / A11 本轮做完，像素测距与 CSS 反查上一轮做完），剩下的动作<strong>无一能离线</strong>。本轮全程未启动任何窗口：复查 <code>TRAE_PROCS=13</code> / 主实例启动时间 12:07:35 未变 / 无 <code>trae-cdp-probe</code> 残留</td></tr>
+    <tr><td>DOM 快照默认 <code>--max-depth 9</code>，每帧只剩 58–78 个节点</td><td><strong>不只是分区宽度缺 DOM 锚点，视图内部（搜索/SCM/设置/编辑器）也全缺</strong>；§5.3 里除尺寸外的多数描述只到「截图目视」级</td><td>§13 A1（含 A8）：一次开机按视图全量重采 <code>--max-depth 40 --max-nodes 6000</code></td></tr>
+    <tr><td>所有尺寸只在 1440×860 成立</td><td>窄窗分栏退化、最小宽、断点全未知 → 借 M5/M6 时可能踩空</td><td>§13 A2 窄窗采 3 档</td></tr>
+    <tr><td>未登录 + 禁扩展 = 非默认状态</td><td>可能漏掉登录后才出现的分区（账号/额度/AI 历史），结论覆盖不全</td><td>已在 §1 采样偏差声明；B 路线（用真实 profile）需用户明确同意并自己挑时机</td></tr>
+    <tr><td>SOLO/引导内容层类名哈希</td><td>本报告的类名锚点在那两层跨版本失效</td><td>报告同时记录「文案 + 尺寸 + 令牌值」三角定位，不只依赖类名</td></tr>
+    <tr><td>Trae 自动更新</td><td>取证明天就可能对不上</td><td>报告锁 <code>1.107.1 / commit 77f41624 / Electron 39.2.7</code>，后续按版本重跑</td></tr>
+    <tr><td>大体积原始 dump 污染仓库</td><td>30 格 × 50KB tokens 会到 1.5MB+</td><td><code>evidence/*.dom.json</code>、<code>*.tokens.json</code> 已 gitignore；PNG 保留（45–127KB/格）</td></tr>
+  </tbody>
+</table>
+
+<h2 id="s13">13. 待补证据与验证动作</h2>
+<p>以下每条都是「一个可独立验证的动作」，不做完就不许在报告里出现对应结论。</p>
+<table>
+  <thead><tr><th>编号</th><th>缺什么</th><th>动作（可直接执行）</th><th>产出落点</th><th class="num">需要探针窗口</th></tr></thead>
+  <tbody>
+    <tr><td>A0</td><td>§8 悬浮球全章（0 证据）</td><td><code>launch</code> → <code>--match floatingButton.html</code> → <code>--press Escape</code> 再采；展开态用 <code>--click-text</code> 打文案锚点</td><td>§8 分区表 + 组件树</td><td class="num">是</td></tr>
+    <tr><td>A1</td><td><strong>所有帧的 DOM 证据都只到外壳骨架层</strong>：实测 <code>visited</code> = E10 78 / E30 78 / E31 78 / E32 78 / E33 69 / E34 69 / E35 <strong>69</strong> / E37 69 / E38 69 / E39 78（SOLO E40 58，引导 E00 19 / E02 15）</td><td><strong>根因是默认 <code>--max-depth 9</code> 把第 9 层以下裁掉了</strong>，节点预算（默认 1400）远未用满。动作：对 <code>workbench.html</code> 的每个视图重跑 <code>--max-depth 40 --max-nodes 6000</code>，一次开机全量重采（含 SOLO）<strong>；引导 3 帧不必重采</strong>——它们 <code>maxDepth</code> 只有 5–6，未触顶，15–19 个节点是真实规模</td><td>§5.1 分区表补 DOM 列；§5.3 各视图从「目视」升为「实测」；§6 结构树补内容层</td><td class="num">是</td></tr>
+    <tr><td>A2</td><td>窄窗（断点/最小宽/分栏退化）</td><td>3 档：1000×800、820×900、680×900 各采 workbench + SOLO</td><td>§10 尺寸矩阵；M5/M6 的适用边界</td><td class="num">是</td></tr>
+    <tr><td>A3</td><td>工作台亮色主题</td><td>命令面板 <code>Color Theme</code> 切换后 <code>--match workbench.html</code> + <code>--match solo-lite.html</code> 各采一帧（主题不跨 target，必须两边都验）</td><td>§9.4 取值表补齐亮色列；M1/M4/M9 的 alpha 需按亮色重算</td><td class="num">是</td></tr>
+    <tr><td>A4</td><td>深蓝主题（第 3 候选）</td><td>同 A3，选深蓝后采</td><td>§10 主题矩阵</td><td class="num">是</td></tr>
+    <tr><td>A5</td><td>QuickOpen（<code>Ctrl+P</code>）</td><td><code>--press "Control+p"</code>（键名用真实字符）</td><td>§5.1 浮层表 + 文件选择器结构</td><td class="num">是</td></tr>
+    <tr><td>A6</td><td>右键上下文菜单</td><td><code>--click-text</code> 无法注入右键；需给工具加 <code>Input.dispatchMouseEvent type=mousePressed …clickCount:1 contextmenu:true buttons:2</code> 分支</td><td>§5.1 浮层表（菜单项高/分隔/快捷键列宽）</td><td class="num">是（且先补工具）</td></tr>
+    <tr><td>A7</td><td>通知 / 进度浮层、Agent 面板展开态</td><td>触发一次长任务（如同步）后连续采 2 帧</td><td>§5.1 浮层表 + §6.1</td><td class="num">是</td></tr>
+    <tr><td>A8</td><td>E35 设置页结构（有截图，但拆不出内部结构）</td><td><strong>原以为可离线拆，已验证不成立</strong>：<code>E35-settings.dom.json</code> 只有 <strong>69</strong> 个节点，全是被 <code>max-depth 9</code> 裁剩的外壳骨架 → 并入 A1 的重采清单（设置页需要单独一帧深采）</td><td>§5.3 设置行由「待补」升为实测</td><td class="num">是（并入 A1）</td></tr>
+    <tr><td class="strike">A9</td><td>令牌镜像的<strong>生成机制</strong></td><td><strong>已完成（本轮，离线）</strong>：<code>tools/a9-mirror-hunt.mjs</code> 全量检索明文 bundle。结果：注册式 <code>icube--*</code> id <strong>102</strong> + 字面量 <strong>5</strong> = <strong>107</strong>，与运行时快照<strong>双向差集 0 / 覆盖率 100%</strong>；<strong>14 种拼接写法 0 命中</strong> → 打包期命名而非运行时拼接；CSS 侧「定义式 0 / 消费 463·305·229」。</td><td>§9.2 已由推测升为<span class="tag t-static">静态</span>；另得新产出 <strong>§9.2.1 多份拷贝</strong>与深蓝取值</td><td class="num">—</td></tr>
+    <tr><td class="strike">A11</td><td>§11.1 与产品现状对账</td><td><strong>已完成（本轮，只读）</strong>：<code>tools/a11-token-audit.mjs</code> 扫 <code>src/index.css</code> + <code>src/components</code>。结果：167 条定义 / 104 个令牌 / 组件内硬写颜色 <strong>0</strong>；逐条判「已有 6 · 真缺 1 · 小补 2 · 数值冲突 3 · 反向删除 1 · 需求未定 1」。</td><td>§11.1 加对账列；§11.3 三件事重排；§11.3.2 记一条<strong>注释漂移</strong>（未改 <code>src</code>）</td><td class="num">—</td></tr>
+    <tr><td>A12<br><em>新增</em></td><td>§9.2.1 的两处残余不确定：① 同一份 CSS 里 Set A / Set B 谁最终生效（取决于选择器作用域与顺序，静态无法判定）；② 深蓝主题在<strong>工作台侧</strong>的实际档位</td><td>与 A3/A4 同一次开机即可：切到深蓝后 <code>--match workbench.html</code> + <code>--match solo-lite.html</code> 各采一帧，读 <code>.tokens.json</code> 里 <code>--bg-bg-base-secondary</code> 的最终值即可判胜负</td><td>§9.2.1 从「两套拷贝并存」升级为「哪套赢」</td><td class="num">是（并入 A3/A4）</td></tr>
+    <tr><td>A10</td><td>登录后 / 真实工作区差异</td><td>B 路线：用 <code>%APPDATA%\Trae</code> 重启并带调试端口——<strong>会打断用户，需明确同意并自己挑时机</strong></td><td>§1 采样偏差可解除；新增登录后分区</td><td class="num">是（用户决定）</td></tr>
+  </tbody>
+</table>
+<p><strong>建议执行顺序（A9 / A11 已完成后更新）：</strong>剩下<strong>全部</strong>待补动作都需要探针窗口 → 用户点头后<strong>一次开机连采</strong>：A1（含 A8 设置页深采，<code>--max-depth 40 --max-nodes 6000</code>）→ A3 亮色 → A4 深蓝（顺手解 A12）→ A5 QuickOpen → A6 右键（<strong>先给工具加 contextmenu 注入分支</strong>）→ A7 浮层 → A2 窄窗 3 档 → A0 悬浮球。约 3–4 分钟，一次窗口生命周期内做完，不分次打扰。<strong>A10（真实 profile）另计，由用户单独挑时机。</strong><br>
+<em>本轮更正记录：① A8 原登记为「离线可做」，验证不成立（E35 DOM 仅 69 节点，是残壳），已并入 A1；② A9 / A11 本轮做完，离线队列<strong>清空</strong>；③ 新增 A12（两份拷贝谁生效），必须靠运行时，故并入 A3/A4。</em></p>
+
+<h2 id="s14">14. 附录 · 工具与复现</h2>
+<h3>14.1 工具清单</h3>
+<table>
+  <thead><tr><th>文件</th><th>用途</th><th>关键约束</th></tr></thead>
+  <tbody>
+    <tr><td><code>tools/trae-cdp.ps1</code></td><td><code>launch | stop | status [-Port 9333] [-Folder]</code> 生命周期</td><td>ASCII-only；launch 等 <code>"type":"page"</code>；stop 只杀带 <code>trae-cdp-probe</code> 标记的进程</td></tr>
+    <tr><td><code>tools/cdp-capture.mjs</code></td><td>单命令产 <code>png / dom.json / tokens.json / eval.json</code></td><td><code>--name --match --press --click-text --eval-file --pre-eval-file --front --max-nodes --max-depth --settle --port</code></td></tr>
+    <tr><td><code>tools/css-mine.mjs</code></td><td>明文 CSS 挖掘（变量名、类名直方图、前缀族、字号/圆角/gap 分布、z 峰值、动效时长、<code>.part.*</code> 计数、@media/@keyframes）并与运行时对账</td><td>只对结构/几何有效，<strong>对令牌无效</strong>（§9.1）</td></tr>
+    <tr><td><code>tools/token-split.mjs</code></td><td>把运行时变量拆成 VS Code 族 / 自研族 + 样例，产 <code>extracted/token-families.json</code></td><td>分组口径见 §9.1（icube 需单独拆，旧版会误并）</td></tr>
+    <tr><td><code>tools/png-measure.mjs</code></td><td>零依赖 PNG 解码 + 众数色分区测距（<code>--cuts row:N|col:N</code>、<code>--strip</code>、<code>--rows</code>、<code>--row</code>、<code>--col</code>、<code>--threshold</code>、<code>--from</code>、<code>--win</code>）</td><td>本轮新增，<strong>不需要探针窗口</strong>——直接吃已存 PNG，把「分区尺寸」从缺口变成实测；校准见 §3；仅支持 bit depth 8 / 非隔行 / colorType 0·2·6</td></tr>
+    <tr><td><code>tools/a9-mirror-hunt.mjs</code></td><td>令牌<strong>通道机制</strong>反查：<code>&lt;app&gt; [--verify &lt;tokens.json&gt;] [--copies &lt;令牌名&gt;] [--scan-dirs]</code>。三种模式分别给「拼接点有/无」「静态并集 vs 运行时快照的双向差集与覆盖率」「同一裸名令牌在多少个文件里有定义、取值是否互不相同」</td><td>本轮新增，<strong>不需要探针窗口</strong>；只读安装目录明文；<code>--verify</code> 用 <code>latin1</code> 读、按 <code>icube--</code> 正则取注册 id（<code>[\w$.]+\("icube--…"</code>），因此<strong>只统计字符串实参形态</strong>，不识别运行时拼接（正是这一点给出 0 命中的结论）</td></tr>
+    <tr><td><code>tools/a11-token-audit.mjs</code></td><td>对<strong>我们自己</strong>的 <code>src/index.css</code> + <code>src/components</code> 做只读清点：令牌数 / 族分布 / 状态色档位缺口 / 梯子 / 组件硬写颜色 / 能力缺失 / 行高文档漂移</td><td>本轮新增，<strong>只读脚本，绝不写 <code>src</code></strong>；「出现多于一次的令牌 61 个」属亮暗镜像正常现象，脚本只列出供核查；<strong>PR 前需重跑</strong>（27 个未提交文件仍在动）</td></tr>
+    <tr><td><code>tools/probe-input.mjs</code></td><td>在页面装 <code>window</code> 捕获监听，验证按键/鼠标是否真送达</td><td>查「输入没反应」的第一步，比猜截图可靠</td></tr>
+    <tr><td><code>tools/probe-keys-pre.js / -post.js</code></td><td>装监听 / 读回监听结果，配合 <code>--pre-eval-file</code> + <code>--eval-file</code></td><td>必须是表达式文件，工具按 <code>(${expr})()</code> 调用</td></tr>
+  </tbody>
+</table>
+
+<h3>14.2 复现</h3>
+<pre><code>cd docs/design/2026-10-18-Trae-UI结构解析
+powershell -File tools/trae-cdp.ps1 launch 9333 $env:TEMP\trae-ui-fixture
+node tools/cdp-capture.mjs --name E30-project-trusted --match workbench.html --press "Escape|" --max-depth 40 --max-nodes 6000
+node tools/cdp-capture.mjs --name E40-agent-solo     --match solo-lite.html   --front
+node tools/cdp-capture.mjs --name E31-cmd-palette    --match workbench.html --press "Control+Shift+p"
+node tools/png-measure.mjs evidence/E34-terminal.png --cuts row:430 --row auto --col auto --from 40 --win 400 --threshold 4
+node tools/css-mine.mjs "&lt;Trae&gt;/resources/app/out/vs/code/electron-browser/workbench/workbench.desktop.main.css" --runtime evidence/E30-project-trusted.tokens.json
+node tools/token-split.mjs
+powershell -File tools/trae-cdp.ps1 stop 9333
+
+# —— 离线两条（不需要探针窗口，只读）——
+APP="$env:LOCALAPPDATA/Programs/Trae/resources/app"
+node tools/a9-mirror-hunt.mjs "$APP" --verify evidence/E30-project-trusted.tokens.json   # §9.2：102+5=107 / 覆盖率 100%
+node tools/a9-mirror-hunt.mjs "$APP" --scan-dirs                                        # 拼接点全量检索（0 命中）
+node tools/a9-mirror-hunt.mjs "$APP" --copies --bg-bg-base-secondary                    # §9.2.1：9 个文件 / 两套取值
+node tools/a11-token-audit.mjs ../../../todolist-gui/src/index.css ../../../todolist-gui/src/components   # §11.1 对账列
+</code></pre>
+
+<h3>14.3 证据文件</h3>
+<table>
+  <thead><tr><th>目录</th><th>内容</th><th>git</th></tr></thead>
+  <tbody>
+    <tr><td><code>evidence/</code></td><td>16 帧 PNG（共 982,649 B，45–127KB/帧）+ 每帧 <code>.dom.json</code> / <code>.tokens.json</code>（目录合计 5.5MB）</td><td>只提交 PNG；<code>evidence/.gitignore</code> 排除 <code>*.dom.json</code> / <code>*.tokens.json</code> / <code>*.eval.json</code></td></tr>
+    <tr><td><code>extracted/</code></td><td>3 份明文 CSS 挖掘结果、<code>token-families.json</code>、3 份结构树（<code>tree-E30-workbench</code> / <code>tree-E40-solo</code> / <code>tree-E31-palette</code>）</td><td>提交（汇总后体量小）</td></tr>
+    <tr><td><code>notes/</code></td><td><code>00</code> 可行性与取证发现 · <code>01</code> 矩阵采集与输入通路 · <code>02</code> CSS 反查与令牌分层 · <code>03</code> 报告骨架与离线补证（像素测距工具与自我更正）· <code>04</code> A9 令牌机制与 A11 令牌对账</td><td>提交（工作底稿，含事故记录）</td></tr>
+    <tr><td><code>tools/</code></td><td>§14.1 全部脚本</td><td>提交</td></tr>
+  </tbody>
+</table>
+
+<hr>
+<h2>变更与状态</h2>
+<table class="kv">
+  <tr><td>v0.1</td><td>Step 4 骨架：§1–§14 全部就位；§5/§6 主体为实测（DOM + 像素双证）；§7 薄（像素 + 目视，且已说明<strong>为何</strong>薄——引导页树本身只有 15–19 节点且类名全哈希）；<strong>§8 为空章（零证据，故零数值）</strong>；§9 含两处对 notes/02 的更正版 + 一个新发现（令牌双通道）；§11 完成判断但未与产品现状对账；§13 列出 12 个动作，其中 <strong>A9 / A11 可离线</strong>（A8 原以为可离线，已验证不成立并并入 A1）</td></tr>
+  <tr><td><strong>v0.2（本页当前）</strong></td><td>离线补证 A9 + A11 完成，<strong>全程未启动任何窗口</strong>。<br><strong>A9</strong>：§9.2 由「推测」升为「静态实证」——注册 id <strong>102</strong> + 字面量 <strong>5</strong> = <strong>107</strong>，与运行时快照<strong>双向差集 0（覆盖率 100.0%）</strong>，14 种拼接写法 <strong>0 命中</strong>，CSS 侧定义 0 / 消费 463·305·229；<strong>新增 §9.2.1</strong>：同一裸名令牌 <strong>9 个文件 / 2 套取值</strong>、<code>dark-blue</code> 在其中一份拷贝里未实现、<code>var()</code> <strong>33.5% 带兜底字面量</strong> → §2 增第 15 条结论、§9.3 对账表加两行、§9.5 加设计系统本体那一份、§12.1 加两条坑、§12.2 加两条卫生规则。<br><strong>A11</strong>：§11.1 加对账列（167 条定义 / 104 个令牌 / 组件内硬写颜色 <strong>0</strong>），12 条判为<strong>已有 6 · 真缺 1 · 小补 2 · 数值冲突 3 · 反向删除 1 · 需求未定 1</strong>；§11.3 三件事<strong>重排</strong>（原前两件被证伪为「已有」）；新增 §11.3.1 同值冗余、§11.3.2 <strong>文档债</strong>（L20/L995 的 38px 口径 vs L1251–1265 的 42px + 发丝线实现，<strong>只报告、未修改</strong>）；M3 反查出 Trae 暗色阴影基色未换（我们已换，属我们更对）；M11 更正上一版的「已有」——实际只有 media query，<strong>没有</strong>手动切换钩子。<br>§13：A9 / A11 结题，新增 <strong>A12</strong>（两套拷贝谁最终生效，需运行时，并入 A3/A4）；§14.1 加两个脚本，§14.2 加离线复现段；§10 主题行的深蓝取值改标「静态已知、运行时未知」。</td></tr>
+  <tr><td>本版已知的最大短板</td><td>① 13 帧工作台/SOLO 的 DOM 快照 <code>maxDepth</code> 全部触顶 9（截止处 10–23 个分支被裁）→ <strong>§5.3 各视图内部结构目前只有截图目视级证据</strong>，尺寸是实测；重采一次即可整体升级（A1）。② <strong>§8 悬浮球仍是零证据空章</strong>（A0）。③ §9.2.1 能证明「有两套拷贝」，<strong>证明不了哪套赢</strong>（A12）</td></tr>
+  <tr><td>离线可做的工作</td><td><strong>已全部做完，无剩余</strong>：像素测距（上轮）· A9 令牌机制 · A11 令牌对账 · 深蓝取值静态获取（A4 的一半）。本轮复查用户实例未被触碰：<code>TRAE_PROCS=13</code>、主实例启动时间 12:07:35 未变、<code>PROBE_MARKED=0</code></td></tr>
+  <tr><td>下一步（需用户点头，一次开机做完）</td><td>A1（含 A8 设置页深采，<code>--max-depth 40 --max-nodes 6000</code>）→ A3 亮色 → A4 深蓝 + A12 → A5 QuickOpen → A6 右键（先给工具加右键注入分支）→ A7 浮层 → A2 窄窗 → A0 悬浮球；A10 真实 profile 由用户单独决定时机</td></tr>
+  <tr><td>不会做</td><td>不写 React 复刻；不复制 Trae 的 CSS/字体/图标资产；不动 <code>todolist-gui/src</code>（本轮对它的全部操作是读，连发现的文档债也只记录不改）；不在未同意时用真实 profile 重启 Trae</td></tr>
+</table>
+
+</main>
+</body>
+</html>

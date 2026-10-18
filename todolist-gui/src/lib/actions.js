@@ -81,7 +81,8 @@ function runAdd(ctx, intent) {
 
   const dueText = slots.dueDate ? `，截止 ${slots.dueDate}` : '';
   const noteText = intent.note ? `（${intent.note}）` : '';
-  return ok('todo.add', params, `已添加任务：${task.title}${dueText}${noteText}`);
+  // taskId 回传给会话焦点态：下一句「把它延到下周」的"它"就指这条新任务。
+  return { ...ok('todo.add', params, `已添加任务：${task.title}${dueText}${noteText}`), taskId: task.id };
 }
 
 function runComplete(ctx, intent) {
@@ -206,12 +207,19 @@ function runQuery(ctx, intent) {
     return ok('todo.query', params, `共 ${sorted.length} 条已完成任务：\n${lines.join('\n')}`);
   }
 
-  // active 分支：可选按 @分类 + 残余关键词过滤。
+  // active / overdue 分支：可选按 @分类 + 残余关键词过滤。
+  // overdue 是 active 的一个筛子：只保留 dueDate 已过的活跃任务，逾期最久的排前面。
+  const scope = intent && intent.scope === 'overdue' ? 'overdue' : 'active';
   const contextName = intent && intent.slots ? intent.slots.context : null;
-  const tasks = (ctx.tasks || [])
+  let tasks = (ctx.tasks || [])
     .filter((t) => !contextName || (t.contexts || []).includes(contextName))
     .filter(matchKeyword);
-  const params = { scope: 'active', count: tasks.length };
+  if (scope === 'overdue') {
+    tasks = tasks
+      .filter((t) => t.dueDate && t.dueDate < today)
+      .sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)));
+  }
+  const params = { scope, count: tasks.length };
   if (contextName) params.context = `@${contextName}`;
   if (keyword) params.keyword = keyword;
 
@@ -221,6 +229,7 @@ function runQuery(ctx, intent) {
       return ok('todo.query', params, e.reply, { clarify: e.clarify });
     }
     const tail = contextName ? ` @${contextName}` : '';
+    if (scope === 'overdue') return ok('todo.query', params, `没有逾期任务${tail} 🎉`);
     return ok('todo.query', params, `当前没有活跃任务${tail} 🎉`);
   }
 
@@ -233,7 +242,8 @@ function runQuery(ctx, intent) {
     }
     return `${n}. ${prio}${t.title}${due}`;
   });
-  return ok('todo.query', params, `共 ${tasks.length} 条活跃任务：\n${lines.join('\n')}`);
+  const head = scope === 'overdue' ? `有 ${tasks.length} 条任务已逾期：` : `共 ${tasks.length} 条活跃任务：`;
+  return ok('todo.query', params, `${head}\n${lines.join('\n')}`);
 }
 
 function runUndo(ctx) {

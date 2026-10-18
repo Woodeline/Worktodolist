@@ -27,6 +27,7 @@ const PENDING_HINT = {
   create: '（等你确认是否新建这条任务…）',
   confirmTarget: '（等你确认是哪一条…）',
   clarify: '（等待你回复候选序号…）',
+  multi: '（这句话里有好几件事，点下面的按钮选做哪一件…）',
 };
 
 function MessageText({ message }) {
@@ -35,6 +36,16 @@ function MessageText({ message }) {
       {message.text}
       {message.streaming && <span className="typing-cursor">▍</span>}
     </div>
+  );
+}
+
+// 消息头像：22px 方角标签，用两个字母区分"谁在说"。
+// 它替代了原来那对方圆气泡 —— 对话记录更像终端日志，而不是即时通讯。
+function Avatar({ who, children }) {
+  return (
+    <span className={'msg-avatar msg-avatar-' + who} aria-hidden="true">
+      {children}
+    </span>
   );
 }
 
@@ -226,6 +237,7 @@ export default function ChatPanel({ store, onOpenList, onOpenTool }) {
             if (m.role === 'user') {
               return (
                 <div key={m.id} className="msg msg-user">
+                  <Avatar who="user">我</Avatar>
                   <MessageText message={m} />
                 </div>
               );
@@ -233,46 +245,79 @@ export default function ChatPanel({ store, onOpenList, onOpenTool }) {
             if (m.role === 'tool') {
               return (
                 <div key={m.id} className="msg msg-tool">
+                  <Avatar who="tool">
+                    <Icon name="toolbox" size={12} />
+                  </Avatar>
                   <ToolCallCard message={m} />
                 </div>
               );
             }
             return (
               <div key={m.id} className={`msg msg-agent${m.kind === 'error' ? ' msg-error' : ''}`}>
-                <MessageText message={m} />
-                {m.id === liveProposalMsgId && m.proposal && (
-                  <div className="proposal-actions">
-                    <button
-                      className="btn btn-primary"
-                      disabled={agent.busy}
-                      onClick={() => agent.send('新建')}
-                    >
-                      新建
-                    </button>
-                    <button
-                      className="btn"
-                      disabled={agent.busy}
-                      onClick={() => setEditingProposal(m.proposal)}
-                    >
-                      修改…
-                    </button>
-                    <button
-                      className="btn"
-                      disabled={agent.busy}
-                      onClick={() => agent.send('跳过')}
-                    >
-                      跳过
-                    </button>
-                  </div>
-                )}
+                <Avatar who="agent">AI</Avatar>
+                <div className="msg-stack">
+                  <MessageText message={m} />
+                  {m.id === liveProposalMsgId && m.proposal && (
+                    <div className="proposal-actions">
+                      <button
+                        className="btn btn-primary"
+                        disabled={agent.busy}
+                        onClick={() => agent.send('新建')}
+                      >
+                        新建
+                      </button>
+                      <button
+                        className="btn"
+                        disabled={agent.busy}
+                        onClick={() => setEditingProposal(m.proposal)}
+                      >
+                        修改…
+                      </button>
+                      <button
+                        className="btn"
+                        disabled={agent.busy}
+                        onClick={() => agent.send('跳过')}
+                      >
+                        跳过
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}
 
           {agent.pending && (
             <div className="msg msg-agent pending-hint">
-              <div className="msg-body">
-                {PENDING_HINT[agent.pending.kind] || PENDING_HINT.clarify}
+              <Avatar who="agent">AI</Avatar>
+              <div className="msg-stack">
+                <div className="msg-body">
+                  {PENDING_HINT[agent.pending.kind] || PENDING_HINT.clarify}
+                </div>
+                {agent.pending.kind === 'multi' && (
+                  <div className="proposal-actions">
+                    {(agent.pending.candidates || []).map((it, i) => (
+                      <button
+                        key={i}
+                        className="btn"
+                        disabled={agent.busy}
+                        onClick={() => agent.send(String(i + 1))}
+                      >
+                        只做 {i + 1}
+                      </button>
+                    ))}
+                    <button
+                      className="btn btn-primary"
+                      disabled={agent.busy}
+                      onClick={() => agent.send('都做')}
+                    >
+                      都做
+                    </button>
+                    <button className="btn" disabled={agent.busy} onClick={() => agent.send('不')}>
+                      取消
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -328,8 +373,8 @@ export default function ChatPanel({ store, onOpenList, onOpenTool }) {
               onKeyDown={onKeyDown}
               placeholder="说一句待办就行，例如：明天交周报（Enter 发送）"
             />
-            <button className="btn btn-primary" type="submit" disabled={agent.busy || !input.trim()}>
-              发送
+            <button className="send" type="submit" disabled={agent.busy || !input.trim()} title="发送（Enter）" aria-label="发送">
+              <Icon name="upload" size={13} />
             </button>
           </form>
         </div>

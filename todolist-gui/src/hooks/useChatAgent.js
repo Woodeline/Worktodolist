@@ -36,7 +36,7 @@ const UNKNOWN_HINT =
 // 前缀匹配就够用（「是的，创建吧」也算同意），但必须先排掉"拖延/反悔"的语气：
 // 「嗯这个嘛回头再说吧」以"嗯"开头，纯前缀匹配会当成同意然后凭空多出一条任务。
 // 代价不对称（认错要写文件、认少只是多问一轮），所以宁可不认。
-const HEDGE_RE = /回头|再说|待会|等会|一会|先不|算了|取消|别/;
+const HEDGE_RE = /回头|再说|待会|等会|一会|先不|算了|取消|别|这个嘛|那个嘛|这倒|嘛$|呢$/;
 const YES_RE = /^(是|是的|对|对的|好|好的|要|创建|新建|确定|确认|可以|行|嗯|yes|ok|y)/i;
 const NO_RE = /^(否|不是|不对|不|不用|不要|取消|算了|跳过|no|n)/i;
 
@@ -66,6 +66,31 @@ function previewParams(intent) {
   return p;
 }
 
+// 多动作单句里一条子动作的人话描述（「删除「对账」」「延期「报销」→ 2026-12-03」）。
+// 目标说不清时直说"目标待确认"，不假装看懂 —— 用户看一眼就知道这条能不能放心执行。
+function describeMultiItem(item, tasks) {
+  const label = (ACTIONS[item.intent] && ACTIONS[item.intent].label) || item.intent;
+  const slots = item.slots || {};
+  const t = item.target;
+  let who = '';
+  if (item.intent === 'add' || item.intent === 'suggestAdd') {
+    who = `「${slots.title || ''}」`;
+  } else if (t && t.kind !== 'ref') {
+    who = t.kind === 'index' ? `第${t.value}条` : t.kind === 'context' ? `@${t.value}` : `「${t.value}」`;
+  } else if (t && t.kind === 'ref') {
+    who = '刚才那条';
+  } else if ((item.matches || []).length === 1) {
+    const hit = (tasks || []).find((x) => x.id === item.matches[0]);
+    who = hit ? `「${hit.title}」` : '';
+  }
+  if (!who) who = '（目标待确认）';
+  const due = slots.dueDate ? ` → ${slots.dueDate}` : '';
+  const prio = slots.priority ? ` (${slots.priority})` : '';
+  const ctx = slots.context ? ` → @${slots.context}` : '';
+  const proj = slots.project ? ` → +${slots.project}` : '';
+  return `${label}${who}${due}${prio}${ctx}${proj}`;
+}
+
 /**
  * 聊天式本地规则 Agent。
  * @param {object} store useTodoStore() 返回值
@@ -88,6 +113,11 @@ export function useChatAgent(store, opts = {}) {
   const restoredRef = useRef(false);
   const typingTimerRef = useRef(null);
   const tasksRef = useRef([]);
+
+  // 会话焦点态：本轮动过哪条任务、上一份候选列表是什么。
+  // 「再把它标为高」「上面第二个删掉」这类回指全靠它还原 ——
+  // 只在内存里活着一轮又一轮，不写日志、不跨重启（与 pending 同一套生命周期口径）。
+  const memoryRef = useRef({ lastTaskId: null, lastCandidates: [] });
 
   // 任务快照：与 NL 序号指代一致（活跃任务 + 当前排序）。
   const snapshotTasks = useMemo(
@@ -248,6 +278,14 @@ export function useChatAgent(store, opts = {}) {
       });
 
       await respond(result.reply);
+
+      // 记下本轮焦点：新建动作把新任务 id 交回来（runAdd 的 result.taskId），
+      // 其余动作以命中的第一条为焦点，查询则把整份列表当候选（供「上面第二个」回指）。
+      if (result.taskId) {
+        memoryRef.current = { lastTaskId: result.taskId, lastCandidates: [result.taskId] };
+      } else if (Array.isArray(intent.matches) && intent.matches.length) {
+        memoryRef.current = { lastTaskId: intent.matches[0], lastCandidates: intent.matches };
+      }
       return result;
     },
     [persist, pushMessage, patchMessage, respond, store]
@@ -269,6 +307,9 @@ export function useChatAgent(store, opts = {}) {
         await respond('没能定位到具体是哪一条任务。可以换个说法，或直接用「第 N 条」（序号见右侧快照）。');
         return;
       }
+      // 候选列表本身就是回指的靶子：用户接下来说的「上面第二个」指的必须是这份列表，
+      // 而不是整个任务表 —— 所以这里覆盖 lastCandidates。
+      memoryRef.current = { ...memoryRef.current, lastCandidates: list.map((t) => t.id) };
       setPending({ intent, candidates: list });
       const body = list.map((t, i) => `${i + 1}. ${t.title}`).join('\n');
       const head =
@@ -313,6 +354,23 @@ export function useChatAgent(store, opts = {}) {
     [respond]
   );
 
+  // 多动作单句：一句话里认到两件（及以上）会改数据的事。
+  //
+  // 这里**一条都不执行**，只把清单摊开给用户看：他可能只想做其中一件，也可能
+  // 两件都是认真的。回「1」「2」各做一条，回「都做」按说出的顺序执行，回「不」取消。
+  const askMulti = useCallback(
+    async (intent) => {
+      const items = (intent.slots && intent.slots.items) || [];
+      const body = items.map((it, i) => `${i + 1}. ${describeMultiItem(it, tasksRef.current)}`).join('\n');
+      setPending({ kind: 'multi', candidates: items });
+      await respond(
+        `这句里我听到 ${items.length} 件事：\n${body}\n` +
+          '回序号只做那一条，回「都做」按顺序全部执行（确认前文件没动）。'
+      );
+    },
+    [respond]
+  );
+
   // 解析一条文本并分发到对应动作 —— 正常路径与「澄清态里用户又说了新命令」共用同一份。
   //
   // 抽成一个内部函数是为了不再复制第二份解析逻辑：当处于 create 澄清态、用户却改主意
@@ -327,7 +385,7 @@ export function useChatAgent(store, opts = {}) {
   const route = useCallback(
     async (text, opts = {}) => {
       const { fallbackHint = true } = opts;
-      const intent = parseIntent(text, { tasks: tasksRef.current, today, tools });
+      const intent = parseIntent(text, { tasks: tasksRef.current, today, tools, memory: memoryRef.current });
 
       // —— 打开工具：只切页，不动数据 ——
       // 无副作用意图，所以不走澄清框架：认到哪个就开哪个。工具页收到 id + 预填参数后，
@@ -344,10 +402,31 @@ export function useChatAgent(store, opts = {}) {
         return 'done';
       }
 
+      // —— 多动作单句：只列清单，一条都不执行 ——
+      if (intent.intent === 'multi') {
+        await askMulti(intent);
+        return 'clarify';
+      }
+
       // —— 隐式新增：只建议，不执行 ——
       if (intent.intent === 'suggestAdd') {
         await askCreate(intent);
         return 'suggestAdd';
+      }
+
+      // —— 极性护栏命中：用户说的是「别做」「还没做」或「要不要做」 ——
+      // 这时候回通用的"没听懂"是误导：它听懂了，只是不该动手。如实说清没改文件，
+      // 并给出纠正路径（理解反了 / 确实想做该怎么说）。
+      // 三族各有各的措辞：把「需求文档未完成」回成"这句像在征求意见"，
+      // 用户会以为引擎连"完成"两个字都没看见。
+      if (intent.refused) {
+        const REFUSED_REPLY = {
+          negated: '你说了「别 / 不要」，这条我没动，文件也没改。要是我理解反了，把要做的那件事再说一遍就行。',
+          unrealized: '你说的是「未 / 没 + 动词」，我按"还没做"处理，所以没有勾掉它。要做完的话直接说，例如「完成 X」。',
+          consult: '这句听着像在问我的意见，不是在下命令，所以我没动手。确实要做的话直接说，例如「把 X 延到下周三」。',
+        };
+        await respond(REFUSED_REPLY[intent.refused] || REFUSED_REPLY.consult, 'hint');
+        return 'unknown';
       }
 
       if (intent.intent === 'unknown') {
@@ -386,7 +465,7 @@ export function useChatAgent(store, opts = {}) {
       }
       return 'done';
     },
-    [today, tools, onOpenTool, askCreate, askClarify, respond, executeIntent]
+    [today, tools, onOpenTool, askCreate, askClarify, askMulti, respond, executeIntent]
   );
 
   // 发送一条用户消息。
@@ -473,6 +552,55 @@ export function useChatAgent(store, opts = {}) {
             return;
           }
 
+          // 子类 D：多动作单句 → 回序号只做那一条，回「都做」按用户说出的顺序依次执行。
+          //
+          // 子动作是解析时对着当时快照定好目标的，所以顺序执行是安全的（每条都只经 store）。
+          // 唯一要交代清楚的是"其中一条目标没锁定"：批量时明确跳过并说明，
+          // 单独点选时才进澄清流程 —— 不能既不做也不说，静默丢掉一件事。
+          if (carried.kind === 'multi') {
+            const items = carried.candidates || [];
+            const locked = (it) =>
+              !NEEDS_TARGET.has(it.intent) || (it.confidence === 'high' && (it.matches || []).length === 1) ||
+              (it.intent === 'add' && it.slots && it.slots.title);
+
+            const runOne = async (it, { clarify }) => {
+              if (!locked(it)) {
+                if (clarify) {
+                  const cands = (it.matches || []).map((id) => tasksRef.current.find((t) => t.id === id)).filter(Boolean);
+                  await askClarify(it, cands);
+                  return;
+                }
+                await respond(
+                  `「${describeMultiItem(it, tasksRef.current)}」这条我没锁定目标，先跳过；要它做事请单独说一句（或用「第 N 条」）。`
+                );
+                return;
+              }
+              await executeIntent(it);
+            };
+
+            if (readConfirm(text) === 'no') {
+              await respond('好，这几件都没做，文件没动。');
+              return;
+            }
+            const digit = String(text).match(/\d+/);
+            if (digit) {
+              const it = items[Number(digit[0]) - 1];
+              if (it) {
+                await runOne(it, { clarify: true });
+                return;
+              }
+            }
+            if (readConfirm(text) === 'yes' || /都做|都办|全部|一起|依次|都干|两个都|三个都/.test(text)) {
+              await respond(`按你说的顺序做，共 ${items.length} 件。`, 'hint');
+              for (const it of items) await runOne(it, { clarify: false });
+              return;
+            }
+            // 既不是序号也不是"都做/不"：保持清单在原处，重新问一次，不让它消失。
+            setPending(carried);
+            await respond('回「1」「2」各做一条，回「都做」按顺序全部执行，回「不」取消。');
+            return;
+          }
+
           // 子类 C：多候选 / 目标不明 → 回复序号选中。
           const chosen = pickByReply(carried.candidates, text);
           if (!chosen) {
@@ -489,7 +617,7 @@ export function useChatAgent(store, opts = {}) {
         setBusy(false);
       }
     },
-    [busy, pending, persist, pushMessage, executeIntent, respond, route]
+    [busy, pending, persist, pushMessage, executeIntent, askClarify, respond, route]
   );
 
   // 「修改」弹窗确认后：带着编辑过的槽位直接落盘新建。

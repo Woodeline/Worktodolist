@@ -1,6 +1,6 @@
 [package]
 name = "worktodolist"
-version = "1.0.3"
+version = "1.0.4"
 description = "待办清单 · 纯文本驱动（Tauri 2 桌面壳）"
 authors = ["Woodeline"]
 edition = "2021"

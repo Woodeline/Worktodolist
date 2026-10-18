@@ -333,3 +333,18 @@ describe('store.undo 支持“新增”的逆操作（真实 useTodoStore）', (
     expect(s.todoEntries.filter((e) => e.kind === 'task')).toHaveLength(0);
   });
 });
+
+describe('actions 集成：逾期查询 scope', () => {
+  it('「哪些事拖到期了」只列 dueDate 已过的活跃任务，且不反问是否新建', () => {
+    const store = makeStore();
+    const run = agent(store);
+    const { intent, result } = run('哪些事拖到期了');
+    expect(intent.scope).toBe('overdue');
+    expect(result.tool.params.scope).toBe('overdue');
+    // 夹具里相对 2026-10-01 只有这两条逾期
+    expect(result.reply).toContain('季报复核');
+    expect(result.reply).toContain('回测报告');
+    expect(result.reply).not.toContain('星标任务');
+    expect(result.clarify).toBeUndefined();
+  });
+});

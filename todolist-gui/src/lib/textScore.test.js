@@ -1,6 +1,14 @@
 // textScore 纯函数测试（零新增依赖，node 环境）。
 import { describe, expect, it } from 'vitest';
-import { hanLength, rankBySimilarity, similarity, tokenize } from './textScore.js';
+import {
+  editDistance,
+  hanLength,
+  rankByFuzzy,
+  rankBySimilarity,
+  similarity,
+  similarityFuzzy,
+  tokenize,
+} from './textScore.js';
 
 describe('tokenize', () => {
   it('中文长片段切 bigram，并把整段本身也放入（完整词要能命中）', () => {
@@ -105,5 +113,73 @@ describe('rankBySimilarity', () => {
 
   it('空候选 → 空数组', () => {
     expect(rankBySimilarity('回测', [])).toEqual([]);
+  });
+});
+
+// 容错档是第八轮才接进 resolveTarget 的，此前只有 held-out 卷间接压过它。
+// 这里守的是那条架构红线本身：容错分**永远进不了**强匹配门槛。
+describe('editDistance（OSA + 相邻交换）', () => {
+  it('单字替换 / 增删各算一处', () => {
+    expect(editDistance('疫苗合同', '疫苗合约')).toBe(1);
+    expect(editDistance('疫苗合同', '疫苗书合同')).toBe(1);
+  });
+
+  it('相邻两字交换算一处 —— 经典 Levenshtein 要记两处，会把双字手误挡在门外', () => {
+    expect(editDistance('疫苗', '苗疫')).toBe(1);
+  });
+
+  it('同音字换序（疫苗→苗役）是两处，不是手误', () => {
+    // 这一条是给注释里的例子把关的：它看着像"一次手误"，其实换了序又换了字。
+    expect(editDistance('疫苗合同', '苗役合同')).toBe(2);
+  });
+
+  it('空串 / 完全相同', () => {
+    expect(editDistance('', 'abc')).toBe(3);
+    expect(editDistance('周线复盘', '周线复盘')).toBe(0);
+  });
+});
+
+describe('similarityFuzzy / rankByFuzzy', () => {
+  const STRONG = 0.5; // rankBySimilarity 的默认门槛
+
+  it('一处错字的短标题被接住', () => {
+    expect(similarityFuzzy('疫苗合同书', '疫苗协同书')).toBeGreaterThan(0);
+  });
+
+  it('分数刻意卡在强匹配门槛之下：容错档只能扩澄清候选，不能抬成可直接执行', () => {
+    for (const [q, t] of [
+      ['疫苗合同书', '疫苗协同书'],
+      ['苗役合同', '疫苗合同'],
+      ['周线副盘', '周线复盘'],
+    ]) {
+      const s = similarityFuzzy(q, t);
+      expect(s, `${q} vs ${t}`).toBeGreaterThan(0);
+      expect(s, `${q} vs ${t} 不许进 matches`).toBeLessThan(STRONG);
+    }
+  });
+
+  it('已经强命中的不归容错档管 —— 否则同一条任务会同时进两个池子', () => {
+    expect(similarityFuzzy('疫苗合约', '疫苗合同续签')).toBe(0); // 覆盖率已达 0.5
+    expect(similarityFuzzy('回测报告', '今天到期：写第 10 周回测报告')).toBe(0);
+  });
+
+  it('三个字以下不容错：两字窗口跟任何两字都凑得出距离 1', () => {
+    for (const [q, t] of [['牛奶', '牛乃'], ['买牛奶', '牛奶']]) {
+      expect(similarityFuzzy(q, t), `${q} vs ${t}`).toBe(0);
+    }
+  });
+
+  it('差两处以上不算手误 —— 容错档只接手滑，不接手滑以外的东西', () => {
+    expect(similarityFuzzy('疫苗合同书签', '疫苗那约事情')).toBe(0);
+  });
+
+  it('rankByFuzzy 只回正分候选，key 可自定义', () => {
+    const items = [
+      { id: 1, title: '疫苗协同书' },
+      { id: 2, title: '买牛奶' },
+    ];
+    const r = rankByFuzzy('疫苗合同', items, { key: (x) => x.title });
+    expect(r.map((x) => x.item.id)).toEqual([1]);
+    expect(r[0].score).toBeLessThan(STRONG);
   });
 });

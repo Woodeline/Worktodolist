@@ -50,7 +50,7 @@ function SidebarGroup({ prefix, label, items, view, onSelect }) {
   );
 }
 
-export default function Sidebar({ store }) {
+export default function Sidebar({ store, collapsed = false }) {
   const today = dayjs().format('YYYY-MM-DD');
 
   const stats = useMemo(() => sidebarStats(store.todoEntries), [store.todoEntries]);
@@ -67,25 +67,29 @@ export default function Sidebar({ store }) {
     [store.todoEntries, today]
   );
 
-  const item = (view, label, count) => (
+  // 四个固定视图各有一个图标：图标不是装饰，它是这四条目在"一眼扫过"时的
+  // 唯一可用线索 —— 中文标签两个字宽窄相近，光靠文字很难快速分流。
+  const item = (view, label, icon, count) => (
     <button
       className={`nav-item${store.view === view ? ' active' : ''}`}
       onClick={() => store.selectView(view)}
+      aria-current={store.view === view ? 'true' : undefined}
     >
-      <span>{label}</span>
+      <Icon name={icon} size={16} className="nav-icon" />
+      <span className="nav-label">{label}</span>
       {count != null && <span className="count">{count}</span>}
     </button>
   );
 
   return (
-    <nav className="sidebar">
+    <nav className={'sidebar' + (collapsed ? ' is-collapsed' : '')} aria-label="视图">
       <div className="sidebar-group">
-        {item('today', '今天', todayCount)}
-        {item('all', '全部', allCount)}
-        {item('done', '已完成', doneCount)}
+        {item('today', '今天', 'calendar', todayCount)}
+        {item('all', '全部', 'list', allCount)}
+        {item('done', '已完成', 'check-circle', doneCount)}
       </div>
       <div className="sidebar-group">
-        {item('inbox', '收集箱', stats.inbox)}
+        {item('inbox', '收集箱', 'inbox', stats.inbox)}
       </div>
       {stats.contexts.length > 0 && (
         <div className="sidebar-group">
@@ -109,6 +113,12 @@ export default function Sidebar({ store }) {
           />
         </div>
       )}
+      {/* 脚注：把"数据在哪、现在怎么排"写在目录最底下 —— 这两件事
+          决定列表长什么样，却没有任何按钮能表达它们。 */}
+      <div className="side-foot">
+        <span>todo.txt</span>
+        <span>自动排序 · {store.sortMode === 'auto' ? '开' : '关'}</span>
+      </div>
     </nav>
   );
 }

@@ -13,6 +13,7 @@ const GROUPS = [
     note: '在任意页签都可用。',
     rows: [
       ['Ctrl + 1 / 2 / 3', '切换页签：对话 / 列表 / 工具'],
+      ['Ctrl + B', '折叠 / 展开侧栏（列表页）'],
       ['Ctrl + ,', '打开 / 关闭本设置页'],
       ['Esc', '关闭本设置页'],
     ],
@@ -81,7 +82,7 @@ export default function SettingsPage({ onClose }) {
       <div className="settings-foot">
         <span className="spacer" />
         <span className="settings-where">
-          随时可查：顶栏齿轮 / 应用菜单「设置…」/ Ctrl + ,
+          随时可查：活动栏齿轮 / 应用菜单「设置…」/ Ctrl + ,
         </span>
       </div>
     </div>

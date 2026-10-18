@@ -194,6 +194,13 @@ const PATHS = {
       <path d="M12 3v18" />
     </>
   ), // lucide:columns-2
+  'panel-fold': (
+    <>
+      <path d="M3.75 5.25v13.5" />
+      <path d="M20.25 12H9" />
+      <path d="M12.9 7.8L9 12l3.9 4.2" />
+    </>
+  ), // （原型 v2 的折叠图形：左缘竖条 + 左向箭头，自绘；16×24 已换算到 24 画布）—— 页眉最左的侧栏开关
   'filter': (
     <>
       <path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z" />
@@ -225,6 +232,27 @@ const PATHS = {
       <path d="M12 6v6l4 2" />
     </>
   ), // lucide:clock
+  'message-square': (
+    <>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </>
+  ), // lucide:message-square —— 活动栏「对话」
+  'list': (
+    <>
+      <path d="M3 5h.01" />
+      <path d="M3 12h.01" />
+      <path d="M3 19h.01" />
+      <path d="M8 5h13" />
+      <path d="M8 12h13" />
+      <path d="M8 19h13" />
+    </>
+  ), // lucide:list —— 活动栏「列表」
+  'inbox': (
+    <>
+      <path d="M22 12h-6l-2 3h-4l-2-3H2" />
+      <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+    </>
+  ), // lucide:inbox —— 侧栏「收集箱」
 };
 
 export default function Icon({ name, size = 16, title, className = '', ...rest }) {
