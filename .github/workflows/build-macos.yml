@@ -1,8 +1,11 @@
 # 在 GitHub 的 macOS 云主机上编译 Worktodolist.app
 #
-# 触发方式二选一：
+# 触发方式三选一：
 #   1. 推送标签  git push origin v1.1.0   → 自动构建，并把 zip 挂到该版本的 Release 上
-#   2. 手动      仓库页面 → Actions → "Build macOS APP" → Run workflow
+#   2. 推送 main（且改动落在下方 paths 内）→ 自动构建，只传 Artifacts
+#      paths 过滤是刻意加的：否则改个文档也要烧掉几分钟的 macOS runner 时间。
+#      不想让它跑时，直接在 GitHub 的 Actions 页面停用该 workflow 即可。
+#   3. 手动      仓库页面 → Actions → "Build macOS APP" → Run workflow
 #
 # 产物：Worktodolist-macos.zip（内含 Worktodolist.app）
 #
@@ -20,6 +23,12 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - main
+    paths:
+      - 'todolist-gui/src/**'
+      - 'todolist-gui/src-tauri/**'
+      - '.github/workflows/build-macos.yml'
 
 permissions:
   contents: write
