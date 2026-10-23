@@ -50,9 +50,13 @@ jobs:
         with:
           workspaces: todolist-gui/src-tauri
 
+      # --force 不能省：package.json 里显式声明了 @esbuild/win32-x64（Windows 构建要用），
+      # 而 npm ci 在 darwin/arm64 上会因平台不匹配直接失败（EBADPLATFORM: Unsupported
+      # platform for @esbuild/win32-x64）。本地 start-mac.sh 也是靠 npm install --force
+      # 绕同一个问题。将来若把该依赖挪进 optionalDependencies，这里就能去掉 --force。
       - name: 安装前端依赖
         working-directory: todolist-gui
-        run: npm ci
+        run: npm ci --force
 
       # 同 Windows：不走 npm run tauri:build，见那边注释（.bin 软链在部分安装方式下缺失）。
       - name: 编译 Tauri 应用
