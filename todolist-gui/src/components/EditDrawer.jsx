@@ -179,36 +179,59 @@ function TagField({ label, prefix, placeholder, value, onChange, options, emptyH
   );
 }
 
+/** 备注正文（备注存在 notes.md 里，不在 todo.txt 的行上）。store 缺这个能力时当没备注。 */
+function noteOf(store, stableId) {
+  if (!stableId || typeof store.getNote !== 'function') return '';
+  return store.getNote(stableId) || '';
+}
+
+// 表单初始值：把一条任务摊平成表单字段。
+//
+// 它同时是「表单的初始状态」—— 不再走「先渲染空壳、再在 effect 里 setState」那条路。
+// 那条路要求组件在 form 还是 null 时提前 return，而提前 return 会**跳过后面的 Hooks**，
+// 于是在「没在编辑 → 正在编辑」这一次切换里 Hook 数量从 3 个变成 4 个，React 直接抛
+// "Rendered more hooks than during the previous render."，整棵树被卸载（白屏 + 点哪都没反应）。
+// v1.1.0 在 Windows 上「点编辑就卡死且看不到界面」就是这个。
+function formFromTask(task, store) {
+  return {
+    title: task.title,
+    priority: task.priority || '',
+    dueDate: task.dueDate || '',
+    thresholdDate: task.thresholdDate || '',
+    remindAt: task.remindAt || '',
+    recurrence: task.recurrence || '',
+    note: noteOf(store, task.stableId),
+    contexts: task.contexts.join(', '),
+    projects: task.projects.join(', '),
+    starred: Boolean(task.starValue),
+  };
+}
+
+/**
+ * 编辑浮窗（外壳）。
+ *
+ * 只回答一个问题：现在有没有正在编辑的任务。没有就整体不挂载 ——
+ * 于是表单组件**只在真的要编辑时才 mount**，它的初始状态能用 useState 直接算出来，
+ * 不需要「空壳渲染一次 + effect 里补状态」这种会改变 Hook 数量的写法。
+ *
+ * Hooks 的数量必须在组件的每一次渲染里恒定，这不是风格问题：少一个多一个，
+ * React 就认为前后两次渲染不是同一个组件，直接抛错并卸载整棵树。
+ */
 export default function EditDrawer({ store }) {
   const task = store.editingTask;
-  const [form, setForm] = useState(null);
+  if (!task) return null;
+  // key 让「从 A 直接切到 B」也重新初始化一次表单，否则会留着上一条的标题。
+  return <EditForm key={task.id} task={task} store={store} />;
+}
+
+function EditForm({ task, store }) {
+  const [form, setForm] = useState(() => formFromTask(task, store));
 
   // 已保存的分类 / 标签候选：复用侧栏统计，取的就是 todo.txt 里的真实值。
   const { contexts: contextOptions, projects: projectOptions } = useMemo(
     () => sidebarStats(store.todoEntries || []),
     [store.todoEntries]
   );
-
-  useEffect(() => {
-    if (task) {
-      setForm({
-        title: task.title,
-        priority: task.priority || '',
-        dueDate: task.dueDate || '',
-        thresholdDate: task.thresholdDate || '',
-        remindAt: task.remindAt || '',
-        recurrence: task.recurrence || '',
-        note: store.getNote(task.stableId),
-        contexts: task.contexts.join(', '),
-        projects: task.projects.join(', '),
-        starred: Boolean(task.starValue),
-      });
-    } else {
-      setForm(null);
-    }
-  }, [task && task.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  if (!task || !form) return null;
 
   const priorities = [...PRIORITY_ORDER];
   if (task.priority && !priorities.includes(task.priority)) priorities.push(task.priority);
@@ -218,10 +241,10 @@ export default function EditDrawer({ store }) {
   // 手写的规则（rec:+5d、rec:mon,wed）可能不在预设里，补一个选项进去，
   // 否则下拉框会显示成空 —— 看起来像「没设重复」，实际设着。
   const recurrenceOptions = useMemo(() => {
-    const cur = form ? form.recurrence : '';
+    const cur = form.recurrence || '';
     if (!cur || RECURRENCE_CHOICES.some((c) => c.value === cur)) return RECURRENCE_CHOICES;
     return [...RECURRENCE_CHOICES, { value: cur, label: describeRecurrence(cur) || cur }];
-  }, [form && form.recurrence]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [form.recurrence]);
 
   const preview = serializeTask({
     ...task,
@@ -250,7 +273,9 @@ export default function EditDrawer({ store }) {
     });
     // 备注写在数据目录的 notes.md 里，不在 todo.txt 的行上 —— 它是异步写，
     // 但先关浮窗不等它：失败会自己弹 toast，而让人对着一个已经保存的任务等着没意义。
-    if (form.note !== store.getNote(task.stableId)) store.saveNote(task.id, form.note);
+    if (form.note !== noteOf(store, task.stableId) && typeof store.saveNote === 'function') {
+      store.saveNote(task.id, form.note);
+    }
     store.closeEditor();
   };
 

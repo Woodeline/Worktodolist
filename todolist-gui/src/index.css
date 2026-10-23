@@ -4551,6 +4551,77 @@ mark {
   flex-wrap: wrap;
 }
 
+/* --- 应用级崩溃页：界面出错时给人一个能读的现场，而不是一块白板 --- */
+.app-crash {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-6) var(--sp-4);
+  background: var(--bg);
+}
+
+.app-crash-card {
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-3);
+}
+
+.app-crash-main {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: flex-start;
+}
+
+.app-crash-icon {
+  display: flex;
+  color: var(--danger);
+}
+
+.app-crash-title {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.app-crash-msg {
+  margin: var(--sp-2) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.app-crash-where {
+  margin: var(--sp-1) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+  color: var(--muted);
+  word-break: break-word;
+}
+
+.app-crash-hint {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  line-height: var(--lh-base);
+}
+
+.app-crash-actions {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
 /* --- 工具内容通用件（新工具靠这些把样式成本压到 0） --- */
 .tool-actions-row {
   display: flex;

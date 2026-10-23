@@ -465,7 +465,7 @@ pub fn reminder_tick(
         .filter(|s| is_iso_datetime(s))
         .unwrap_or_else(local_now);
     let text = std::fs::read_to_string(dir.join("todo.txt")).unwrap_or_default();
-    let fired = load_fired(&dir);
+    let mut fired = load_fired(&dir);
     let due = collect_due(&text, &now, &fired);
     if due.is_empty() {
         return Ok(0);
@@ -486,8 +486,8 @@ pub fn reminder_tick(
         .body(body)
         .show()
         .map_err(|e| format!("通知发送失败：{e}"))?;
-    // 弹成功才记账，失败下次还会再试
-    let mut fired = load_fired(&dir);
+    // 弹成功才记账，失败下次还会再试。直接在上面那份上记，不再重读一次文件：
+    // 这个 tick 每 30 秒跑一趟，重复读是在给数据目录（可能在网盘 / 被杀软实时扫描）加压。
     for r in &due {
         fired.insert(format!("{}|{}", fnv1a(&r.title), r.rem));
     }

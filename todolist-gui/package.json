@@ -1,7 +1,7 @@
 {
   "name": "todolist-gui",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -17,7 +17,8 @@
     "test:nl:verbose": "node scripts/qa-nl-coverage.mjs --verbose",
     "test:nl:drift": "node scripts/qa-nl-drift.mjs",
     "test:nl:heldout": "node scripts/qa-nl-heldout.mjs",
-    "test:ui": "node scripts/qa-css-check.mjs && node scripts/qa-contrast.mjs",
+    "test:ui": "node scripts/qa-css-check.mjs && node scripts/qa-contrast.mjs && node scripts/qa-hooks.mjs",
+    "test:hooks": "node scripts/qa-hooks.mjs",
     "test:settings": "node scripts/qa-settings.mjs",
     "test:settings:shots": "node scripts/qa-settings.mjs --shots",
     "test:tools": "node scripts/qa-tools.mjs",
