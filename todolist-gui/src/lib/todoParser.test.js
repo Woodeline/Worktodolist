@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   applyPatch,
+  collectStableIds,
   completeTask,
   isValidDate,
+  isValidStableId,
+  newStableId,
   parseFile,
   parseQuickInput,
   parseSingleLine,
@@ -287,5 +290,241 @@ describe('快速添加解析', () => {
     const task = taskFromQuickInput('买牛奶 @超市 due:2026-10-01 (A)', '2026-09-30');
     expect(task.createdAt).toBe('2026-09-30');
     expect(serializeTask(task)).toBe('(A) 2026-09-30 买牛奶 @超市 due:2026-10-01');
+  });
+});
+
+describe('rem: 提醒时刻标签', () => {
+  it('解析为 remindAt 且不进 extraTags，序列化往返一致', () => {
+    const t = parseSingleLine('交周报 @工作 due:2026-10-24 rem:2026-10-23T15:00');
+    expect(t.remindAt).toBe('2026-10-23T15:00');
+    expect(t.title).toBe('交周报');
+    expect(t.extraTags).toEqual([]);
+    expect(serializeTask(t)).toBe('交周报 @工作 due:2026-10-24 rem:2026-10-23T15:00');
+  });
+
+  it('非法值不进 remindAt，原样留在 extraTags（不丢数据）', () => {
+    const t = parseSingleLine('写代码 rem:25:99 rem:2026-10-23T24:00');
+    expect(t.remindAt).toBeNull();
+    expect(t.extraTags).toEqual([
+      { key: 'rem', value: '25:99' },
+      { key: 'rem', value: '2026-10-23T24:00' },
+    ]);
+  });
+
+  it('applyPatch 可设置与清除 remindAt', () => {
+    const t = parseSingleLine('体检');
+    const withRem = applyPatch(t, { remindAt: '2026-10-23T09:30' });
+    expect(serializeTask(withRem)).toBe('体检 rem:2026-10-23T09:30');
+    const cleared = applyPatch(withRem, { remindAt: null });
+    expect(serializeTask(cleared)).toBe('体检');
+  });
+
+  it('时间片段 13:45 仍然不误认成标签', () => {
+    const t = parseSingleLine('13:45 开会');
+    expect(t.remindAt).toBeNull();
+    expect(t.title).toBe('13:45 开会');
+  });
+});
+
+// ——— 稳定 ID（id: 标签）———
+// 这一组锁的是"引用关系"的地基：子任务认父、重复认自己、备注认主人，全靠它。
+// 它失效的方式是静默的：ID 被当成普通标签显示、序列化时丢掉、重复了还照写 ——
+// 三种都不会报错，只在将来引用它的那一刻才暴露成"指错了人"。
+describe('稳定 ID', () => {
+  it('读得出 id:，且不混进 extraTags（不显示成普通标签）', () => {
+    const t = parseSingleLine('写周报 +投资 id:k3f9a2');
+    expect(t.stableId).toBe('k3f9a2');
+    expect(t.extraTags).toEqual([]);
+  });
+
+  it('序列化把 id 放在用户自写标签之前', () => {
+    const t = parseSingleLine('写周报 id:k3f9a2 note:明天交');
+    expect(serializeTask(t)).toBe('写周报 id:k3f9a2 note:明天交');
+  });
+
+  it('往返不丢 ID：解析 → 序列化 → 再解析', () => {
+    const once = parseSingleLine('写周报 +投资 due:2026-10-24 id:k3f9a2');
+    const twice = parseSingleLine(serializeTask(once));
+    expect(twice.stableId).toBe('k3f9a2');
+    expect(serializeTask(twice)).toBe(serializeTask(once));
+  });
+
+  it('完成与撤销都保留 ID（done.txt 里它仍然指得回原任务）', () => {
+    const done = completeTask(parseSingleLine('写周报 id:k3f9a2'), '2026-10-22');
+    expect(done.stableId).toBe('k3f9a2');
+    expect(done.raw).toContain('id:k3f9a2');
+    expect(reviveTask(done).stableId).toBe('k3f9a2');
+  });
+
+  it('applyPatch 改别的字段不动 ID', () => {
+    const t = parseSingleLine('写周报 id:k3f9a2');
+    expect(applyPatch(t, { priority: 'A' }).stableId).toBe('k3f9a2');
+  });
+
+  it('非法 id 直接丢弃，不留成 extraTags', () => {
+    const t = parseSingleLine('写周报 id:!! id:ab');
+    expect(t.stableId).toBeNull();
+    expect(t.extraTags).toEqual([]);
+  });
+
+  it('同一个文件里重复 ID 只认第一个（复制粘贴的后果）', () => {
+    const entries = parseFile('第一条 id:dup001\n第二条 id:dup001\n第三条 id:other1');
+    expect(entries[0].stableId).toBe('dup001');
+    expect(entries[1].stableId).toBeNull();
+    expect(entries[2].stableId).toBe('other1');
+  });
+
+  it('快速添加里手打的 id: 会被丢弃（ID 由系统分配）', () => {
+    const t = taskFromQuickInput('写周报 id:hand1', '2026-10-22');
+    expect(t.stableId).toBeNull();
+    expect(t.raw).not.toContain('id:');
+  });
+});
+
+describe('newStableId', () => {
+  it('生成 6 位 base36，且避开已占用的', () => {
+    const taken = new Set(['000000', 'zzzzzz']);
+    for (let i = 0; i < 50; i += 1) {
+      const id = newStableId(taken);
+      expect(id).toMatch(/^[0-9a-z]{6}$/);
+      expect(taken.has(id)).toBe(false);
+    }
+  });
+
+  it('拿不到唯一 ID 时返回 null —— 宁可不写，也不写重复的', () => {
+    const spy = vi.spyOn(Math, 'random').mockReturnValue(0);
+    expect(newStableId(new Set(['000000']))).toBe(null);
+    spy.mockRestore();
+  });
+
+  it('collectStableIds 收集得到、且只收有 ID 的', () => {
+    const entries = parseFile('第一条 id:aaa111\n第二条\n第三条 id:bbb222');
+    const ids = collectStableIds(entries);
+    expect(ids.has('aaa111')).toBe(true);
+    expect(ids.has('bbb222')).toBe(true);
+    expect(ids.size).toBe(2);
+  });
+});
+
+describe('isValidStableId', () => {
+  it('字母数字 4–16 位才作数', () => {
+    expect(isValidStableId('k3f9a2')).toBe(true);
+    expect(isValidStableId('ABC123')).toBe(true);
+    expect(isValidStableId('ab')).toBe(false);
+    expect(isValidStableId('a'.repeat(17))).toBe(false);
+    // 含冒号 / 空格 / 中文的一律不算：它要能安全地进文件名
+    expect(isValidStableId('a:b')).toBe(false);
+    expect(isValidStableId('a b')).toBe(false);
+    expect(isValidStableId('编号1')).toBe(false);
+  });
+});
+
+describe('子任务引用（parent: 标签）', () => {
+  it('读得出 parent:，且不混进 extraTags', () => {
+    const t = parseSingleLine('拆后盖 parent:k3f9a2');
+    expect(t.parentId).toBe('k3f9a2');
+    expect(t.extraTags).toEqual([]);
+  });
+
+  it('序列化时 parent 紧跟在 id 之后、用户自写标签之前', () => {
+    const t = parseSingleLine('拆后盖 id:c00001 parent:p00002 note:小心卡扣');
+    expect(serializeTask(t)).toBe('拆后盖 id:c00001 parent:p00002 note:小心卡扣');
+  });
+
+  it('非法 parent 直接丢弃', () => {
+    const t = parseSingleLine('拆后盖 parent:!! parent:ab');
+    expect(t.parentId).toBeNull();
+    expect(t.extraTags).toEqual([]);
+  });
+
+  it('完成与撤销都保留 parent（引用关系不会因为做完就断）', () => {
+    const done = completeTask(parseSingleLine('拆后盖 parent:p00002'), '2026-10-22');
+    expect(done.parentId).toBe('p00002');
+    expect(done.raw).toContain('parent:p00002');
+    expect(reviveTask(done).parentId).toBe('p00002');
+  });
+
+  it('快速添加里手打的 parent: 会被丢弃（关系只能由界面建立）', () => {
+    const t = taskFromQuickInput('拆后盖 parent:hand1', '2026-10-22');
+    expect(t.parentId).toBeNull();
+    expect(t.raw).not.toContain('parent:');
+  });
+});
+
+describe('子任务引用（parent: 标签）', () => {
+  it('读得出 parent:，且不混进 extraTags', () => {
+    const t = parseSingleLine('拆后盖 parent:k3f9a2');
+    expect(t.parentId).toBe('k3f9a2');
+    expect(t.extraTags).toEqual([]);
+  });
+
+  it('序列化时 parent 紧跟在 id 之后、用户自写标签之前', () => {
+    const t = parseSingleLine('拆后盖 id:c00001 parent:p00002 note:小心卡扣');
+    expect(serializeTask(t)).toBe('拆后盖 id:c00001 parent:p00002 note:小心卡扣');
+  });
+
+  it('非法 parent 直接丢弃', () => {
+    const t = parseSingleLine('拆后盖 parent:!! parent:ab');
+    expect(t.parentId).toBeNull();
+    expect(t.extraTags).toEqual([]);
+  });
+
+  it('完成与撤销都保留 parent（引用关系不会因为做完就断）', () => {
+    const done = completeTask(parseSingleLine('拆后盖 parent:p00002'), '2026-10-22');
+    expect(done.parentId).toBe('p00002');
+    expect(done.raw).toContain('parent:p00002');
+    expect(reviveTask(done).parentId).toBe('p00002');
+  });
+
+  it('快速添加里手打的 parent: 会被丢弃（关系只能由界面建立）', () => {
+    const t = taskFromQuickInput('拆后盖 parent:hand1', '2026-10-22');
+    expect(t.parentId).toBeNull();
+    expect(t.raw).not.toContain('parent:');
+  });
+});
+
+describe('重复规则（rec: 标签）', () => {
+  it('读得出 rec:，且不混进 extraTags', () => {
+    const t = parseSingleLine('交周报 rec:mon');
+    expect(t.recurrence).toBe('mon');
+    expect(t.extraTags).toEqual([]);
+  });
+
+  it('序列化往返一致（手写的大小写被归一）', () => {
+    const t = parseSingleLine('交周报 rec:MON');
+    expect(t.recurrence).toBe('mon');
+    expect(serializeTask(t)).toBe('交周报 rec:mon');
+  });
+
+  it('认不出的 rec 原样留在 extraTags —— 用户写的规则不能静默消失', () => {
+    const t = parseSingleLine('交周报 rec:每周一');
+    expect(t.recurrence).toBeNull();
+    expect(t.extraTags).toEqual([{ key: 'rec', value: '每周一' }]);
+    expect(serializeTask(t)).toBe('交周报 rec:每周一');
+  });
+
+  it('完成与撤销都保留 rec（历史里它说明这条是重复实例）', () => {
+    const done = completeTask(parseSingleLine('交周报 rec:+1w'), '2026-10-22');
+    expect(done.recurrence).toBe('+1w');
+    expect(done.raw).toContain('rec:+1w');
+    expect(reviveTask(done).recurrence).toBe('+1w');
+  });
+
+  it('applyPatch 可设置与清除 rec', () => {
+    const t = parseSingleLine('交周报');
+    expect(applyPatch(t, { recurrence: '+2w' }).raw).toContain('rec:+2w');
+    expect(applyPatch(t, { recurrence: null }).raw).toBe('交周报');
+  });
+
+  it('快速添加里手打的 rec: 生效（这是用户能写的规则，不像 id:/parent:）', () => {
+    const t = taskFromQuickInput('交周报 rec:+1w', '2026-10-22');
+    expect(t.recurrence).toBe('+1w');
+    expect(t.raw).toContain('rec:+1w');
+  });
+
+  it('快速添加里的非法 rec 不生效，也不丢', () => {
+    const t = taskFromQuickInput('交周报 rec:每周', '2026-10-22');
+    expect(t.recurrence).toBeNull();
+    expect(t.raw).toContain('rec:每周');
   });
 });

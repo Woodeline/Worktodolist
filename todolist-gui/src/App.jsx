@@ -8,7 +8,8 @@ import { useTodoSnapshot } from './hooks/useTodoSnapshot';
 import useDebounce from './hooks/useDebounce';
 import useHotkeys from './hooks/useHotkeys';
 import { useContextMenu } from './hooks/useContextMenu.jsx';
-import { displayOrder, isVisibleToday, todayGroups, viewTasks } from './lib/sortFilter';
+import { displayOrder, isVisibleToday, sidebarStats, todayGroups, viewTasks } from './lib/sortFilter';
+import { buildNesting, childProgress, depthOf } from './lib/subtasks.js';
 import TopBar from './components/TopBar.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import TaskRow from './components/TaskRow.jsx';
@@ -214,6 +215,23 @@ export function MainList({ store, query }) {
     [store.todoEntries, store.view, store.sortMode, query, today]
   );
 
+  // 子任务索引：一次建好，行自己不再扫全表。
+  // 「今天」视图刻意不按层级缩进 —— 那个视图先按紧急度分流，父子本来就会被拆到
+  // 不同组，缩进一条没有父在旁边的行只会让人以为界面坏了。
+  // 索引要同时吃 todo 与 done：**已完成的子任务也算进度**（2/3 里的 2 就是它们），
+  // 只看 todo 的话，子任务一完成就从进度里消失了，分母跟着缩水。
+  const nesting = useMemo(
+    () => buildNesting([...store.todoEntries, ...store.doneEntries]),
+    [store.todoEntries, store.doneEntries]
+  );
+  const rowProps = useCallback(
+    (t) => ({
+      depth: store.view === 'today' ? 0 : depthOf(nesting, t),
+      kids: childProgress(nesting, t.stableId),
+    }),
+    [nesting, store.view]
+  );
+
   const rawSection = (store.view === 'all' || store.view === 'inbox') && rawEntries.length > 0;
 
   if (store.view === 'done') {
@@ -257,17 +275,17 @@ export function MainList({ store, query }) {
           <GroupHead label="逾期" count={groups.overdue.length} tone="overdue" />
         )}
         {groups.overdue.map((t) => (
-          <TaskRow key={t.id} task={t} store={store} query={query} />
+          <TaskRow key={t.id} task={t} store={store} query={query} {...rowProps(t)} />
         ))}
         {groups.dueToday.length > 0 && (
           <GroupHead label="今天到期" count={groups.dueToday.length} />
         )}
         {groups.dueToday.map((t) => (
-          <TaskRow key={t.id} task={t} store={store} query={query} />
+          <TaskRow key={t.id} task={t} store={store} query={query} {...rowProps(t)} />
         ))}
         {groups.noDate.length > 0 && <GroupHead label="无日期" count={groups.noDate.length} />}
         {groups.noDate.map((t) => (
-          <TaskRow key={t.id} task={t} store={store} query={query} />
+          <TaskRow key={t.id} task={t} store={store} query={query} {...rowProps(t)} />
         ))}
       </div>
     );
@@ -277,7 +295,7 @@ export function MainList({ store, query }) {
     <div>
       <GroupHead label={store.view === 'inbox' ? '收集箱' : '全部任务'} count={visible.length} />
       {visible.map((t) => (
-        <TaskRow key={t.id} task={t} store={store} query={query} />
+        <TaskRow key={t.id} task={t} store={store} query={query} {...rowProps(t)} />
       ))}
       {renderRawSection()}
     </div>
@@ -554,6 +572,9 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   // 工具页的只读投影：派生逻辑全在 lib/todoSnapshot.js（纯函数、可单测）。
   // 工具拿到的是它，而不是 store —— "默认只读"因此是技术事实而非口头约定。
+  // 设置页的列表外观需要知道有哪些 +项目：与侧栏同源（sidebarStats 是唯一口径），
+  // 设置页不自己扫一遍 todo.txt，免得两处对"列表"的定义分叉。
+  const projects = useMemo(() => sidebarStats(store.todoEntries).projects, [store.todoEntries]);
   const snapshot = useTodoSnapshot(store);
   // 对话页 → 工具页的路由请求：{ id, params, seq }。seq 每发一次自增，
   // 工具页据此只消费一次（React 重渲染不会重复切页/重复聚焦）。
@@ -713,7 +734,7 @@ export default function App() {
 
         <div className={'content' + (!settingsOpen && tab === 'list' ? ' layout' : '')}>
           {settingsOpen ? (
-            <SettingsPage onClose={() => setSettingsOpen(false)} />
+            <SettingsPage onClose={() => setSettingsOpen(false)} projects={projects} />
           ) : tab === 'chat' ? (
             <ChatPanel store={store} onOpenList={() => setTab('list')} onOpenTool={openTool} />
           ) : tab === 'tools' ? (

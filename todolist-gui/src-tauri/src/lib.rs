@@ -201,7 +201,7 @@ pub fn run() {
     // 这样「应用没打开也会提醒」这条承诺不丢，而且不再依赖 Python。
     let headless_reminder = std::env::args().any(|a| a == "--reminder");
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             // 第二个实例：把已有窗口从托盘唤回前台（窗口可能正隐藏着）
             show_main_window(app);
@@ -223,6 +223,7 @@ pub fn run() {
             workspace::fs_save_as,
             git::git_autocommit,
             reminder::reminder_check,
+            reminder::reminder_tick,
             reminder::notify,
             app_confirm_close,
             app_quit,
@@ -260,6 +261,19 @@ pub fn run() {
                 begin_close(&app);
             }
         })
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("Worktodolist 启动失败");
+
+    app.run(|app_handle, event| {
+        // macOS 专属：点 Dock 图标 / 再次双击 .app 时，LaunchServices 发现同 bundle id
+        // 已有进程，**不会**拉起新实例，而是走 applicationShouldHandleReopen。
+        // 不接这个事件，窗口 hide 到托盘后就永远唤不回来（点了没反应）。
+        // Windows/Linux 走的是单实例插件那条路（第二个进程 → show_main_window）。
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Reopen { .. } = event {
+            show_main_window(app_handle);
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = (app_handle, event);
+    });
 }

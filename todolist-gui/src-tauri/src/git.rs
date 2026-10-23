@@ -1,6 +1,6 @@
 //! git 自动提交：把旧 `scripts/git_autocommit.py` 的能力搬进壳里（该脚本已随之移除）。
 //!
-//! 语义与 Python 版逐条对齐：只 add 数据路径（todo.txt / done.txt），
+//! 语义与 Python 版逐条对齐：只 add 数据路径（todo.txt / done.txt / notes.md），
 //! 绝不碰代码；没有 git、不是仓库、没有变更、提交失败——一律**静默降级**，
 //! 因为 git 化是增强而不是依赖。
 //!
@@ -22,7 +22,8 @@ use crate::workspace::Workspace;
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// 提交范围：只有数据本体，不含 backup/（理由见文件头注释）。
-const DATA_PATHS: [&str; 2] = ["todo.txt", "done.txt"];
+/// notes.md 是备注（见前端 lib/notes.js），同样属于"事实"，该有版本历史。
+const DATA_PATHS: [&str; 3] = ["todo.txt", "done.txt", "notes.md"];
 
 #[derive(Serialize)]
 pub struct CommitReport {
@@ -78,7 +79,9 @@ pub fn autocommit(root: &Path, stamp: Option<&str>) -> CommitReport {
     }
 
     let mut add_args = vec!["add", "--"];
-    add_args.extend(DATA_PATHS.iter().copied());
+    // 只 add 实际存在的文件：git add 遇到不存在的 pathspec 会**整批失败**，
+    // 那会让"用户还没写过备注"变成"todo.txt 也不再自动提交"。
+    add_args.extend(DATA_PATHS.iter().copied().filter(|p| root.join(*p).exists()));
     let _ = run_git(root, &add_args);
 
     // diff --cached --quiet：有差异时退出码为 1

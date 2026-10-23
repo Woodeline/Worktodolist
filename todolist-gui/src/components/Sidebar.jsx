@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { sidebarStats, tasksForView } from '../lib/sortFilter';
+import { colorHex, resolveColorId, useListStyle } from '../lib/listStyle.js';
 import Icon from './Icon.jsx';
 
 // 可展开的分组（分类 / 项目）。
@@ -9,7 +10,9 @@ import Icon from './Icon.jsx';
 // 点具体名称 = 把右侧主列表过滤到该项；**不在侧栏里往下摊任务行** ——
 // 任务列表归右侧主区，侧栏保持"一眼可扫的目录"。
 // 分类与项目共用这一个组件，因此两处的字体、箭头、缩进完全一致。
-function SidebarGroup({ prefix, label, items, view, onSelect }) {
+// 只有项目带圆点（dotFor）：提醒事项里"列表"是靠颜色一眼分流的，
+// 分类（@）没有对应物，保持纯文字才不会让人以为它是另一种列表。
+function SidebarGroup({ prefix, label, items, view, onSelect, dotFor }) {
   // 默认展开：首屏直接看到具体分类 / 项目，不必先点一下。
   const [open, setOpen] = useState(true);
   const subId = `sidebar-members-${prefix === '@' ? 'contexts' : 'projects'}`;
@@ -32,6 +35,7 @@ function SidebarGroup({ prefix, label, items, view, onSelect }) {
         <div className="sidebar-members" id={subId}>
           {items.map(({ name, count }) => {
             const key = `${prefix}:${name}`;
+            const dot = dotFor ? dotFor(name) : null;
             return (
               <button
                 key={key}
@@ -39,7 +43,12 @@ function SidebarGroup({ prefix, label, items, view, onSelect }) {
                 className={`nav-item${view === key ? ' active' : ''}`}
                 onClick={() => onSelect(key)}
               >
-                <span>{name}</span>
+                {dot && (
+                  // 圆点是纯装饰：它的语义只是"这是哪个列表"，而列表名就写在旁边，
+                  // 再让读屏念一次颜色只会重复一遍同样的信息。
+                  <span className="nav-dot" style={{ background: dot }} aria-hidden="true" />
+                )}
+                <span className="nav-label">{name}</span>
                 {count != null && <span className="count">{count}</span>}
               </button>
             );
@@ -65,6 +74,13 @@ export default function Sidebar({ store, collapsed = false }) {
   const todayCount = useMemo(
     () => tasksForView(store.todoEntries, 'today', today).length,
     [store.todoEntries, today]
+  );
+
+  // 项目色：配过的用配置，没配过的按名字稳定取一个（见 listStyle.js 的说明）。
+  const { colors } = useListStyle();
+  const dotFor = useMemo(
+    () => (name) => colorHex(resolveColorId(name, colors)),
+    [colors]
   );
 
   // 四个固定视图各有一个图标：图标不是装饰，它是这四条目在"一眼扫过"时的
@@ -106,10 +122,11 @@ export default function Sidebar({ store, collapsed = false }) {
         <div className="sidebar-group">
           <SidebarGroup
             prefix="+"
-            label="项目"
+            label="列表"
             items={stats.projects}
             view={store.view}
             onSelect={store.selectView}
+            dotFor={dotFor}
           />
         </div>
       )}

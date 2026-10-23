@@ -1,5 +1,128 @@
 # 更新日志
 
+## v1.1.0 · 2026-10-22
+
+**列表外观**：`+项目` 升格为「列表」—— 侧栏每个列表前多一颗颜色圆点，颜色在设置页挑（8 色板）。这是「向提醒事项式列表靠拢」的第一步，**数据面零改动**：todo.txt / done.txt 一个字节没动，颜色存本机 localStorage，不进数据目录、不进 git。
+
+### 为什么颜色不写进 todo.txt
+
+- 颜色是外观偏好，不是数据：同一份 todo.txt 换台机器打开，颜色该跟着这台机器的偏好；写进文本就把它变成了数据的一部分。
+- 纯文本里塞 `#E24B4A` 会污染 grep / 排序 / topydo（topydo 会把色值当普通词）。
+- 备份与 git 只该管事实，不该管审美。
+
+### 没挑过色的列表也有色
+
+按项目名做**稳定散列**取色（FNV-1a → 8 色板取模）：同名永远同色，不同名尽量分散，且不随排序变化跳色。所以「没配过」与「配成灰色」是两种状态 —— 设置页里显式配过的项会多出一个「自动」按钮，点了就回到按名字取色。
+
+### 稳定 ID（`id:` 标签）
+
+子任务、重复规则、备注三者都要「引用某一条任务」，而 todo.txt 的行号会变、标题会改，唯一能当锚点的是一个写进那一行里的 ID。这一节只埋地基，**界面上没有任何变化**。
+
+- 语法：`id:<6 位 base36>`，作为普通 `key:value` 标签写进 todo.txt（topydo 与记事本都当它是普通标签，无害）。
+- 与 `task.id` 分开：后者是解析时现算的运行时 ID（服务 React key 与拖拽），重读一次文件就全变了；`stableId` 写进行里，一旦生成不再变。
+- **渐进补齐，不批量改写**：新建任务自带 ID；老任务在被编辑时才补。不为埋 ID 把几百行文件一次性改样 —— 那会让 git 记下一次谁也看不懂的大 diff。
+- 重复 ID 只认第一个（复制粘贴的常见后果），后来者置空而不是替它改号：改号等于替用户决定「哪条是真的」。
+- 拿不到唯一 ID 时宁可不写：没 ID 将来还能补，写重了会让引用它的人指错。
+- 非法 ID（含冒号 / 空格 / 中文 / 长度不符）直接丢弃，不留成 `extraTags` —— 它既不是用户写的，也不是我们能用的，显示出来只是噪音。
+
+### 子任务（`parent:` 标签）
+
+关系写在**子任务自己那一行**上：`parent:<父的 stableId>`。**不用缩进**表达从属 —— 缩进在 todo.txt 里活不下来：topydo 不认、记事本会吃掉行首空格、复制粘贴经常丢。一行一条 + 一个标签，是唯一扛得住「外部编辑器随便改」的形状。
+
+- 入口：编辑浮窗（双击任务）里的「子任务」区块 —— 列出全部子任务、可勾选完成、可删除、底部输入框回车即添加。放在浮窗而不是列表行上，是因为加子任务是「停下来想一想」的动作，不是一个顺手的点击。
+- 列表里子任务缩进一档紧跟父任务；父任务的元信息簇显示 `1/3` 进度。
+- **「今天」视图不缩进**：那个视图先按紧急度分流，父子本来就会被拆到不同组，缩进一条旁边没有父的行只会让人以为界面坏了。两种视图的渲染与键盘导航都走 `viewTasks` 一条路径，顺序不会分叉。
+- 父任务缺 ID 时**当场补一个**再加子任务 —— 这就是「用到才补」的场合：为可能永远不会来的子任务提前改写整份文件不值得。
+- 完成的子任务仍算在分母里（`2/3` 的 2 就是它们）：索引同时吃 todo 与 done，否则子任务一完成就从进度里蒸发、分母跟着缩水。
+- **删父不带走子任务**，它们降级为独立任务，toast 会说明「N 个子任务已变为独立任务」。连带删除更符合提醒事项的手感，但那意味着替用户删掉他没点过的行 —— 纯文本清单的底线是不让人意外地丢数据。
+
+三种「看不见」的失效都写成了断言：父子互认成环会让整组任务从界面消失（环在建索引时断开）；父不在当前视图时子任务会跟着消失（降级为顶层）；快速添加里手打的 `parent:` 会挂不上（一律丢弃）。
+
+### 重复规则（`rec:` 标签）
+
+完成后**自动生成下一次**，而不是把任务留在原地勾选又取消。语法只做提醒事项里真正高频的那几种，不抄全 EKRecurrenceRule：
+
+| 写法 | 含义 |
+|---|---|
+| `rec:+1d` / `rec:+3d` | 每天 / 每 3 天 |
+| `rec:+1w` / `rec:+2w` | 每周 / 每 2 周 |
+| `rec:+1m` / `rec:+3m` | 每月 / 每 3 个月 |
+| `rec:mon` / `rec:mon,thu` | 每周一 / 每周一、四 |
+
+- 入口：编辑浮窗「重复」下拉（含「每个工作日」与各星期几）；手写在文本里同样生效，`rec:mon,wed` 这类组合下拉里没有也能正常用，且会作为一项补进下拉，不会显示成空白。
+- 列表里带 `rec:` 的行显示一个 `↻`，完整规则（「每周一、四」）放在悬停提示里 —— 列表是用来扫的，多一个字都会挤压日期的位置。
+- **下一次以 `due` 为锚点推进，不是以「今天」推进**：逾期三天才完成的任务，下一次仍是 `due + 一个周期`。若从今天推，每逾期一次间隔就被悄悄缩短，「每周」会慢慢变成「每几天」。
+- 算出的日期**必须严格晚于今天**：提前完成的重复任务不会当天再冒出一条。
+- `t:`（阈值）与 `rem:`（提醒时刻）跟着平移同样的天数，时刻不变 —— 「每周一 9 点提醒」不能变成「那周的周二才提醒」。
+- **每月按号数走，遇短月压到月末且不漂移**：1/31 → 2/28 → 3/31。实现上每一步都从原始锚点重算，而不是在上一步结果上累加（后者会让「每月 31 号」被 2 月永久拽成 28 号）。
+- **下一次是另一条任务**：运行时 ID 与 `stableId` 都重新分配，绝不继承 —— 继承会造成两行同号，引用它的人（子任务 / 备注）指不准。`parentId` 则保留，父没换。
+- **插回原位置**而不是追加到末尾：重复任务该在它原来待的地方重新长出来。
+- **撤销完成会连带撤掉下一次**：它不属于用户做过的动作，留着就是一条凭空多出来的任务。
+- 认不出的 `rec:` 值**不丢**，原样留在「其他字段」里 —— 这是用户自己写的规则，静默吞掉会让人以为设过了。这一点与 `id:` / `parent:` 相反（那两个是系统分配的引用，非法值直接丢弃）。
+
+### 备注（`notes.md`）
+
+备注是唯一**不放在 todo.txt 里**的数据。双击任务，编辑浮窗底部那块多行输入框就是它。
+
+- 位置：数据目录下的 `notes.md`，与 todo.txt 同级。每条备注是 `## <stableId>` 起头的一节，正文随便写（Markdown 可用）。
+- 为什么外置：备注是多行、长、带格式的，而 todo.txt 的每一行都是一条待办 —— 扫列表、grep、topydo、拖拽排序全依赖这个形状。而且备注不是「扫列表时要看见」的东西，它是点进去才看的。
+- 为什么是**一个文件**而不是 `notes/<id>.md` 一任务一文件：将来纳入备份 / git 是「多一个路径」而不是「多一个目录」（后者的清理、孤儿回收、目录创建都得另写一套）；数据目录里也不该长出几百个碎文件。
+- 文件开头那段说明**原样保留**，程序只重写 `## <id>` 之后的部分。
+- **保存是「读·改·写」**：写之前重新读一次磁盘，只合并自己那一条。用户可能正用别的编辑器改着 notes.md，拿内存里的旧文本整文件覆盖会吃掉他的改动。
+- 清空输入框 = 删掉那一节，不留空节。
+- 老任务没有 ID 时先补一个再挂 —— 备注靠 `id:` 认人，没有 id 就挂不住。
+- 列表上有备注的行显示一个 `✎`。
+- **删任务不删备注**：那一节还留在 notes.md 里（它是你写过的字），要清就直接在文件里删掉那一节。提醒事项的备注跟着任务走，但纯文本清单的底线是不让人意外地丢数据。
+- 已知缺口：**每日备份（`backup/todo-<date>.txt`）只拷 todo.txt，不含 notes.md**。git 自动提交已同步纳入（见下）。
+
+### git 提交范围纳入 notes.md
+
+`git.rs` 的 `DATA_PATHS` 由两项改为三项（`todo.txt` / `done.txt` / `notes.md`），备注从此有版本历史。同时把 `git add` 改成**只 add 实际存在的文件** —— `git add -- a b c` 里只要有一个 pathspec 不存在就**整批失败**，那会让「用户还没写过备注」变成「todo.txt 也不再自动提交」。
+
+这一处是 Rust 改动，`cargo check` 已通过（`RUSTUP_TOOLCHAIN=stable-aarch64-apple-darwin` 覆盖 `rust-toolchain.toml` 里写死的 Windows-MSVC 通道后验证）。
+
+> 注：`src-tauri/rust-toolchain.toml` 把通道锁成 `stable-x86_64-pc-windows-msvc`（理由见该文件注释：Windows 上必须走 MSVC，GNU 路线会踩 windres / 中文路径 / 响应文件三个坑）。因此在 macOS 上直接跑 `cargo` 会报 `target tuple in channel name`，**这不是代码问题** —— 用 `RUSTUP_TOOLCHAIN` 覆盖即可，不要去改那个文件。
+
+### 改动面
+
+- 新增 `src/lib/listStyle.js`：色板、稳定散列、本机配置 store（key `worktodolist.list-style.v1`；色板外的脏 id 在归一化阶段丢弃）。
+- `Sidebar.jsx`：项目组条目加圆点，分组标题由「项目」改「列表」。`@分类` 不长圆点 —— 它不是列表。
+- `TopBar.jsx`：当前视图是某个列表时，面包屑带上它的颜色（否则「列表」只在侧栏成立，进主区就退回一串灰字）。
+- `SettingsPage.jsx`：新增「列表外观」组，列出全部列表 + 8 色点。这一节会写本机配置，页头说明因此由「本页只读」改为「列表外观存本机」。
+- `index.css`：新增 `--dot-edge` 令牌（色点描边，明暗两套值）、`.nav-dot` / `.swatches` / `.swatch` / `.swatch-auto` 样式。
+- `todoParser.js`：`stableId` 字段（读写 `id:`、序列化时排在用户自写标签之前）、`parseFile` 内重复 ID 去重、`newStableId` / `isValidStableId` / `collectStableIds`。
+- `useTodoStore.js`：`addTask` 与 `updateTask` 两处分配 ID（需要全库视角，所以放在提交时而不是解析器里 —— 解析器保持纯函数）；新增 `addSubtask`；`deleteTask` 的 toast 会说明有多少子任务变为独立。
+- `subtasks.js`（新）：`buildNesting`（建索引 + 断环）/ `childrenOf` / `childProgress` / `depthOf` / `nestChildren`（子随父排）。
+- `sortFilter.js`：`viewTasks` 末尾做一次嵌套（「今天」「已完成」两个视图除外，原因见上）。
+- `TaskRow.jsx`：新增 `depth` / `kids` 两个 prop —— 缩进类 `is-child` 与进度 `1/3`。
+- `EditDrawer.jsx`：新增子任务区块；输入框回车是「加一条」而不是「保存浮窗」（不拦住会顺手关掉浮窗）。
+- `recurrence.js`（新）：`parseRecurrence` / `formatRecurrence` / `describeRecurrence` / `nextDueDate` / `nextOccurrence` / `RECURRENCE_CHOICES`。纯函数，只依赖 dayjs。
+- `todoParser.js`：`recurrence` 字段（读写 `rec:`，序列化排在 `star:` 之后、`id:` 之前）；新增 `newTaskId`（给凭空造出的任务分配运行时 ID）；快速添加里手打的 `rec:` 生效（与 `id:` / `parent:` 相反，它是用户能写的规则）。
+- `useTodoStore.js`：`toggleComplete` 在提交时生成下一次实例（fade 窗口内撤销时它还没出生，不会留幽灵任务）；撤销记录新增 `spawnedId`，撤销完成连带删除；toast 预告「下次 2026-10-29」。
+- `EditDrawer.jsx`：新增「重复」下拉；手写的规则若不在预设里会补一项进去。
+- `TaskRow.jsx` 与 `index.css`：`.rec-chip` 重复标记。
+- `notes.js`（新）：`parseNotes` / `serializeNotes` / `writeNote` / `readNote` / `NOTES_FILE`。纯函数，只依赖 `isValidStableId`。
+- `useTodoStore.js`：加载时读 notes.md 进内存（`noteIds` 进 state，正文留在 ref 里按需取）；新增 `getNote` / `saveNote`；`saveNote` 对缺 ID 的老任务先补 ID 再挂。
+- `EditDrawer.jsx`：新增备注输入框（多行；`textarea` 里的回车不触发保存）；保存时顺带写备注。
+- `TaskRow.jsx` 与 `index.css`：`.note-chip` 备注标记、`.note-input` 输入框样式。
+- `styleguide.jsx`：假 store 补上 `getNote` / `saveNote` / `noteIds` / `addSubtask`。
+- `src-tauri/src/git.rs`：`DATA_PATHS` 加 `notes.md`；`git add` 前过滤不存在的文件。
+
+### 打包与分发
+
+- 新增 `.github/workflows/build-macos.yml`：在 `macos-latest` 上出 `Worktodolist.app`（打 zip 后上传）。同样两个坑：`RUSTUP_TOOLCHAIN` 覆盖写死的 Windows-MSVC 通道；`.app` 是目录包，上传前先 `ditto` 成 zip。
+- 改造 `.github/workflows/build-windows.yml`：新增**推送 `v*` 标签即自动构建**，并把 NSIS 安装包挂到该版本的 Release 上（手动触发时只传 Artifacts，不建 Release）。
+- 构建命令统一改为直接调 `node node_modules/@tauri-apps/cli/tauri.js build`，绕过 `npm run tauri:build` —— 后者依赖 `node_modules/.bin/tauri` 软链，该软链在部分安装方式下不建立，会报 `tauri: command not found`。
+- 版本号定为 **1.1.0**，`package.json` / `tauri.conf.json` / `Cargo.toml` 三处同步（不同步会让 app 里显示的版本与日志对不上）。
+
+### 验证
+
+- `npm test` 570 用例全过（新增 `recurrence` 19 例 + 解析器 `rec:` 7 例 + store 重复 4 例 + `TaskRow` 3 例 + `notes` 19 例 + store 备注 5 例 + `TaskRow` 备注 3 例）。
+- `notes` 那一组专盯**丢数据**：往返不丢正文、说明头不被重写、正文里的 `##` 不被当成新节、反复写同一条不产生重复节、空正文不留空节。
+- store 备注那一组里有一条专门模拟「用户正在外部编辑器改 notes.md」，断言保存一条之后别人的那条还在 —— 这是「读·改·写」唯一值得写测试的理由。
+- `Sidebar.test.jsx` 是首个组件渲染冒烟（react-dom/server 静态渲染）：断言 3 个 `+项目` 渲染出 3 颗 `#RRGGBB` 圆点、不同列表不同色、`@分类` 不长圆点。圆点失效的方式是静默的（dotFor 传漏、色值取到 undefined 都只是变回一排灰字），所以需要这层断言。
+- `qa-css-check`（无裸色值 / 裸字号）、`qa-contrast` 90 组、`vite build` 全部通过。
+
 ## v1.0.4 · 2026-10-18
 
 **小版本更新 · 纯本地离线**：自然语言识别长尾收口（八轮 held-out 压测 + 会话回指层 + 极性护栏，零模型、零出网）、工具页改「目录态卡片墙 + 工作态」两态、UI 外壳换成「左侧活动栏 + 上下文条」骨架、页眉开关左侧化，外加 git 自动提交范围与备份清理两处数据层修正。构建产物 `Worktodolist.exe` 随仓库分发（见文末「下载」）。

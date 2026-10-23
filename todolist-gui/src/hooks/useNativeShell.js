@@ -120,4 +120,17 @@ export function useNativeShell(store) {
       if (timer) clearTimeout(timer);
     };
   }, [dirReady]);
+
+  // ④ 每任务时刻提醒（rem: 标签）：每 30 秒 tick 一次。
+  //    扫描、弹通知、去重记账都在 Rust 侧（reminder_tick），前端只负责定时与给本地时刻。
+  useEffect(() => {
+    if (!isTauri() || !dirReady) return undefined;
+    const tick = () => {
+      invoke('reminder_tick', { now: dayjs().format('YYYY-MM-DDTHH:mm') }).catch(() => {
+        // 提醒是增强，失败静默
+      });
+    };
+    const timer = setInterval(tick, 30_000);
+    return () => clearInterval(timer);
+  }, [dirReady]);
 }

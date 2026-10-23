@@ -1,3 +1,4 @@
+import { colorHex, resolveColorId, useListStyle } from '../lib/listStyle.js';
 import Icon from './Icon.jsx';
 
 // 视图名：侧栏选中的那一项（含 @分类 / +项目 的伪视图），用在面包屑第一段。
@@ -46,8 +47,14 @@ export default function TopBar({
 }) {
   const isList = tab === 'list' && !settingsOpen;
 
+  // 当前视图是某个列表（+项目）时，面包屑带上它的颜色 ——
+  // 否则"列表"这个概念只在侧栏成立，进了主区就退回成一串灰字。
+  const { colors } = useListStyle();
+  const listName = store.view.startsWith('+:') ? store.view.slice(2) : '';
+  const listDot = listName ? colorHex(resolveColorId(listName, colors)) : null;
+
   const crumb = settingsOpen
-    ? { title: '设置', sub: '只读 · 快捷键速查' }
+    ? { title: '设置', sub: '列表外观 · 快捷键速查' }
     : tab === 'chat'
       ? { title: '对话', sub: '自然语言操作' }
       : tab === 'tools'
@@ -72,6 +79,9 @@ export default function TopBar({
       )}
 
       <div className="crumb">
+        {isList && listDot && (
+          <span className="nav-dot" style={{ background: listDot }} aria-hidden="true" />
+        )}
         <b>{crumb.title}</b>
         <i>/</i>
         <span>{crumb.sub}</span>

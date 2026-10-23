@@ -2,12 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import {
   applyPatch,
+  collectStableIds,
   completeTask,
+  newStableId,
+  newTaskId,
   parseFile,
   reviveTask,
   serializeEntries,
   taskFromQuickInput,
 } from '../lib/todoParser';
+import { nextOccurrence } from '../lib/recurrence';
+import { NOTES_FILE, parseNotes, writeNote } from '../lib/notes';
 import {
   ensureDailyBackup,
   isFsaSupported,
@@ -29,6 +34,11 @@ function normalizeText(text) {
   return text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
 }
 
+// 撤销「完成」时，重复规则顺手生成的下一次实例要一起撤掉 —— 它不属于用户做过的动作。
+function dropSpawned(todo, action) {
+  return action.spawnedId ? todo.filter((e) => e.id !== action.spawnedId) : todo;
+}
+
 export function useTodoStore() {
   const supported = isFsaSupported();
 
@@ -47,6 +57,9 @@ export function useTodoStore() {
   const [focusedId, setFocusedId] = useState(null);
   const [fadingIds, setFadingIds] = useState([]);
   const [dragId, setDragId] = useState(null);
+  // 有备注的任务 id 集合。列表只要知道「有没有」，所以存 Set 而不是整份 Map：
+  // 正文按需从 notesRef 里取，不必为了渲染把别人的备注也放进 state。
+  const [noteIds, setNoteIds] = useState(() => new Set());
 
   const dirHandleRef = useRef(null);
   const todoEntriesRef = useRef([]);
@@ -57,6 +70,7 @@ export function useTodoStore() {
   const saveTimerRef = useRef(null);
   const undoStackRef = useRef([]);
   const pendingCompleteRef = useRef(new Map());
+  const notesRef = useRef(new Map());
   const quickAddRef = useRef(null);
   const searchRef = useRef(null);
 
@@ -78,16 +92,26 @@ export function useTodoStore() {
 
   const dismissToast = useCallback(() => setToast(null), []);
 
+  // 备注：notes.md 全量解析进内存。它和 todo.txt 一样是一整份纯文本，
+  // 量级小到没必要按需加载；但只有 id 集合进 state（见 noteIds 的注释）。
+  const refreshNotes = useCallback((text) => {
+    const map = parseNotes(text);
+    notesRef.current = map;
+    setNoteIds(new Set(map.keys()));
+  }, []);
+
   const loadFromDisk = useCallback(
     async (handle, { notify = false } = {}) => {
       const todoText = normalizeText(await readFileText(handle, 'todo.txt'));
       const doneText = normalizeText(await readFileText(handle, 'done.txt'));
       setEntries(parseFile(todoText), parseFile(doneText));
+      // 备注文件可能根本不存在（还没写过备注）—— readFileText 返回空串，解析出空 Map
+      refreshNotes(await readFileText(handle, NOTES_FILE));
       diskStateRef.current = { todo: todoText, done: doneText };
       setSyncStatus('saved');
       if (notify) showToast('已同步外部修改');
     },
-    [setEntries, setSyncStatus, showToast]
+    [refreshNotes, setEntries, setSyncStatus, showToast]
   );
 
   const saveNow = useCallback(async () => {
@@ -163,9 +187,9 @@ export function useTodoStore() {
         // 幂等保护：任务已存在于列表（例如删除撤销后已恢复）时不重复插入，
         // 仅确保 done.txt 无残留条目。
         if (todo.some((e) => e.id === action.doneTask.id)) {
-          return { todo, done: done.filter((e) => e.id !== action.doneTask.id) };
+          return { todo: dropSpawned(todo, action), done: done.filter((e) => e.id !== action.doneTask.id) };
         }
-        const nextTodo = [...todo];
+        const nextTodo = [...dropSpawned(todo, action)];
         const insertAt = Math.min(action.todoIndex, nextTodo.length);
         nextTodo.splice(insertAt, 0, reviveTask(action.doneTask));
         const nextDone = done.filter((e) => e.id !== action.doneTask.id);
@@ -196,19 +220,27 @@ export function useTodoStore() {
   const addTask = useCallback(
     (inputText) => {
       const today = dayjs().format('YYYY-MM-DD');
-      const task = taskFromQuickInput(inputText, today);
-      if (!task.title) {
+      const draft = taskFromQuickInput(inputText, today);
+      if (!draft.title) {
         showToast('请输入任务标题');
         return null;
       }
-      commit(({ todo, done }) => ({ todo: [...todo, task], done }));
+      // 稳定 ID 在**提交时**分配而不是在 taskFromQuickInput 里：
+      // 它需要"当前所有已占用的 ID"这个全库视角，而那个函数是纯的、看不见仓库。
+      // 拿不到唯一 ID 时宁可不写 —— 没 ID 将来还能补，写重了会指错人。
+      let created = draft;
+      commit(({ todo, done }) => {
+        const sid = newStableId(collectStableIds([...todo, ...done]));
+        created = sid ? applyPatch(draft, { stableId: sid }) : draft;
+        return { todo: [...todo, created], done };
+      });
       // 记录“新增”的逆操作（追加到末尾，todoIndex 便于将来复用）。
       undoStackRef.current.push({
         kind: 'add',
-        taskId: task.id,
+        taskId: created.id,
         todoIndex: todoEntriesRef.current.length,
       });
-      return task;
+      return created;
     },
     [commit, showToast]
   );
@@ -230,6 +262,12 @@ export function useTodoStore() {
       // 防重入：同一任务在 fade 窗口内被重复触发完成时，只保留一次提交。
       if (pendingCompleteRef.current.has(task.id)) return;
       const doneTask = completeTask(task, today);
+      // 重复规则：下一次的字段先算好（纯计算，所以能立刻预告给用户），
+      // 但**生成放在下面的提交里** —— fade 窗口内撤销时它还没出生，不会留下幽灵任务。
+      const next = nextOccurrence(task, today);
+      // 撤销记录先入栈、生成后回填 spawnedId：撤销必须连带删掉下一次实例，
+      // 否则「撤销完成」会留下一条凭空多出来的任务。
+      const record = { kind: 'complete', todoIndex, doneTask, taskId: task.id, spawnedId: null };
       setFadingIds((prev) => [...prev, task.id]);
       const timer = setTimeout(() => {
         pendingCompleteRef.current.delete(task.id);
@@ -237,12 +275,28 @@ export function useTodoStore() {
         commit(({ todo, done }) => {
           // 若任务已被其它操作（如删除）移除，则放弃本次完成，避免产生重复/幽灵条目。
           if (!todo.some((e) => e.id === task.id)) return { todo, done };
-          return { todo: todo.filter((e) => e.id !== task.id), done: [...done, doneTask] };
+          const nextTodo = todo.filter((e) => e.id !== task.id);
+          if (next) {
+            const taken = collectStableIds([...nextTodo, ...done]);
+            // 下一次是**另一条任务**：换个新的运行时 ID（否则两行同 id，React key 与拖拽都会乱），
+            // stableId 也重新分配（继承会让引用它的人指不准）。parentId 则在 next 里原样保留。
+            const spawned = applyPatch(
+              { ...task, ...next, id: newTaskId(`${task.id}|${next.dueDate}`) },
+              { stableId: newStableId(taken) }
+            );
+            // 插回原位置而不是追加到末尾：重复任务应该在它原来待的地方重新长出来。
+            nextTodo.splice(Math.min(todoIndex, nextTodo.length), 0, spawned);
+            record.spawnedId = spawned.id;
+          }
+          return { todo: nextTodo, done: [...done, doneTask] };
         });
       }, FADE_MS);
       pendingCompleteRef.current.set(task.id, timer);
-      undoStackRef.current.push({ kind: 'complete', todoIndex, doneTask, taskId: task.id });
-      showToast(`已完成：${task.title}`, { actionLabel: '撤销', onAction: undo });
+      undoStackRef.current.push(record);
+      showToast(
+        next ? `已完成：${task.title} · 下次 ${next.dueDate}` : `已完成：${task.title}`,
+        { actionLabel: '撤销', onAction: undo }
+      );
     },
     [commit, showToast, undo]
   );
@@ -268,9 +322,64 @@ export function useTodoStore() {
         done,
       }));
       undoStackRef.current.push({ kind: 'delete', task, todoIndex });
-      showToast(`已删除：${task.title}`, { actionLabel: '撤销', onAction: undo });
+      // 删父**不带走**子任务：它们各自是独立的一行，父没了就降级为顶层任务。
+      // 连带删除更符合提醒事项的手感，但在这里意味着替用户删掉他没点过的行 ——
+      // 而纯文本清单的底线是"不让人意外地丢数据"。降级后它们仍然可见、可撤销感更差，
+      // 所以把这件事说清楚，交给用户自己决定要不要再删。
+      const kids = task.stableId
+        ? todoEntriesRef.current.filter(
+            (e) => e.kind === 'task' && e.parentId === task.stableId
+          ).length
+        : 0;
+      showToast(
+        kids > 0 ? `已删除：${task.title}（${kids} 个子任务已变为独立任务）` : `已删除：${task.title}`,
+        { actionLabel: '撤销', onAction: undo }
+      );
     },
     [commit, showToast, undo]
+  );
+
+  // 在一条任务下面加子任务。
+  //
+  // 父任务可能还没有 stableId（老任务从未被编辑过）—— **这时候当场给它补一个**。
+  // 这就是"用到才补"的场合：为了一个可能永远不会来的子任务去提前改写整份文件不值得，
+  // 但真到要用的时候，补一个 ID 是必须的（否则子任务挂不上去）。
+  const addSubtask = useCallback(
+    (parentTaskId, text) => {
+      const today = dayjs().format('YYYY-MM-DD');
+      const draft = taskFromQuickInput(text, today);
+      if (!draft.title) {
+        showToast('请输入子任务标题');
+        return null;
+      }
+      let created = null;
+      commit(({ todo, done }) => {
+        const taken = collectStableIds([...todo, ...done]);
+        const idx = todo.findIndex((e) => e.id === parentTaskId);
+        if (idx === -1) return { todo, done };
+        let parent = todo[idx];
+        if (!parent.stableId) {
+          const pid = newStableId(taken);
+          if (!pid) return { todo, done };
+          taken.add(pid);
+          parent = applyPatch(parent, { stableId: pid });
+        }
+        created = applyPatch(draft, {
+          stableId: newStableId(taken),
+          parentId: parent.stableId,
+        });
+        const next = [...todo];
+        next[idx] = parent;
+        return { todo: [...next, created], done };
+      });
+      if (!created) {
+        showToast('没能创建子任务');
+        return null;
+      }
+      showToast(`已添加子任务：${created.title}`);
+      return created;
+    },
+    [commit, showToast]
   );
 
   const updateTask = useCallback(
@@ -279,12 +388,71 @@ export function useTodoStore() {
         showToast('标题不能为空');
         return;
       }
-      commit(({ todo, done }) => ({
-        todo: todo.map((e) => (e.id === id && e.kind === 'task' ? applyPatch(e, patch) : e)),
-        done,
-      }));
+      commit(({ todo, done }) => {
+        const taken = collectStableIds([...todo, ...done]);
+        return {
+          todo: todo.map((e) => {
+            if (e.id !== id || e.kind !== 'task') return e;
+            // 编辑老任务时顺手给它补一个 ID —— **渐进**补齐，不为埋 ID 去改写整个文件：
+            // 一份几百行的 todo.txt 一次性全部变样，git 会记下一次谁也看不懂的大 diff。
+            const nextPatch =
+              e.stableId || patch.stableId !== undefined
+                ? patch
+                : { ...patch, stableId: newStableId(taken) };
+            if (nextPatch.stableId) taken.add(nextPatch.stableId);
+            return applyPatch(e, nextPatch);
+          }),
+          done,
+        };
+      });
     },
     [commit, showToast]
+  );
+
+  /** 读某条任务的备注正文（没有则空串）。备注挂在 stableId 上，不是运行时 id。 */
+  const getNote = useCallback(
+    (stableId) => (stableId ? notesRef.current.get(stableId) || '' : ''),
+    []
+  );
+
+  const saveNote = useCallback(
+    async (taskId, body) => {
+      const handle = dirHandleRef.current;
+      if (!handle) return false;
+      const found = todoEntriesRef.current.find((e) => e.id === taskId);
+      if (!found) return false;
+      let sid = found.stableId;
+      // 没有 ID 的老任务：先补一个再挂备注 —— 备注靠 id 认人，没有 id 就挂不住。
+      if (!sid) {
+        commit(({ todo, done }) => {
+          const taken = collectStableIds([...todo, ...done]);
+          const pid = newStableId(taken);
+          if (!pid) return { todo, done };
+          sid = pid;
+          return {
+            todo: todo.map((e) => (e.id === taskId ? applyPatch(e, { stableId: pid }) : e)),
+            done,
+          };
+        });
+        if (!sid) {
+          showToast('没能给这条任务分配 ID，备注没保存');
+          return false;
+        }
+      }
+      try {
+        // 读·改·写：拿磁盘上的最新内容合并，而不是拿内存里的旧文本覆盖 ——
+        // 用户可能正用别的编辑器改着 notes.md，整文件覆盖会吃掉他的改动。
+        const latest = await readFileText(handle, NOTES_FILE);
+        const next = writeNote(latest, sid, body);
+        await writeFileText(handle, NOTES_FILE, next);
+        refreshNotes(next);
+        return true;
+      } catch (err) {
+        showToast(`备注保存失败：${err.message || err}`);
+        return false;
+      }
+    },
+    [commit, refreshNotes, showToast]
   );
 
   const reorder = useCallback(
@@ -480,16 +648,20 @@ export function useTodoStore() {
     focusedId,
     fadingIds,
     dragId,
+    noteIds,
     quickAddRef,
     searchRef,
     // 追加：供聊天 Agent 写入会话事件日志所用的目录句柄引用（不改变任何既有字段）。
     dirHandleRef,
     addTask,
+    addSubtask,
     toggleComplete,
     deleteTask,
     updateTask,
     reorder,
     undo,
+    getNote,
+    saveNote,
     selectView,
     setSortMode,
     setSearch,

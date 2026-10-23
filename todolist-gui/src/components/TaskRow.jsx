@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import dayjs from 'dayjs';
 import { isOverdue, PRIORITY_LABELS } from '../lib/sortFilter';
+import { describeRecurrence } from '../lib/recurrence';
 import { useContextMenu } from '../hooks/useContextMenu.jsx';
 import Icon from './Icon.jsx';
 
@@ -41,8 +42,16 @@ function copyPlain(text) {
   }
 }
 
-export default function TaskRow({ task, store, query = '', readonly = false }) {
+export default function TaskRow({
+  task,
+  store,
+  query = '',
+  readonly = false,
+  depth = 0,
+  kids = null,
+}) {
   const today = dayjs().format('YYYY-MM-DD');
+  const isChild = depth > 0;
   const overdue = isOverdue(task, today);
   const fading = store.fadingIds.includes(task.id);
   const dragEnabled =
@@ -171,6 +180,7 @@ export default function TaskRow({ task, store, query = '', readonly = false }) {
         store.dragId === task.id ? 'dragging' : '',
         selected ? 'selected' : '',
         readonly ? 'row-readonly' : '',
+        isChild ? 'is-child' : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -211,11 +221,32 @@ export default function TaskRow({ task, store, query = '', readonly = false }) {
       {/* 元信息收进一个右对齐的簇：优先级与截止日各占固定宽度，
           于是整列右边缘是一条直线 —— 扫列表时不用逐行找日期在哪。 */}
       <span className="task-meta">
+        {/* 子任务进度：父任务行才显示。它是"这一堆事做到哪了"的唯一线索 ——
+            否则要展开才知道下面三条完成了两条。 */}
+        {kids && kids.total > 0 ? (
+          <span className="sub-count" title={`${kids.done} / ${kids.total} 个子任务已完成`}>
+            {kids.done}/{kids.total}
+          </span>
+        ) : null}
         {task.contexts.map((c) => (
           <span key={c} className="context">
             @{c}
           </span>
         ))}
+        {task.stableId && store.noteIds && store.noteIds.has(task.stableId) ? (
+          // 备注角标：只表示"这条后面还有字"。备注是要点进去看的，
+          // 列表上多显示一个字都会挤压标题和日期。
+          <span className="note-chip" title="有备注（双击任务查看）">
+            ✎
+          </span>
+        ) : null}
+        {task.recurrence ? (
+          // 重复标记：一个 ↻ 就够，完整规则（"每周一、周四"）放在 title 里悬停看。
+          // 列表是用来扫的，不是用来读的 —— 这里多一个字都会挤压日期的位置。
+          <span className="rec-chip" title={`重复：${describeRecurrence(task.recurrence)}`}>
+            ↻
+          </span>
+        ) : null}
         {task.starValue ? (
           <span className="star" title="星标">
             <Icon name="star" size={13} fill="currentColor" />

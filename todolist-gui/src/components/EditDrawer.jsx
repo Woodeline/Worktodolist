@@ -1,7 +1,85 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { RECURRENCE_CHOICES, describeRecurrence } from '../lib/recurrence';
 import { PRIORITY_LABELS, sidebarStats } from '../lib/sortFilter';
 import { serializeTask } from '../lib/todoParser';
+import { buildNesting, childrenOf } from '../lib/subtasks.js';
 import Icon from './Icon.jsx';
+
+// 子任务区块。
+//
+// 放在编辑浮窗里而不是列表行上：加子任务是"停下来想一想"的动作，不是一个顺手的点击 ——
+// 列表行上每多一个入口，误触的代价就多一分。这里同时能看见全部子任务，
+// 加完就能核对，不必回到列表里找它们缩进在哪。
+function SubtaskField({ store, task }) {
+  const [text, setText] = useState('');
+  const nesting = useMemo(
+    () => buildNesting([...(store.todoEntries || []), ...(store.doneEntries || [])]),
+    [store.todoEntries, store.doneEntries]
+  );
+  const kids = childrenOf(nesting, task.stableId);
+
+  const add = () => {
+    const title = text.trim();
+    if (!title) return;
+    store.addSubtask(task.id, title);
+    setText('');
+  };
+
+  return (
+    <div className="field field-subtasks">
+      <span className="field-subtasks-label">
+        子任务{kids.length > 0 ? ` · ${kids.filter((k) => k.completed).length}/${kids.length}` : ''}
+      </span>
+      {kids.length === 0 ? (
+        <p className="subtasks-empty">还没有子任务</p>
+      ) : (
+        <ul className="subtask-list">
+          {kids.map((k) => (
+            <li key={k.id}>
+              <button
+                type="button"
+                className={`checkbox${k.completed ? ' checked' : ''}`}
+                onClick={() => store.toggleComplete(k)}
+                aria-label={k.completed ? '取消完成子任务' : '完成子任务'}
+              />
+              <span className={'subtask-title' + (k.completed ? ' completed' : '')}>{k.title}</span>
+              <button
+                type="button"
+                className="subtask-del"
+                onClick={() => store.deleteTask(k)}
+                title="删除子任务"
+                aria-label={`删除子任务 ${k.title}`}
+              >
+                <Icon name="x" size={12} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="subtask-add">
+        <input
+          type="text"
+          value={text}
+          placeholder="添加子任务，回车确认"
+          aria-label="添加子任务"
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            // 回车在这里是"加一条"，不是"保存整个浮窗" —— 不拦住的话
+            // 每加一个子任务都会顺手把浮窗关掉。
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              e.stopPropagation();
+              add();
+            }
+          }}
+        />
+        <button type="button" className="btn btn-sm" onClick={add} disabled={!text.trim()}>
+          添加
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const PRIORITY_ORDER = ['A', 'B', 'C'];
 
@@ -118,6 +196,9 @@ export default function EditDrawer({ store }) {
         priority: task.priority || '',
         dueDate: task.dueDate || '',
         thresholdDate: task.thresholdDate || '',
+        remindAt: task.remindAt || '',
+        recurrence: task.recurrence || '',
+        note: store.getNote(task.stableId),
         contexts: task.contexts.join(', '),
         projects: task.projects.join(', '),
         starred: Boolean(task.starValue),
@@ -134,27 +215,42 @@ export default function EditDrawer({ store }) {
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
+  // 手写的规则（rec:+5d、rec:mon,wed）可能不在预设里，补一个选项进去，
+  // 否则下拉框会显示成空 —— 看起来像「没设重复」，实际设着。
+  const recurrenceOptions = useMemo(() => {
+    const cur = form ? form.recurrence : '';
+    if (!cur || RECURRENCE_CHOICES.some((c) => c.value === cur)) return RECURRENCE_CHOICES;
+    return [...RECURRENCE_CHOICES, { value: cur, label: describeRecurrence(cur) || cur }];
+  }, [form && form.recurrence]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const preview = serializeTask({
     ...task,
     title: form.title.trim(),
     priority: form.priority || null,
     dueDate: form.dueDate || null,
     thresholdDate: form.thresholdDate || null,
+    remindAt: form.remindAt || null,
+    recurrence: form.recurrence || null,
     contexts: toList(form.contexts, '@'),
     projects: toList(form.projects, '+'),
     starValue: form.starred ? '1' : null,
   });
 
-  const save = () => {
+  const save = async () => {
     store.updateTask(task.id, {
       title: form.title.trim(),
       priority: form.priority || null,
       dueDate: form.dueDate || null,
       thresholdDate: form.thresholdDate || null,
+      remindAt: form.remindAt || null,
+      recurrence: form.recurrence || null,
       contexts: toList(form.contexts, '@'),
       projects: toList(form.projects, '+'),
       starValue: form.starred ? '1' : null,
     });
+    // 备注写在数据目录的 notes.md 里，不在 todo.txt 的行上 —— 它是异步写，
+    // 但先关浮窗不等它：失败会自己弹 toast，而让人对着一个已经保存的任务等着没意义。
+    if (form.note !== store.getNote(task.stableId)) store.saveNote(task.id, form.note);
     store.closeEditor();
   };
 
@@ -234,6 +330,27 @@ export default function EditDrawer({ store }) {
           <input type="date" value={form.thresholdDate} onChange={set('thresholdDate')} />
         </label>
 
+        <label className="field">
+          <span>提醒时刻（到点弹系统通知，一次性）</span>
+          <input
+            type="datetime-local"
+            value={form.remindAt}
+            onChange={set('remindAt')}
+            title="留空表示不提醒"
+          />
+        </label>
+
+        <label className="field">
+          <span>重复（完成后自动生成下一次）</span>
+          <select value={form.recurrence} onChange={set('recurrence')}>
+            {recurrenceOptions.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <TagField
           label="@分类（逗号分隔）"
           prefix="@"
@@ -262,6 +379,18 @@ export default function EditDrawer({ store }) {
           />
           <span>星标 ★</span>
         </label>
+        <label className="field">
+          <span>备注（存数据目录的 notes.md，不进 todo.txt）</span>
+          <textarea
+            className="note-input"
+            rows={4}
+            value={form.note}
+            onChange={set('note')}
+            placeholder="长文本、多行、Markdown 都行。它不在待办那一行上，所以不会挤压列表。"
+          />
+        </label>
+        <SubtaskField store={store} task={task} />
+
         {task.extraTags.length > 0 && (
           <div className="extra-tags">
             <span>其他字段（只读）：</span>

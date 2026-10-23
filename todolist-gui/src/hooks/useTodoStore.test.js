@@ -235,3 +235,272 @@ describe('useTodoStore 撤销链路 / fade 窗口竞态', () => {
     expect(fs['todo.txt']).not.toContain('任务A');
   });
 });
+
+// ——— 稳定 ID 的分配时机 ———
+// 这三条锁的是「谁在什么时候拿到 ID」。分配太早（一次性改写全文件）会让
+// git 记下一次谁也看不懂的大 diff；分配太晚（用到才现编）会让引用关系指空。
+describe('useTodoStore 稳定 ID 分配', () => {
+  it('新建任务自带 id:，并真的落进 todo.txt', async () => {
+    const { store, render, fs } = await bootStore();
+    const created = store.addTask('写周报 +投资');
+    expect(created.stableId).toMatch(/^[0-9a-z]{6}$/);
+    await sleep(320);
+    const s = render();
+    expect(byTitle(s.todoEntries, '写周报').stableId).toBe(created.stableId);
+    expect(fs['todo.txt']).toContain(`id:${created.stableId}`);
+  });
+
+  it('编辑一条没有 ID 的老任务时，顺手给它补一个', async () => {
+    const { store, render } = await bootStore();
+    const a = store.todoEntries[0];
+    expect(a.stableId).toBeNull();
+    store.updateTask(a.id, { priority: 'A' });
+    const s = render();
+    expect(s.todoEntries.find((e) => e.id === a.id).stableId).toMatch(/^[0-9a-z]{6}$/);
+  });
+
+  it('没被碰过的老任务不会跟着变（渐进补齐，不改写整个文件）', async () => {
+    const { store, render, fs } = await bootStore();
+    store.addTask('新任务');
+    await sleep(320);
+    const s = render();
+    const untouched = s.todoEntries.filter((e) => e.title.startsWith('任务'));
+    expect(untouched).toHaveLength(3);
+    expect(untouched.every((e) => e.stableId === null)).toBe(true);
+    // 文件里也只有那一条新任务带 id:
+    const lines = fs['todo.txt'].split('\n').filter((l) => l.includes('id:'));
+    expect(lines).toHaveLength(1);
+  });
+
+  it('新建的 ID 不与既有 ID 撞（SEED 里预置一个）', async () => {
+    const { store, render } = await bootStore({
+      'todo.txt': '老任务 id:aaa111\n',
+      'done.txt': '',
+    });
+    const created = store.addTask('新任务');
+    expect(created.stableId).not.toBe('aaa111');
+    expect(created.stableId).toMatch(/^[0-9a-z]{6}$/);
+    const s = render();
+    const ids = s.todoEntries.map((e) => e.stableId);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('useTodoStore 子任务', () => {
+  it('给没有 ID 的老任务加子任务：父当场补 ID，子挂上去', async () => {
+    const { store, render, fs } = await bootStore();
+    const parent = store.todoEntries[0];
+    expect(parent.stableId).toBeNull();
+    const kid = store.addSubtask(parent.id, '子任务一');
+    const s = render();
+    const parent2 = s.todoEntries.find((e) => e.id === parent.id);
+    expect(parent2.stableId).toMatch(/^[0-9a-z]{6}$/);
+    expect(kid.parentId).toBe(parent2.stableId);
+    await sleep(320);
+    expect(fs['todo.txt']).toContain(`id:${parent2.stableId}`);
+    expect(fs['todo.txt']).toContain(`parent:${parent2.stableId}`);
+  });
+
+  it('父已经有 ID 时直接挂上，不动父的 ID', async () => {
+    const { store, render } = await bootStore({ 'todo.txt': '装机 id:aaa111\n', 'done.txt': '' });
+    const parent = store.todoEntries[0];
+    const kid = store.addSubtask(parent.id, '拆后盖');
+    expect(kid.parentId).toBe('aaa111');
+    const s = render();
+    expect(s.todoEntries.find((e) => e.id === parent.id).stableId).toBe('aaa111');
+  });
+
+  it('删父不带走子任务（它们降级为独立任务）', async () => {
+    const { store, render, fs } = await bootStore({ 'todo.txt': '装机 id:aaa111\n', 'done.txt': '' });
+    const parent = store.todoEntries[0];
+    store.addSubtask(parent.id, '拆后盖');
+    store.deleteTask(parent);
+    await sleep(320);
+    const s = render();
+    const titles = s.todoEntries.map((e) => e.title);
+    expect(titles).toContain('拆后盖'); // 没被连带删掉
+    expect(titles).not.toContain('装机');
+  });
+});
+
+describe('useTodoStore 子任务', () => {
+  it('给没有 ID 的老任务加子任务：父当场补 ID，子挂上去', async () => {
+    const { store, render, fs } = await bootStore();
+    const parent = store.todoEntries[0];
+    expect(parent.stableId).toBeNull();
+    const kid = store.addSubtask(parent.id, '子任务一');
+    const s = render();
+    const parent2 = s.todoEntries.find((e) => e.id === parent.id);
+    expect(parent2.stableId).toMatch(/^[0-9a-z]{6}$/);
+    expect(kid.parentId).toBe(parent2.stableId);
+    await sleep(320);
+    expect(fs['todo.txt']).toContain(`id:${parent2.stableId}`);
+    expect(fs['todo.txt']).toContain(`parent:${parent2.stableId}`);
+  });
+
+  it('父已经有 ID 时直接挂上，不动父的 ID', async () => {
+    const { store, render } = await bootStore({ 'todo.txt': '装机 id:aaa111\n', 'done.txt': '' });
+    const parent = store.todoEntries[0];
+    const kid = store.addSubtask(parent.id, '拆后盖');
+    expect(kid.parentId).toBe('aaa111');
+    const s = render();
+    expect(s.todoEntries.find((e) => e.id === parent.id).stableId).toBe('aaa111');
+  });
+
+  it('删父不带走子任务（它们降级为独立任务）', async () => {
+    const { store, render, fs } = await bootStore({ 'todo.txt': '装机 id:aaa111\n', 'done.txt': '' });
+    const parent = store.todoEntries[0];
+    store.addSubtask(parent.id, '拆后盖');
+    store.deleteTask(parent);
+    await sleep(320);
+    const s = render();
+    const titles = s.todoEntries.map((e) => e.title);
+    expect(titles).toContain('拆后盖'); // 没被连带删掉
+    expect(titles).not.toContain('装机');
+  });
+});
+
+// ——— 重复规则：完成时生成下一次 ———
+// 这一组锁的是「完成一条之后，仓库里应该剩下什么」。重复最容易出的错是静默的：
+// 多生成一条（凭空多出一堆任务）、少生成一条（规则失效）、或者撤销后新实例赖着不走。
+const pad2 = (n) => String(n).padStart(2, '0');
+function isoOf(date) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+const REAL_NOW = new Date();
+const TODAY = isoOf(REAL_NOW);
+function plusDays(n) {
+  return isoOf(new Date(REAL_NOW.getTime() + n * 86400000));
+}
+
+describe('useTodoStore 重复规则', () => {
+  it('完成重复任务：原任务进 done，下一次自动生成且 due 推进一个周期', async () => {
+    const { store, render, fs } = await bootStore({
+      'todo.txt': `交周报 due:${TODAY} rec:+1w id:aaa111\n`,
+      'done.txt': '',
+    });
+    store.toggleComplete(store.todoEntries[0]);
+    await sleep(320);
+    const s = render();
+    // 一条走了，一条来了 —— 数量不变，但已经是下一次
+    expect(s.todoEntries).toHaveLength(1);
+    const spawned = s.todoEntries[0];
+    expect(spawned.title).toBe('交周报');
+    expect(spawned.dueDate).toBe(plusDays(7));
+    expect(spawned.recurrence).toBe('+1w');
+    // 下一次是另一条任务：ID 重新分配，绝不能继承（继承会让引用它的人指不准）
+    expect(spawned.stableId).not.toBe('aaa111');
+    expect(spawned.stableId).toMatch(/^[0-9a-z]{6}$/);
+    expect(spawned.id).not.toBe(store.todoEntries[0].id);
+    // 原任务进了 done，且带着 rec（历史里它说明这条是重复实例）。
+    // 这里断言状态而不是文件内容：fade 后的提交是异步的，
+    // 测试替身里的写盘 effect 需要额外 flush，落盘时机不由本用例负责。
+    expect(s.doneEntries).toHaveLength(1);
+    expect(s.doneEntries[0].raw).toContain('rec:+1w');
+    expect(s.doneEntries[0].raw).toContain('id:aaa111');
+  });
+
+  it('非重复任务完成不生成任何东西', async () => {
+    const { store, render } = await bootStore();
+    store.toggleComplete(store.todoEntries[0]);
+    await sleep(320);
+    expect(render().todoEntries).toHaveLength(2); // 3 条里少了一条，没有多出来的
+  });
+
+  it('撤销完成：下一次实例一并撤掉，不留凭空多出来的任务', async () => {
+    const { store, render, fs } = await bootStore({
+      'todo.txt': `交周报 due:${TODAY} rec:+1d\n`,
+      'done.txt': '',
+    });
+    store.toggleComplete(store.todoEntries[0]);
+    await sleep(320);
+    expect(render().todoEntries).toHaveLength(1);
+    store.undo();
+    await sleep(320);
+    const s = render();
+    expect(s.todoEntries).toHaveLength(1);
+    expect(s.todoEntries[0].dueDate).toBe(TODAY); // 原来那条回来了，不是新生成的那条
+    expect(fs['done.txt'].trim()).toBe('');
+  });
+
+  it('下一次插回原位置，不追加到末尾', async () => {
+    const { store, render } = await bootStore({
+      'todo.txt': `第一条\n交周报 due:${TODAY} rec:+1w\n最后一条\n`,
+      'done.txt': '',
+    });
+    store.toggleComplete(store.todoEntries[1]);
+    await sleep(320);
+    const titles = render().todoEntries.map((e) => e.title);
+    // 重复任务该在它原来待的地方重新长出来，而不是跑到列表底部
+    expect(titles).toEqual(['第一条', '交周报', '最后一条']);
+  });
+});
+
+// ——— 备注（notes.md）———
+// 这一组锁的是「备注挂得住、写得进、不覆盖别人」。备注是唯一放在 todo.txt 之外的数据，
+// 所以「读·改·写」是否真的读的是磁盘最新内容，必须有一条断言盯着。
+describe('useTodoStore 备注', () => {
+  it('保存备注：写进数据目录的 notes.md，正文挂在 stableId 上', async () => {
+    const { store, render, fs } = await bootStore({
+      'todo.txt': '写周报 id:aaa111\n',
+      'done.txt': '',
+    });
+    await store.saveNote(store.todoEntries[0].id, '记得附上上周的数据');
+    await sleep(320);
+    expect(fs['notes.md']).toContain('## aaa111');
+    expect(fs['notes.md']).toContain('记得附上上周的数据');
+    // 内存里也能立刻读到（不用重新加载）
+    expect(render().getNote('aaa111')).toContain('上周的数据');
+  });
+
+  it('老任务没有 ID 时：先补 ID 再挂备注，备注不会挂空', async () => {
+    const { store, render, fs } = await bootStore();
+    const task = store.todoEntries[0];
+    expect(task.stableId).toBeNull();
+    await store.saveNote(task.id, '给老任务的备注');
+    await sleep(320);
+    const sid = render().todoEntries.find((e) => e.id === task.id).stableId;
+    expect(sid).toMatch(/^[0-9a-z]{6}$/);
+    expect(fs['notes.md']).toContain(`## ${sid}`);
+    expect(fs['notes.md']).toContain('给老任务的备注');
+  });
+
+  it('读·改·写：保存一条不动别人同时在外部编辑器改的另一条', async () => {
+    const { store, render, fs } = await bootStore({
+      'todo.txt': '写周报 id:aaa111\n装机 id:bbb222\n',
+      'done.txt': '',
+    });
+    // 模拟「用户正在外部编辑器里改 notes.md」：磁盘上已经有 bbb222 的一条
+    fs['notes.md'] = '# 备注\n\n## bbb222\n\n外部写的内容\n';
+    await store.saveNote(store.todoEntries[0].id, '程序写的备注');
+    await sleep(320);
+    expect(fs['notes.md']).toContain('## aaa111');
+    expect(fs['notes.md']).toContain('程序写的备注');
+    expect(fs['notes.md']).toContain('外部写的内容'); // 别人的改动没被吃掉
+  });
+
+  it('清空备注 = 删掉那一节，不留下空节', async () => {
+    const { store, fs } = await bootStore({
+      'todo.txt': '写周报 id:aaa111\n',
+      'done.txt': '',
+    });
+    await store.saveNote(store.todoEntries[0].id, '先写点');
+    await sleep(320);
+    expect(fs['notes.md']).toContain('aaa111');
+    await store.saveNote(store.todoEntries[0].id, '');
+    await sleep(320);
+    expect(fs['notes.md']).not.toContain('aaa111');
+  });
+
+  it('启动时把已有的备注读进内存（列表角标靠它）', async () => {
+    const { store, render } = await bootStore({
+      'todo.txt': '写周报 id:aaa111\n装机 id:bbb222\n',
+      'done.txt': '',
+      'notes.md': '# 备注\n\n## aaa111\n\n有备注的一条\n',
+    });
+    const s = render();
+    // 只有 aaa111 有备注 —— 角标要按这个集合渲染
+    expect(s.noteIds.has('aaa111')).toBe(true);
+    expect(s.noteIds.has('bbb222')).toBe(false);
+  });
+});

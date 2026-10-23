@@ -1,4 +1,5 @@
 // 视图过滤 / 排序 / 搜索 / 统计（纯函数，日期用 YYYY-MM-DD 字符串比较）
+import { buildNesting, nestChildren } from './subtasks.js';
 
 export const PRIORITY_LABELS = { A: '高', B: '中', C: '低' };
 
@@ -75,7 +76,12 @@ export function sortTasks(tasks, mode) {
 export function viewTasks(entries, view, sortMode, query, today) {
   const base = tasksForView(entries, view, today);
   const filtered = base.filter((t) => searchMatch(t, query));
-  return sortTasks(filtered, sortMode);
+  const sorted = sortTasks(filtered, sortMode);
+  // 「今天」视图按日期分组，父子本来就会被拆到不同组 —— 那正是这个视图的语义
+  // （先按紧急度分流，而不是先按归属聚拢），所以只有其余视图做嵌套。
+  // 两种情况下渲染与键盘导航都走 viewTasks 这一条路径，顺序不会分叉。
+  if (view === 'today' || view === 'done') return sorted;
+  return nestChildren(sorted, buildNesting(entries));
 }
 
 // 列表自上而下的显示顺序：今天视图按「逾期 → 今日到期 → 无日期」分组，

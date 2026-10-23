@@ -20,6 +20,9 @@ node_modules/
 todolist-gui/dist/
 todolist-gui/dist-*/
 todolist-gui/.tmp/
+# 仓库根级 .tmp/：build-mac.sh 把 TMPDIR 指到这里（sandbox 不让写系统临时目录），
+# 里面是 node-compile-cache / rust 编译临时文件 / QA 截图，都是机器相关产物。
+.tmp/
 todolist-gui/qa-artifacts/
 todolist-gui/vite.config.js.timestamp-*.mjs
 .qa-backup/
