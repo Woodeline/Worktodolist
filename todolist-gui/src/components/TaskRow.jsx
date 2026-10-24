@@ -7,15 +7,23 @@ import Icon from './Icon.jsx';
 
 export function Highlight({ text, query }) {
   if (!query) return <>{text}</>;
-  const idx = text.toLowerCase().indexOf(query.toLowerCase());
-  if (idx === -1) return <>{text}</>;
-  return (
-    <>
-      {text.slice(0, idx)}
-      <mark>{text.slice(idx, idx + query.length)}</mark>
-      {text.slice(idx + query.length)}
-    </>
-  );
+  const q = query.toLowerCase();
+  const t = text.toLowerCase();
+  if (!q || !t.includes(q)) return <>{text}</>;
+  // 所有命中都高亮，不只第一处 —— 扫列表时「明明匹配了却看不出在哪」比不高亮更烦。
+  const parts = [];
+  let cursor = 0;
+  for (;;) {
+    const idx = t.indexOf(q, cursor);
+    if (idx === -1) {
+      if (cursor < text.length) parts.push(text.slice(cursor));
+      break;
+    }
+    if (idx > cursor) parts.push(text.slice(cursor, idx));
+    parts.push(<mark key={idx}>{text.slice(idx, idx + q.length)}</mark>);
+    cursor = idx + q.length;
+  }
+  return <>{parts}</>;
 }
 
 export function dueLabel(due, today) {
@@ -57,6 +65,24 @@ export default function TaskRow({
   const dragEnabled =
     !readonly && store.sortMode === 'manual' && store.view !== 'today' && !task.completed;
 
+  // 退场窗口内的行：数据还没提交，但界面要提前「演」出结果 ——
+  // 复选框按已勾上预览（否则点了勾选 180ms 内没有任何反馈）、标题划线扫过。
+  const completing = fading && !task.completed;
+  const checked = task.completed || completing;
+  // 行级高亮：重复任务的「下一次」/ 刚添加的新任务（纯 UI 状态，到期自动收回）。
+  const spawned = (store.spawnedIds || []).includes(task.id);
+  const entering = (store.enteringIds || []).includes(task.id);
+  // 拖拽落点预告：这条行是不是当前插入点、插在前缘还是后缘。
+  const drop = store.dropInfo || null;
+  const dropBefore = drop && drop.id === task.id && !drop.after;
+  const dropAfter = drop && drop.id === task.id && drop.after;
+  // 鼠标落在行的上半 = 插到这条前面，下半 = 后面。dragover 与 drop 共用
+  // 同一个判断，保证「预览的线」和「真正的落点」不会各说各话。
+  const dropAfterIn = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return e.clientY > rect.top + rect.height / 2;
+  };
+
   const { openMenu } = useContextMenu();
   const rowRef = useRef(null);
 
@@ -69,8 +95,13 @@ export default function TaskRow({
     const el = rowRef.current;
     if (!el) return;
     el.scrollIntoView({ block: 'nearest' });
+    // 编辑浮窗开着的时候不抢焦点：autoFocus 刚把焦点放进浮窗的输入框，
+    // 这里一抢（双击开浮窗时 selected 与浮窗挂载是同一次提交，本 effect
+    // 恰好跑在 autoFocus 之后），浮窗里的打字 / 回车 / Esc 全部失灵 ——
+    // 事件目标跑到背后的行上，而浮窗的 onKeyDown 在浮窗内部，根本收不到。
+    if (store.editingTask) return;
     if (document.activeElement !== el) el.focus({ preventScroll: true });
-  }, [selected]);
+  }, [selected, store.editingTask]);
 
   // 单击 = 选中（沿用 focusedId，供空格/ e / 右键等键盘与菜单操作定位）；
   // 双击才进入编辑 —— 避免误点一下就弹出编辑浮窗。
@@ -177,6 +208,11 @@ export default function TaskRow({
         task.completed ? 'completed' : '',
         overdue ? 'row-overdue' : '',
         fading ? 'fading' : '',
+        completing ? 'completing' : '',
+        spawned ? 'spawned' : '',
+        entering ? 'entering' : '',
+        dropBefore ? 'drop-before' : '',
+        dropAfter ? 'drop-after' : '',
         store.dragId === task.id ? 'dragging' : '',
         selected ? 'selected' : '',
         readonly ? 'row-readonly' : '',
@@ -185,6 +221,7 @@ export default function TaskRow({
         .filter(Boolean)
         .join(' ')}
       ref={rowRef}
+      data-task-id={task.id}
       tabIndex={readonly ? -1 : 0}
       onClick={handleRowClick}
       onDoubleClick={handleRowDoubleClick}
@@ -198,21 +235,36 @@ export default function TaskRow({
         store.setDragId(task.id);
       }}
       onDragOver={(e) => {
-        if (dragEnabled && store.dragId && store.dragId !== task.id) e.preventDefault();
+        if (dragEnabled && store.dragId && store.dragId !== task.id) {
+          e.preventDefault();
+          // 落点预告：鼠标在行的下半就算「插到这条后面」，上半算「前面」。
+          store.setDropInfo({ id: task.id, after: dropAfterIn(e) });
+        }
+      }}
+      onDragLeave={(e) => {
+        // 离开这条行就收回它的指示线；进入下一条时，下一条的 dragover 会画新的。
+        // 移进行内子元素不算离开（relatedTarget 还在行内）。
+        if (e.currentTarget.contains(e.relatedTarget)) return;
+        if (drop && drop.id === task.id) store.setDropInfo(null);
       }}
       onDrop={(e) => {
         e.preventDefault();
         if (dragEnabled && store.dragId && store.dragId !== task.id) {
-          store.reorder(store.dragId, task.id);
+          // 落点以 drop 时现算的为准：dragover 可能因快速拖动丢帧，预览可以旧，落点不能旧。
+          store.reorder(store.dragId, task.id, { after: dropAfterIn(e) });
         }
         store.setDragId(null);
+        store.setDropInfo(null);
       }}
-      onDragEnd={() => store.setDragId(null)}
+      onDragEnd={() => {
+        store.setDragId(null);
+        store.setDropInfo(null);
+      }}
     >
       <button
-        className={`checkbox${task.completed ? ' checked' : ''}${readonly ? ' disabled' : ''}`}
+        className={`checkbox${checked ? ' checked' : ''}${readonly ? ' disabled' : ''}`}
         onClick={handleCheck}
-        title={readonly ? '已完成（只读）' : task.completed ? '取消完成' : '完成（空格）'}
+        title={readonly ? '已完成（只读）' : checked ? '取消完成' : '完成（空格）'}
         aria-label="切换完成状态"
       />
       <span className="task-title">
@@ -234,17 +286,17 @@ export default function TaskRow({
           </span>
         ))}
         {task.stableId && store.noteIds && store.noteIds.has(task.stableId) ? (
-          // 备注角标：只表示"这条后面还有字"。备注是要点进去看的，
+          // 备注角标：只表示“这条后面还有字”。备注是要点进去看的，
           // 列表上多显示一个字都会挤压标题和日期。
           <span className="note-chip" title="有备注（双击任务查看）">
-            ✎
+            <Icon name="pencil" size={12} />
           </span>
         ) : null}
         {task.recurrence ? (
           // 重复标记：一个 ↻ 就够，完整规则（"每周一、周四"）放在 title 里悬停看。
           // 列表是用来扫的，不是用来读的 —— 这里多一个字都会挤压日期的位置。
           <span className="rec-chip" title={`重复：${describeRecurrence(task.recurrence)}`}>
-            ↻
+            <Icon name="rotate-cw" size={12} />
           </span>
         ) : null}
         {task.starValue ? (
@@ -277,6 +329,45 @@ export default function TaskRow({
           </span>
         ) : null}
       </span>
+
+      {/* 行内快捷按钮：hover 时才浮出，盖在元信息簇上方。
+          优先级 / 日期 / 星标 / 删除全在右键菜单里，鼠标用户却很难发现 ——
+          这三个按钮把最高频的三个动作提到台面上。键盘用户不走这条路
+          （快捷键 + 右键菜单已全覆盖），所以不进 Tab 序列，不给 Tab 流添堵。 */}
+      {!readonly && (
+        <span className="row-quick" role="group" aria-label="快捷操作">
+          <button
+            type="button"
+            className="row-quick-btn"
+            tabIndex={-1}
+            title={task.starValue ? '取消星标' : '加星标'}
+            aria-label={task.starValue ? '取消星标' : '加星标'}
+            onClick={() => store.updateTask(task.id, { starValue: task.starValue ? null : '1' })}
+          >
+            <Icon name="star" size={13} fill={task.starValue ? 'currentColor' : 'none'} />
+          </button>
+          <button
+            type="button"
+            className="row-quick-btn"
+            tabIndex={-1}
+            title="到期日设为今天"
+            aria-label="到期日设为今天"
+            onClick={() => store.updateTask(task.id, { dueDate: today })}
+          >
+            <Icon name="calendar" size={13} />
+          </button>
+          <button
+            type="button"
+            className="row-quick-btn row-quick-del"
+            tabIndex={-1}
+            title="删除"
+            aria-label="删除任务"
+            onClick={() => store.deleteTask(task)}
+          >
+            <Icon name="trash" size={13} />
+          </button>
+        </span>
+      )}
     </div>
   );
 }

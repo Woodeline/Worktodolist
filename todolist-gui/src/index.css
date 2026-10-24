@@ -119,6 +119,7 @@
   --dur-1: 90ms;
   --dur-2: 100ms;
   --dur-3: 140ms;
+  --dur-flash: 700ms; /* 行级高亮交接的存续时间（重复任务新生行），与 store 的 SPAWN_FLASH_MS 是同一次动作的两半 */
   --ease: cubic-bezier(0.2, 0.9, 0.3, 1);
   --ease-out: cubic-bezier(0.33, 1, 0.68, 1);
 
@@ -675,6 +676,18 @@ code {
   background: var(--surface);
 }
 
+/* 页签切换：内容区一次性轻淡入。刻意不用「按 key 重挂内容」实现转场 ——
+   那会把对话历史、侧栏展开状态一起重置；这里只让整个内容区沉一下再起来，
+   不碰任何组件的生命周期（App.jsx 的 useTabSwitch）。 */
+.content.is-switching {
+  animation: tab-switch var(--dur-3) var(--ease-out);
+}
+
+@keyframes tab-switch {
+  from { opacity: 0.55; }
+  to { opacity: 1; }
+}
+
 /* --- 新建任务：列表首行是一个**看得出来的输入框**。
        上一版做成无边界的一行，读起来像列表里的说明文字，
        用户不知道这里可以打字。现在给它描边、浅底、圆角与聚焦环，
@@ -808,6 +821,17 @@ code {
   border-color: var(--warn);
   color: var(--warn);
   font-family: var(--font-mono);
+}
+
+/* chips 折叠指示：超过 MAX_QUICK_CHIPS 收起成 +N，完整清单在悬停里。
+   虚线 = 「这里还有没露出来的」，与 chip-date 的虚线同一语言。 */
+.chip-more {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+  border-style: dashed;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 /* --- 搜索：上下文条上的窄输入框（24px 高，与 ctx-btn 同一行高） --- */
@@ -1328,9 +1352,138 @@ code {
   color: var(--muted);
 }
 
+/* 退场（完成 / 删除共用）= 淡出 + 高度折叠。
+   高度动画是关键：后续行会随布局平滑上移，而不是等这行消失后「瞬移」——
+   那一下跳变就是列表发涩感的来源。折叠在 dur-3(140ms) 内完成，
+   store 的 FADE_MS(180ms) 到点才提交数据：CSS 管看得见的退场，
+   定时器管看不见的提交，两半拼成同一次动作。 */
 .task-row.fading {
   opacity: 0;
-  transition: opacity 180ms var(--ease-out);
+  height: 0;
+  transition: opacity var(--dur-3) var(--ease-out), height var(--dur-3) var(--ease);
+}
+
+/* 正在完成的行（数据还没提交）：复选框按「已勾上」预览并弹一下，
+   标题上的划线从左到右扫过。text-decoration 不能动画，划线用伪线划。
+   只作用于 .completing —— done.txt 里一片已完成行，常驻动画会全场乱蹦。 */
+.task-row.completing .checkbox.checked {
+  animation: cb-pop var(--dur-2) var(--ease);
+}
+
+@keyframes cb-pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(0.82); }
+  100% { transform: scale(1); }
+}
+
+.task-row.completing .task-title {
+  position: relative;
+}
+
+.task-row.completing .task-title::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 52%;
+  height: 1.5px;
+  background: var(--border-strong);
+  transform-origin: left center;
+  animation: line-sweep var(--dur-2) var(--ease-out) forwards;
+}
+
+@keyframes line-sweep {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+/* 重复任务的「下一次」交接：新生行同位置高亮渐隐，明示它跟刚完成的那条
+   是同一条事的延续，而不是凭空冒出来的新任务。 */
+.task-row.spawned {
+  animation: spawn-flash var(--dur-flash) var(--ease-out);
+}
+
+@keyframes spawn-flash {
+  from { background: var(--accent-soft); }
+  to { background: transparent; }
+}
+
+/* 新任务入场：高度从 0 展开 + 淡入，下方的行顺势下移。 */
+.task-row.entering {
+  animation: row-enter var(--dur-3) var(--ease-out);
+}
+
+@keyframes row-enter {
+  from { height: 0; opacity: 0; }
+  to { height: var(--row-h); opacity: 1; }
+}
+
+/* 拖拽落点：松手前画在目标行前缘 / 后缘的一条 2px 强调线。
+   没有它，拖拽等于「闭着眼睛松手、错了再撤」。 */
+.task-row.drop-before::before,
+.task-row.drop-after::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.task-row.drop-before::before { top: 0; }
+.task-row.drop-after::after { bottom: 0; }
+
+/* 行内快捷按钮：hover 时才浮出，盖在元信息簇上方。键盘用户不走这条路
+   （快捷键 + 右键菜单已全覆盖），所以按钮不进 Tab 序列 —— 隐藏时可聚焦
+   的按钮是键盘用户的陷阱。 */
+.row-quick {
+  position: absolute;
+  right: var(--row-pad);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  box-shadow: var(--sh-1);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-1) var(--ease-out);
+  z-index: 6;
+}
+
+.task-row:hover .row-quick,
+.task-row:focus-within .row-quick {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.row-quick-btn {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--muted);
+  padding: 0;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+
+.row-quick-btn:hover {
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+
+.row-quick-del:hover {
+  color: var(--danger);
 }
 
 .task-row.dragging {

@@ -3,6 +3,7 @@ import { RECURRENCE_CHOICES, describeRecurrence } from '../lib/recurrence';
 import { PRIORITY_LABELS, sidebarStats } from '../lib/sortFilter';
 import { serializeTask } from '../lib/todoParser';
 import { buildNesting, childrenOf } from '../lib/subtasks.js';
+import { nextInTrap, pickRestoreTarget, queryFocusable } from '../lib/focusTrap.js';
 import Icon from './Icon.jsx';
 
 // 子任务区块。
@@ -226,11 +227,33 @@ export default function EditDrawer({ store }) {
 
 function EditForm({ task, store }) {
   const [form, setForm] = useState(() => formFromTask(task, store));
+  const winRef = useRef(null);
 
   // 已保存的分类 / 标签候选：复用侧栏统计，取的就是 todo.txt 里的真实值。
   const { contexts: contextOptions, projects: projectOptions } = useMemo(
     () => sidebarStats(store.todoEntries || []),
     [store.todoEntries]
+  );
+
+  // 焦点契约（与 useHotkeys 的「编辑时禁用全局快捷键」配套）：
+  // ① 关闭（卸载）时把焦点还给来源那一行；来源行正在退场（刚在浮窗里被删除）
+  //    或已经不在文档里，就顺延到相邻的活行，再不行退回快速添加框 ——
+  //    绝不撒手让焦点落到 body：那之后按 Tab 会从工具栏第一个按钮开始，
+  //    用户看到的就是「焦点跑进了工具栏」；
+  // ② Tab / Shift+Tab 在浮窗内循环，不穿透到背后的列表（陷阱逻辑见 lib/focusTrap.js）。
+  // 注意：这必须是 useEffect 里的清理函数 —— 只在真的编辑时 mount 的组件，
+  // 它的卸载时机就是「浮窗关闭」的唯一真相。
+  // deps 只留 task.id：store 每次渲染都是新对象，但它身上的 quickAddRef 是
+  // 稳定 ref，清理时读 .current 拿到的就是当前那个输入框。
+  useEffect(
+    () => () => {
+      const origin = document.querySelector(`.task-row[data-task-id="${task.id}"]`);
+      const allRows = Array.from(document.querySelectorAll('.task-row'));
+      const quickAdd = store.quickAddRef && store.quickAddRef.current;
+      const target = pickRestoreTarget(origin, allRows, quickAdd);
+      if (target && typeof target.focus === 'function') target.focus({ preventScroll: true });
+    },
+    [task.id]
   );
 
   const priorities = [...PRIORITY_ORDER];
@@ -290,6 +313,15 @@ function EditForm({ task, store }) {
       store.closeEditor();
       return;
     }
+    // Tab 焦点陷阱：到头循环，不让焦点穿过浮窗落到背后的列表上。
+    if (e.key === 'Tab') {
+      const target = nextInTrap(queryFocusable(winRef.current), document.activeElement, e.shiftKey);
+      if (target) {
+        e.preventDefault();
+        target.focus();
+      }
+      return;
+    }
     // 回车即确认保存；按钮上的回车留给按钮自身的语义（选中优先级等）。
     if (e.key === 'Enter' && !e.shiftKey) {
       if (e.target.tagName === 'BUTTON' || e.target.tagName === 'TEXTAREA') return;
@@ -310,6 +342,7 @@ function EditForm({ task, store }) {
         aria-modal="true"
         aria-label="编辑任务"
         tabIndex={-1}
+        ref={winRef}
         onKeyDown={handleKeyDown}
       >
         <div className="drawer-header">

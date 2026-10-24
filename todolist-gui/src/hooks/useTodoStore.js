@@ -29,6 +29,16 @@ import {
 // 把丢失窗口从半秒压到接近零；再小会让连续编辑退化成逐键写盘。
 const SAVE_DEBOUNCE_MS = 200;
 const FADE_MS = 180;
+// 行内「闪光」时长：重复任务新生行的高亮交接 / 新建行的入场动画。
+// 与 index.css 的 --dur-flash / --dur-3 是同一次动作的两半：定时器负责
+// 「什么时候收回类名」，CSS 负责「这段时间里看得见什么」。
+const SPAWN_FLASH_MS = 700;
+const ENTER_MS = 220;
+// toast 自动消失：普通提示 3.4s（与工具页 toast 同一口径，TOAST_MS）；
+// 带「撤销」的留到 6s —— 撤销是低频高价值动作，值得多给一倍的阅读时间。
+// durationMs 可覆盖（将来若有需要常驻的提示）。
+const TOAST_MS = 3400;
+const TOAST_ACTION_MS = 6000;
 
 function normalizeText(text) {
   return text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
@@ -56,6 +66,12 @@ export function useTodoStore() {
   const [editingId, setEditingId] = useState(null);
   const [focusedId, setFocusedId] = useState(null);
   const [fadingIds, setFadingIds] = useState([]);
+  // 行级高亮：重复任务「下一次」的新生行（交接提示）、刚添加的任务（入场）。
+  // 都是纯 UI 状态 —— 不进 todo.txt、不落盘，类名到期自动收回。
+  const [spawnedIds, setSpawnedIds] = useState([]);
+  const [enteringIds, setEnteringIds] = useState([]);
+  // 拖拽落点：{ id, after } —— 松手前画在哪条行的前缘 / 后缘。
+  const [dropInfo, setDropInfo] = useState(null);
   const [dragId, setDragId] = useState(null);
   // 有备注的任务 id 集合。列表只要知道「有没有」，所以存 Set 而不是整份 Map：
   // 正文按需从 notesRef 里取，不必为了渲染把别人的备注也放进 state。
@@ -68,8 +84,11 @@ export function useTodoStore() {
   const diskStateRef = useRef({ todo: '', done: '' });
   const snapshotRef = useRef(null);
   const saveTimerRef = useRef(null);
+  const toastTimerRef = useRef(null);
   const undoStackRef = useRef([]);
   const pendingCompleteRef = useRef(new Map());
+  const pendingDeleteRef = useRef(new Map());
+  const flashTimersRef = useRef(new Map());
   const notesRef = useRef(new Map());
   const quickAddRef = useRef(null);
   const searchRef = useRef(null);
@@ -87,10 +106,43 @@ export function useTodoStore() {
   }, []);
 
   const showToast = useCallback((message, opts = {}) => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
     setToast({ key: Date.now(), message, ...opts });
+    // 自动消失：没有它，「已取消完成：xxx」会一直挂在右下角，
+    // 直到下一条 toast 把它挤掉——用户只能手动去点那个小叉。
+    const duration = opts.durationMs ?? (opts.actionLabel ? TOAST_ACTION_MS : TOAST_MS);
+    if (duration > 0) {
+      toastTimerRef.current = setTimeout(() => {
+        toastTimerRef.current = null;
+        setToast(null);
+      }, duration);
+    }
   }, []);
 
-  const dismissToast = useCallback(() => setToast(null), []);
+  const dismissToast = useCallback(() => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    setToast(null);
+  }, []);
+
+  // 行级高亮闪烁：给一个 id 挂上类名，ms 后收回。
+  // 同一个 id 只保留一个定时器 —— 连续两次操作同一行时，后到的覆盖前一个，
+  // 不会出现「第一个定时器先把类名收掉、第二个还在跑」的错位。
+  const flashId = useCallback((setter, id, ms) => {
+    setter((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    const old = flashTimersRef.current.get(id);
+    if (old) clearTimeout(old);
+    const timer = setTimeout(() => {
+      flashTimersRef.current.delete(id);
+      setter((prev) => prev.filter((x) => x !== id));
+    }, ms);
+    flashTimersRef.current.set(id, timer);
+  }, []);
 
   // 备注：notes.md 全量解析进内存。它和 todo.txt 一样是一整份纯文本，
   // 量级小到没必要按需加载；但只有 id 集合进 state（见 noteIds 的注释）。
@@ -196,6 +248,16 @@ export function useTodoStore() {
         return { todo: nextTodo, done: nextDone };
       });
     } else if (action.kind === 'delete') {
+      // 删除也可能还在 fade 窗口内（数据尚未提交）：取消定时器即复原，
+      // 否则会先把任务插回、随后又被挂起的提交删掉，行凭空消失。
+      const pendingTimer = pendingDeleteRef.current.get(action.task.id);
+      if (pendingTimer) {
+        clearTimeout(pendingTimer);
+        pendingDeleteRef.current.delete(action.task.id);
+        setFadingIds((prev) => prev.filter((id) => id !== action.task.id));
+        showToast('已撤销');
+        return;
+      }
       commit(({ todo, done }) => {
         const nextTodo = [...todo];
         const insertAt = Math.min(action.todoIndex, nextTodo.length);
@@ -240,9 +302,12 @@ export function useTodoStore() {
         taskId: created.id,
         todoIndex: todoEntriesRef.current.length,
       });
+      // 入场闪光：新行高亮一下再收回 —— 「添加」这个动作要有回响，
+      // 否则任务只是静默地出现在列表某一处，视线得自己去找。
+      flashId(setEnteringIds, created.id, ENTER_MS);
       return created;
     },
-    [commit, showToast]
+    [commit, flashId, showToast]
   );
 
   const toggleComplete = useCallback(
@@ -261,6 +326,9 @@ export function useTodoStore() {
       if (todoIndex === -1) return;
       // 防重入：同一任务在 fade 窗口内被重复触发完成时，只保留一次提交。
       if (pendingCompleteRef.current.has(task.id)) return;
+      // 同理，正在删除退场窗口内的任务不接受完成 —— 两条退场动效会互相打架
+      // （完成要插进 done、删除要移出 todo），撤销栈还会多出一条谁也想不起来的记录。
+      if (pendingDeleteRef.current.has(task.id)) return;
       const doneTask = completeTask(task, today);
       // 重复规则：下一次的字段先算好（纯计算，所以能立刻预告给用户），
       // 但**生成放在下面的提交里** —— fade 窗口内撤销时它还没出生，不会留下幽灵任务。
@@ -287,6 +355,9 @@ export function useTodoStore() {
             // 插回原位置而不是追加到末尾：重复任务应该在它原来待的地方重新长出来。
             nextTodo.splice(Math.min(todoIndex, nextTodo.length), 0, spawned);
             record.spawnedId = spawned.id;
+            // 交接高亮：新行和刚完成的那一行动画上是同一条事的延续 ——
+            // 没有这层高亮，用户看到的是「旧行消失 + 凭空多出一条新任务」。
+            flashId(setSpawnedIds, spawned.id, SPAWN_FLASH_MS);
           }
           return { todo: nextTodo, done: [...done, doneTask] };
         });
@@ -298,7 +369,7 @@ export function useTodoStore() {
         { actionLabel: '撤销', onAction: undo }
       );
     },
-    [commit, showToast, undo]
+    [commit, flashId, showToast, undo]
   );
 
   const deleteTask = useCallback(
@@ -317,10 +388,20 @@ export function useTodoStore() {
           (a) => !(a.kind === 'complete' && a.taskId === task.id)
         );
       }
-      commit(({ todo, done }) => ({
-        todo: todo.filter((e) => e.id !== task.id),
-        done,
-      }));
+      // 删除与完成共用同一条退场动效（淡出 + 高度折叠）：行先体面地退场，
+      // 数据在 FADE_MS 后落。防重入：同一任务在删除窗口内被重复触发只算一次。
+      if (pendingDeleteRef.current.has(task.id)) return;
+      setFadingIds((prev) => (prev.includes(task.id) ? prev : [...prev, task.id]));
+      const delTimer = setTimeout(() => {
+        pendingDeleteRef.current.delete(task.id);
+        setFadingIds((prev) => prev.filter((id) => id !== task.id));
+        commit(({ todo, done }) => {
+          // 任务可能已在窗口期内被别的操作处理过 —— 不在列表里就放弃本次提交。
+          if (!todo.some((e) => e.id === task.id)) return { todo, done };
+          return { todo: todo.filter((e) => e.id !== task.id), done };
+        });
+      }, FADE_MS);
+      pendingDeleteRef.current.set(task.id, delTimer);
       undoStackRef.current.push({ kind: 'delete', task, todoIndex });
       // 删父**不带走**子任务：它们各自是独立的一行，父没了就降级为顶层任务。
       // 连带删除更符合提醒事项的手感，但在这里意味着替用户删掉他没点过的行 ——
@@ -456,7 +537,7 @@ export function useTodoStore() {
   );
 
   const reorder = useCallback(
-    (fromId, targetId) => {
+    (fromId, targetId, { after = false } = {}) => {
       commit(({ todo, done }) => {
         const from = todo.findIndex((e) => e.id === fromId);
         const to = todo.findIndex((e) => e.id === targetId);
@@ -465,6 +546,8 @@ export function useTodoStore() {
         const [moved] = next.splice(from, 1);
         let insertAt = next.findIndex((e) => e.id === targetId);
         if (insertAt === -1) insertAt = next.length;
+        // after = 落点画在目标行后缘：插到它后面；默认（前缘）行为不变。
+        else if (after) insertAt += 1;
         next.splice(insertAt, 0, moved);
         return { todo: next, done };
       });
@@ -647,6 +730,9 @@ export function useTodoStore() {
     editingTask,
     focusedId,
     fadingIds,
+    spawnedIds,
+    enteringIds,
+    dropInfo,
     dragId,
     noteIds,
     quickAddRef,
@@ -667,6 +753,7 @@ export function useTodoStore() {
     setSearch,
     setFocusedId,
     setDragId,
+    setDropInfo,
     openEditor,
     closeEditor,
     dismissToast,

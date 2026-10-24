@@ -543,6 +543,23 @@ export function Overview({ store, open, onToggle }) {
   );
 }
 
+// 页签切换的一次性过渡信号：切页时为 true，200ms 后收回。
+// 首屏渲染不算「切换」，不走动画。
+function useTabSwitch(tab) {
+  const [switching, setSwitching] = useState(false);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    setSwitching(true);
+    const t = setTimeout(() => setSwitching(false), 200);
+    return () => clearTimeout(t);
+  }, [tab]);
+  return switching;
+}
+
 export default function App() {
   const store = useTodoStore();
   // 壳级行为：关窗握手刷盘 / 启动时一次 git 提交 / 09:00 提醒。
@@ -568,6 +585,10 @@ export default function App() {
     if (store.view === 'done') return store.doneEntries.filter((e) => e.kind === 'task').length;
     return orderedIds.length;
   }, [store.view, store.doneEntries, orderedIds]);
+  // 页签切换过渡：内容区一次 140ms 的轻淡入。刻意不走「按 key 重挂内容」——
+  // 那会把对话历史、侧栏展开状态一起重置，代价远超收益；这里只让整个
+  // 内容区Opacity 沉一下再起来，不碰任何组件的生命周期。
+  const tabSwitching = useTabSwitch(tab);
   // 设置是独立页面，不占页签：打开时主内容整体让位，Esc / 「返回」退出。
   const [settingsOpen, setSettingsOpen] = useState(false);
   // 工具页的只读投影：派生逻辑全在 lib/todoSnapshot.js（纯函数、可单测）。
@@ -732,7 +753,13 @@ export default function App() {
           onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
         />
 
-        <div className={'content' + (!settingsOpen && tab === 'list' ? ' layout' : '')}>
+        <div
+          className={
+            'content' +
+            (!settingsOpen && tab === 'list' ? ' layout' : '') +
+            (tabSwitching ? ' is-switching' : '')
+          }
+        >
           {settingsOpen ? (
             <SettingsPage onClose={() => setSettingsOpen(false)} projects={projects} />
           ) : tab === 'chat' ? (

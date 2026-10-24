@@ -5,7 +5,7 @@
 // 这几处失效同样是静默的 —— prop 传漏了界面不会报错，只是退回成看不出关系的一排行。
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import TaskRow from './TaskRow.jsx';
+import TaskRow, { Highlight } from './TaskRow.jsx';
 import { ContextMenuProvider } from '../hooks/useContextMenu.jsx';
 import { parseSingleLine } from '../lib/todoParser.js';
 
@@ -13,6 +13,9 @@ function render(task, props, storeOverride) {
   const store = {
     noteIds: new Set(),
     fadingIds: [],
+    spawnedIds: [],
+    enteringIds: [],
+    dropInfo: null,
     sortMode: 'manual',
     view: 'all',
     focusedId: null,
@@ -23,6 +26,7 @@ function render(task, props, storeOverride) {
     updateTask: () => {},
     deleteTask: () => {},
     setDragId: () => {},
+    setDropInfo: () => {},
     reorder: () => {},
     ...storeOverride,
   };
@@ -87,5 +91,92 @@ describe('TaskRow 备注标记', () => {
   it('没有 id 的任务永远不长角标 —— 没有 id 就挂不住备注', () => {
     const markup = render(parseSingleLine('写周报'), {}, { noteIds: new Set(['aaa111']) });
     expect(markup).not.toContain('note-chip');
+  });
+});
+
+// 动效类名：CSS 只认类名，store 只发类名 —— 这一层断在哪边界面都看不出来，
+// 所以每条动效状态都在这里钉一个渲染断言。
+describe('TaskRow 动效类名', () => {
+  it('退场窗口内的行带 completing，复选框按已勾上预览', () => {
+    const t = parseSingleLine('交周报');
+    const markup = render(t, {}, { fadingIds: [t.id] });
+    expect(markup).toContain('completing');
+    // 数据还没提交，但勾选框要先「演」出结果，否则点了 180ms 内没有任何反馈
+    expect(markup).toContain('checkbox checked');
+  });
+
+  it('已完成行（done.txt）不带 completing —— 不给静态列表挂常驻动画', () => {
+    const t = parseSingleLine('x 2026-10-01 交周报');
+    expect(t.completed).toBe(true);
+    const markup = render(t, {}, { fadingIds: [t.id] });
+    expect(markup).not.toContain('completing');
+  });
+
+  it('重复任务的新生行带 spawned（交接高亮）', () => {
+    const t = parseSingleLine('交周报');
+    expect(render(t, {}, { spawnedIds: [t.id] })).toContain('spawned');
+  });
+
+  it('刚添加的行带 entering（入场高亮）', () => {
+    const t = parseSingleLine('交周报');
+    expect(render(t, {}, { enteringIds: [t.id] })).toContain('entering');
+  });
+
+  it('行上带 data-task-id —— 浮窗关闭后焦点靠它找回原行', () => {
+    const t = parseSingleLine('交周报');
+    expect(render(t)).toContain(`data-task-id="${t.id}"`);
+  });
+});
+
+describe('TaskRow 拖拽落点与快捷按钮', () => {
+  it('落点在本行前缘时带 drop-before', () => {
+    const t = parseSingleLine('交周报');
+    expect(render(t, {}, { dropInfo: { id: t.id, after: false } })).toContain('drop-before');
+  });
+
+  it('落点在本行后缘时带 drop-after', () => {
+    const t = parseSingleLine('交周报');
+    expect(render(t, {}, { dropInfo: { id: t.id, after: true } })).toContain('drop-after');
+  });
+
+  it('落点在别的行上时，本行不画线', () => {
+    const t = parseSingleLine('交周报');
+    const markup = render(t, {}, { dropInfo: { id: 'other-id', after: true } });
+    expect(markup).not.toContain('drop-after');
+    expect(markup).not.toContain('drop-before');
+  });
+
+  it('可编辑行带三个快捷按钮（星标 / 今天 / 删除）', () => {
+    const t = parseSingleLine('交周报');
+    const markup = render(t);
+    expect(markup).toContain('row-quick');
+    expect(markup.match(/row-quick-btn/g)).toHaveLength(3);
+  });
+
+  it('只读行（done.txt）没有快捷按钮', () => {
+    const t = parseSingleLine('x 2026-10-01 交周报');
+    expect(render(t, { readonly: true })).not.toContain('row-quick');
+  });
+});
+
+describe('Highlight 搜索高亮', () => {
+  it('没有搜索词时原样返回', () => {
+    const markup = renderToStaticMarkup(<Highlight text="交周报" query="" />);
+    expect(markup).toBe('交周报');
+  });
+
+  it('多处匹配全部高亮，不是只标第一个', () => {
+    const markup = renderToStaticMarkup(<Highlight text="周报周报周报" query="周报" />);
+    expect(markup.match(/<mark>/g)).toHaveLength(3);
+  });
+
+  it('大小写不敏感', () => {
+    const markup = renderToStaticMarkup(<Highlight text="Weekly 周报" query="weekly" />);
+    expect(markup).toContain('<mark>Weekly</mark>');
+  });
+
+  it('没命中时不高亮', () => {
+    const markup = renderToStaticMarkup(<Highlight text="交周报" query="装机" />);
+    expect(markup).not.toContain('<mark>');
   });
 });

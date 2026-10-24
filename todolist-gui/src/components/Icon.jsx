@@ -253,6 +253,26 @@ const PATHS = {
       <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
     </>
   ), // lucide:inbox —— 侧栏「收集箱」
+  'trash': (
+    <>
+      <path d="M3 6h18" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <line x1="10" x2="10" y1="11" y2="17" />
+      <line x1="14" x2="14" y1="11" y2="17" />
+    </>
+  ), // lucide:trash-2 —— 行内快捷删除
+  'pencil': (
+    <>
+      <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+    </>
+  ), // lucide:pencil —— 备注角标（替代裸 Unicode ✎）
+  'rotate-cw': (
+    <>
+      <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+      <path d="M21 3v5h-5" />
+    </>
+  ), // lucide:rotate-cw —— 重复标记（替代裸 Unicode ↻）
 };
 
 export default function Icon({ name, size = 16, title, className = '', ...rest }) {

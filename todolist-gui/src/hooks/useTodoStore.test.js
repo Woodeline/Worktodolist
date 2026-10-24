@@ -34,23 +34,32 @@ function installBrowserStubs(seed) {
       return { async write(t) { map[name] = t; }, async close() {} };
     },
   });
-  const makeDir = (map) => ({
-    async getFileHandle(name, opt) {
-      if (!(name in map)) {
-        if (opt && opt.create) map[name] = '';
-        else { const e = new Error('NotFound'); e.name = 'NotFoundError'; throw e; }
-      }
-      return makeFileHandle(name, map);
-    },
-    async getDirectoryHandle(name, opt) {
-      if (!(name in map) && !(opt && opt.create)) { const e = new Error('NotFound'); e.name = 'NotFoundError'; throw e; }
-      if (!(name in map)) map[name] = '__dir__';
-      return makeDir({});
-    },
+  const makeDir = (map) => {
+    const dirs = {};
+    return {
+      async getFileHandle(name, opt) {
+        if (!(name in map)) {
+          if (opt && opt.create) map[name] = '';
+          else { const e = new Error('NotFound'); e.name = 'NotFoundError'; throw e; }
+        }
+        return makeFileHandle(name, map);
+      },
+      async getDirectoryHandle(name, opt) {
+        // 子目录状态跟着目录实例走（而不是每次调用都返回全新空目录）——
+        // 否则「启动恢复 + 手动 pickDirectory」两条启动链各自创建一个互不可见的
+        // backup 目录，ensureDailyBackup 会判两次「今天没备份」，弹两条迟滞不定的
+        // toast，任何带时间断言的用例都会被那条晚到的顶掉。
+        if (!(name in dirs)) {
+          if (!(opt && opt.create)) { const e = new Error('NotFound'); e.name = 'NotFoundError'; throw e; }
+          dirs[name] = makeDir({});
+        }
+        return dirs[name];
+      },
     async queryPermission() { return 'granted'; },
     async requestPermission() { return 'granted'; },
     async *entries() {},
-  });
+    };
+  };
   const dir = makeDir(fs);
   globalThis.window = {
     showDirectoryPicker: async () => dir,
@@ -502,5 +511,151 @@ describe('useTodoStore 备注', () => {
     // 只有 aaa111 有备注 —— 角标要按这个集合渲染
     expect(s.noteIds.has('aaa111')).toBe(true);
     expect(s.noteIds.has('bbb222')).toBe(false);
+  });
+});
+
+// ——— toast 自动消失 ————
+// 以前 showToast 只 setToast 不设定时器：提示会一直挂在右下角，
+// 直到下一条 toast 把它挤掉、或用户手动去点那个小叉。撤销类值得多留一会儿。
+describe('useTodoStore toast 自动消失', () => {
+  // 这三个用例的本质就是「等它到点」，总时长 3.6s / 6.4s —— 显式给超时，
+  // 否则撞上 vitest 默认的 5s 上限，被测的其实是超时而不是行为。
+  it('普通提示 3.4s 后自动消失', async () => {
+    const { store, render } = await bootStore();
+    store.updateTask(store.todoEntries[0].id, { title: '   ' }); // 空标题 → 提示
+    expect(render().toast).not.toBeNull();
+    await sleep(3600);
+    expect(render().toast).toBeNull();
+  }, 9000);
+
+  it('带「撤销」的提示 6s 后才消失（3.4s 时还在）', async () => {
+    const { store, render } = await bootStore();
+    store.toggleComplete(store.todoEntries[0]);
+    expect(render().toast?.actionLabel).toBe('撤销');
+    await sleep(3600);
+    expect(render().toast).not.toBeNull();
+    await sleep(2800); // 累计 6.4s
+    expect(render().toast).toBeNull();
+  }, 12000);
+
+  it('新 toast 顶掉旧 toast 时旧定时器不残留（不会把新提示提前清掉）', async () => {
+    const { store, render } = await bootStore();
+    const a = store.todoEntries[0];
+    store.toggleComplete(a); // 撤销类：6s
+    store.updateTask(a.id, { title: ' ' }); // 紧跟一条普通提示：3.4s
+    await sleep(3600);
+    expect(render().toast).toBeNull(); // 新的到点消失，没被旧定时器提前/延后
+  }, 9000);
+
+  it('手动关闭会取消挂起的定时器（不会再把之后的新 toast 清掉）', async () => {
+    const { store, render } = await bootStore();
+    store.updateTask(store.todoEntries[0].id, { title: ' ' });
+    render().dismissToast();
+    expect(render().toast).toBeNull();
+    store.updateTask(store.todoEntries[0].id, { title: ' ' });
+    await sleep(200);
+    expect(render().toast).not.toBeNull(); // 新提示还在
+  });
+});
+
+// ——— 行级动效状态：退场类名 / 删除窗口 / 高亮闪光 ————
+// 这些是纯 UI 状态：类名到期自动收回，不碰 todo.txt、不落盘。
+describe('useTodoStore 行级动效状态', () => {
+  it('完成：窗口期内行在 fadingIds 里（退场动画有类名可挂）', async () => {
+    const { store, render } = await bootStore();
+    const a = store.todoEntries[0];
+    store.toggleComplete(a);
+    expect(render().fadingIds).toContain(a.id);
+    await sleep(260);
+    expect(render().fadingIds).not.toContain(a.id);
+  });
+
+  it('删除：窗口期内同样在 fadingIds，且可撤销', async () => {
+    const { store, render } = await bootStore();
+    const A = store.todoEntries[0];
+    store.deleteTask(A);
+    expect(render().fadingIds).toContain(A.id);
+    store.undo(); // 窗口内撤销：定时器取消，行原地回来
+    await sleep(260);
+    const s = render();
+    expect(s.fadingIds).not.toContain(A.id);
+    expect(s.todoEntries).toHaveLength(3);
+    expect(s.todoEntries.some((e) => e.id === A.id)).toBe(true);
+  });
+
+  it('删除：窗口内重复触发只算一次（不重复压撤销栈）', async () => {
+    const { store, render } = await bootStore();
+    const A = store.todoEntries[0];
+    store.deleteTask(A);
+    store.deleteTask(A);
+    await sleep(260);
+    expect(render().todoEntries).toHaveLength(2);
+    store.undo();
+    await sleep(20);
+    expect(render().todoEntries).toHaveLength(3);
+  });
+
+  it('删除退场窗口内不接受完成 —— 两条退场不打架', async () => {
+    const { store, render } = await bootStore();
+    const A = store.todoEntries[0];
+    store.deleteTask(A);
+    store.toggleComplete(A); // 窗口内完成：应被守卫忽略
+    await sleep(260);
+    let s = render();
+    expect(s.todoEntries.some((e) => e.id === A.id)).toBe(false);
+    expect(s.doneEntries).toHaveLength(0); // 没有凭空多出的 done 条目
+    store.undo(); // 只撤得掉删除这一件事
+    await sleep(20);
+    s = render();
+    expect(s.todoEntries.some((e) => e.id === A.id)).toBe(true);
+    expect(s.doneEntries).toHaveLength(0);
+  });
+
+  it('完成重复任务：新生行带 spawned 高亮，700ms 后收回', async () => {
+    const { store, render } = await bootStore({
+      'todo.txt': `交周报 due:${TODAY} rec:+1w id:aaa111\n`,
+      'done.txt': '',
+    });
+    const T = store.todoEntries[0];
+    store.toggleComplete(T);
+    await sleep(220); // 越过 fade(180ms)，新生行已生成
+    const s = render();
+    const spawned = s.todoEntries.find((e) => e.id !== T.id);
+    expect(spawned).toBeTruthy();
+    expect(s.spawnedIds).toContain(spawned.id);
+    await sleep(900); // 越过 SPAWN_FLASH_MS(700ms)
+    expect(render().spawnedIds).not.toContain(spawned.id);
+  });
+
+  it('新任务：带 entering 入场高亮，220ms 后收回', async () => {
+    const { store, render } = await bootStore();
+    const created = store.addTask('新任务');
+    expect(render().enteringIds).toContain(created.id);
+    await sleep(300);
+    expect(render().enteringIds).not.toContain(created.id);
+  });
+});
+
+// ——— 拖拽排序的落点语义 ————
+// 落点指示线画在目标行的前缘 / 后缘，落点必须与那条线一致 ——
+// 「线画在前面、人落到后面」比没有线更糟。
+describe('useTodoStore 拖拽排序', () => {
+  it('默认（前缘）插到目标行前面 —— 保持原有语义', async () => {
+    const { store, render } = await bootStore();
+    store.reorder(store.todoEntries[2].id, store.todoEntries[0].id);
+    expect(render().todoEntries[0].title).toBe('任务C');
+  });
+
+  it('after: true（后缘）插到目标行后面', async () => {
+    const { store, render } = await bootStore();
+    store.reorder(store.todoEntries[0].id, store.todoEntries[2].id, { after: true });
+    expect(render().todoEntries.map((e) => e.title)).toEqual(['任务B', '任务C', '任务A']);
+  });
+
+  it('拖到自己头上不产生任何变化', async () => {
+    const { store, render } = await bootStore();
+    const a = store.todoEntries[0].id;
+    store.reorder(a, a);
+    expect(render().todoEntries.map((e) => e.title)).toEqual(['任务A', '任务B', '任务C']);
   });
 });

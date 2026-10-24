@@ -35,11 +35,17 @@ export function __resetHooks() {
 
 export function useState(initial) {
   const i = cursor++;
-  if (slots.length <= i) slots[i] = typeof initial === 'function' ? initial() : initial;
+  // 捕获本次渲染所属的 slots 数组实例，而不是闭包引用模块级变量 ——
+  // __resetHooks() 会换一个新数组，旧实例（上一个 store）的 setState 闭包
+  // （例如一个还没 firing 的 toast 定时器）必须写进已经死掉的旧数组，
+  // 否则它会写进当前测试的 state，把正在跑的用例状态搅乱。
+  // 这与 React 一致：卸载后的 setState 是无效操作，不会污染别人。
+  const host = slots;
+  if (host.length <= i) host[i] = typeof initial === 'function' ? initial() : initial;
   const setState = (value) => {
-    slots[i] = typeof value === 'function' ? value(slots[i]) : value;
+    host[i] = typeof value === 'function' ? value(host[i]) : value;
   };
-  return [slots[i], setState];
+  return [host[i], setState];
 }
 
 export function useRef(initial) {
