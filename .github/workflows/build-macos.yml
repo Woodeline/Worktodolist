@@ -67,6 +67,13 @@ jobs:
         working-directory: todolist-gui
         run: npm ci --force
 
+      # 测试门禁放在 Rust 编译之前：失败就尽早退出，不烧几分钟的编译时间。
+      # test:guard 会以 JSON reporter 重跑一遍 vitest 并核对磁盘上的测试文件数，
+      # 所以它本身就是全量单测（顺带拦 vitest 偶发丢文件的「假绿」），不必再单独跑 npm test。
+      - name: 测试门禁（单测 / 完整性 / NL 词表 / CSS·对比度·Hooks）
+        working-directory: todolist-gui
+        run: npm run test:guard && npm run test:nl && npm run test:ui
+
       # 同 Windows：不走 npm run tauri:build，见那边注释（.bin 软链在部分安装方式下缺失）。
       - name: 编译 Tauri 应用
         working-directory: todolist-gui
