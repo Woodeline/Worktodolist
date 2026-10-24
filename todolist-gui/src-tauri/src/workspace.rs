@@ -255,8 +255,10 @@ pub fn fs_write(state: State<'_, Workspace>, name: String, text: String) -> Resu
     atomic_write(&dir.join(name), text.as_bytes())
 }
 
-/// 当日首次调用时把 todo.txt 复制到 backup/todo-YYYY-MM-DD.txt，并保留最近 30 份。
-/// 返回是否真的新建了一份（与浏览器侧 ensureDailyBackup 一致）。
+/// 当日首次调用时把 todo.txt 复制到 backup/todo-YYYY-MM-DD.txt、notes.md 复制到
+/// backup/notes-YYYY-MM-DD.md，两个家族各自保留最近 30 份。notes.md 不存在或为空
+/// 则跳过该家族（空内容的每日备份没有意义，只会给 backup/ 塞空文件）。
+/// 返回是否真的新建了至少一份（与浏览器侧 ensureDailyBackup 一致）。
 #[tauri::command]
 pub fn fs_backup(state: State<'_, Workspace>, today: String) -> Result<bool, String> {
     if !is_iso_date(&today) {
@@ -266,20 +268,31 @@ pub fn fs_backup(state: State<'_, Workspace>, today: String) -> Result<bool, Str
     let backup_dir = dir.join("backup");
     fs::create_dir_all(&backup_dir).map_err(|e| format!("创建 backup 目录失败：{e}"))?;
 
-    let target = backup_dir.join(format!("todo-{today}.txt"));
-    if target.exists() {
-        return Ok(false);
-    }
-    let source = fs::read_to_string(dir.join("todo.txt")).unwrap_or_default();
+    let mut created = false;
     {
         let _gate = state
             .write_lock
             .lock()
             .map_err(|_| "写入闸门损坏".to_string())?;
-        atomic_write(&target, source.as_bytes())?;
+        // 两个家族独立判断「今天是否已有」：中午新建的 notes.md 不能因为早上
+        // 已经备过 todo.txt 就错过当天的唯一备份窗口（反过来同理）。
+        let todo_target = backup_dir.join(format!("todo-{today}.txt"));
+        if !todo_target.exists() {
+            let source = fs::read_to_string(dir.join("todo.txt")).unwrap_or_default();
+            atomic_write(&todo_target, source.as_bytes())?;
+            created = true;
+        }
+        let notes_target = backup_dir.join(format!("notes-{today}.md"));
+        if !notes_target.exists() {
+            let notes = fs::read_to_string(dir.join("notes.md")).unwrap_or_default();
+            if !notes.is_empty() {
+                atomic_write(&notes_target, notes.as_bytes())?;
+                created = true;
+            }
+        }
     }
     prune_backups(&backup_dir, 30)?;
-    Ok(true)
+    Ok(created)
 }
 
 /// 弹出原生「另存为」对话框，把字节写到用户选定的位置。
@@ -317,36 +330,46 @@ pub async fn fs_save_as(app: AppHandle, name: String, data: Vec<u8>) -> Result<b
     Ok(true)
 }
 
-/// 备份文件名必须严格是 `todo-YYYY-MM-DD.txt`。
-/// 与浏览器版 `pruneBackups` 里的正则 `^todo-\d{4}-\d{2}-\d{2}\.txt$` 逐字对齐 ——
+/// 备份文件名按数据文件分两个家族：`todo-YYYY-MM-DD.txt`（序号 0）与
+/// `notes-YYYY-MM-DD.md`（序号 1）。与浏览器版 `pruneBackups` 里的正则逐字对齐 ——
 /// 光比长度会把 `todo-abcdefgh-1.txt` 也算进来，那就不是"完全不变"了。
-fn is_backup_name(name: &str) -> bool {
-    name.starts_with("todo-")
-        && name.ends_with(".txt")
-        && name.len() == 18
-        // get 而不是 [4..14]：先切片后校验会在非法 UTF-8 边界上 panic
-        && name.get(4..14).is_some_and(is_iso_date)
+/// 返回家族序号；prune 时每个家族独立保留 keep 份，互不挤占。
+fn backup_family(name: &str) -> Option<usize> {
+    const FAMILIES: [(&str, &str); 2] = [("todo-", ".txt"), ("notes-", ".md")];
+    for (slot, (prefix, ext)) in FAMILIES.iter().enumerate() {
+        if name.starts_with(prefix)
+            && name.ends_with(ext)
+            && name.len() == prefix.len() + 10 + ext.len()
+            // get 而不是 [a..b]：先切片后校验会在非法 UTF-8 边界上 panic
+            && name.get(prefix.len()..prefix.len() + 10).is_some_and(is_iso_date)
+        {
+            return Some(slot);
+        }
+    }
+    None
 }
 
 fn prune_backups(dir: &Path, keep: usize) -> Result<(), String> {
-    let mut names: Vec<String> = Vec::new();
+    let mut families: [Vec<String>; 2] = [Vec::new(), Vec::new()];
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
         Err(_) => return Ok(()),
     };
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
-        if is_backup_name(&name) {
-            names.push(name);
+        if let Some(slot) = backup_family(&name) {
+            families[slot].push(name);
         }
     }
-    names.sort();
-    while names.len() > keep {
-        let oldest = names.remove(0);
-        // 逐个删除，删不掉就跳过继续：单个文件被占用（杀软扫描 / 编辑器打开）
-        // 不该让后面所有过期备份都留下来——那等于"保留 30 份"的承诺只兑现一次。
-        if fs::remove_file(dir.join(&oldest)).is_err() {
-            log_prune_failure(dir, &oldest);
+    for names in &mut families {
+        names.sort();
+        while names.len() > keep {
+            let oldest = names.remove(0);
+            // 逐个删除，删不掉就跳过继续：单个文件被占用（杀软扫描 / 编辑器打开）
+            // 不该让后面所有过期备份都留下来——那等于"保留 30 份"的承诺只兑现一次。
+            if fs::remove_file(dir.join(&oldest)).is_err() {
+                log_prune_failure(dir, &oldest);
+            }
         }
     }
     Ok(())
@@ -361,5 +384,59 @@ fn log_prune_failure(dir: &Path, name: &str) {
         .open(dir.join(".todolist-backup.log"))
     {
         let _ = writeln!(fh, "[prune] 删除失败：{name}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn backup_family_只认两个家族的严格全名() {
+        assert_eq!(backup_family("todo-2026-10-24.txt"), Some(0));
+        assert_eq!(backup_family("notes-2026-10-24.md"), Some(1));
+        // 这些名字若被误认成备份，prune 就会删掉用户文件 —— 必须全部拒绝
+        assert_eq!(backup_family("todo-abcdefgh-1.txt"), None);
+        assert_eq!(backup_family("todo-2026-10-24.txt.bak"), None);
+        assert_eq!(backup_family("notes.md"), None);
+        assert_eq!(backup_family("notes-2026-10-24.md.orig"), None);
+        // 日期段是形状校验（与浏览器正则同一口径，不校历法）：非数字才算非法，
+        // "2026-13-99" 这种形状合规的名字两侧都放行 —— 备份名只由本程序生成，无碍。
+        assert_eq!(backup_family("todo-2026-1a-99.txt"), None);
+    }
+
+    #[test]
+    fn prune_每个家族独立保留_keep_份() {
+        let dir = std::env::temp_dir().join(format!("ws-prune-{}-{}", std::process::id(), line!()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        for d in ["2026-10-01", "2026-10-02", "2026-10-03"] {
+            fs::write(dir.join(format!("todo-{d}.txt")), "").unwrap();
+            fs::write(dir.join(format!("notes-{d}.md")), "x").unwrap();
+        }
+        // 不属于任何家族的文件绝不能动
+        fs::write(dir.join("todo.txt"), "").unwrap();
+        fs::write(dir.join("readme.txt"), "").unwrap();
+
+        prune_backups(&dir, 2).unwrap();
+
+        let mut left: Vec<String> = fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .collect();
+        left.sort();
+        assert_eq!(
+            left,
+            vec![
+                "notes-2026-10-02.md".to_string(),
+                "notes-2026-10-03.md".to_string(),
+                "readme.txt".to_string(),
+                "todo-2026-10-02.txt".to_string(),
+                "todo-2026-10-03.txt".to_string(),
+                "todo.txt".to_string(),
+            ]
+        );
+        let _ = fs::remove_dir_all(&dir);
     }
 }

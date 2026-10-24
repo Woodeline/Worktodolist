@@ -158,32 +158,53 @@ async function fileExists(dirHandle, name) {
   }
 }
 
-// 每日备份：当天首次调用时复制 todo.txt → backup/todo-YYYY-MM-DD.txt，保留最近 30 份
+// 每日备份：当天首次调用时复制 todo.txt → backup/todo-YYYY-MM-DD.txt、
+// notes.md → backup/notes-YYYY-MM-DD.md（notes.md 不存在或为空则跳过），
+// 两个家族各自保留最近 30 份。与 Rust 侧 fs_backup 语义一致。
 export async function ensureDailyBackup(dirHandle, today) {
   if (isTauri()) return invoke('fs_backup', { today });
   const backupDir = await dirHandle.getDirectoryHandle('backup', { create: true });
-  const targetName = `todo-${today}.txt`;
-  if (await fileExists(backupDir, targetName)) return false;
-  const source = await readFileText(dirHandle, 'todo.txt');
-  await writeFileText(backupDir, targetName, source);
-  await pruneBackups(backupDir, 30);
-  return true;
-}
-
-async function pruneBackups(backupDir, keep) {
-  const names = [];
-  for await (const [name, handle] of backupDir.entries()) {
-    if (handle.kind === 'file' && /^todo-\d{4}-\d{2}-\d{2}\.txt$/.test(name)) {
-      names.push(name);
+  let created = false;
+  // 两个家族独立判断「今天是否已有」：中午新建的 notes.md 不能因为早上已经
+  // 备过 todo.txt 就错过当天的唯一备份窗口（反过来同理）。
+  if (!(await fileExists(backupDir, `todo-${today}.txt`))) {
+    const source = await readFileText(dirHandle, 'todo.txt');
+    await writeFileText(backupDir, `todo-${today}.txt`, source);
+    created = true;
+  }
+  if (!(await fileExists(backupDir, `notes-${today}.md`))) {
+    // readFileText 对不存在的文件返回空串（NotFoundError 已在函数内消化）
+    const notes = await readFileText(dirHandle, 'notes.md');
+    if (notes) {
+      await writeFileText(backupDir, `notes-${today}.md`, notes);
+      created = true;
     }
   }
-  names.sort();
-  while (names.length > keep) {
-    const oldest = names.shift();
-    try {
-      await backupDir.removeEntry(oldest);
-    } catch {
-      break;
+  await pruneBackups(backupDir, 30);
+  return created;
+}
+
+// 备份名两个家族的判定，与 Rust 侧 backup_family 逐字对齐 ——
+// 光比长度会把 `todo-abcdefgh-1.txt` 也算进来，那就不是"完全不变"了。
+const BACKUP_FAMILIES = [/^todo-\d{4}-\d{2}-\d{2}\.txt$/, /^notes-\d{4}-\d{2}-\d{2}\.md$/];
+
+async function pruneBackups(backupDir, keep) {
+  const families = BACKUP_FAMILIES.map(() => []);
+  for await (const [name, handle] of backupDir.entries()) {
+    if (handle.kind !== 'file') continue;
+    const fam = BACKUP_FAMILIES.findIndex((re) => re.test(name));
+    if (fam >= 0) families[fam].push(name);
+  }
+  // 每个家族独立保留 keep 份：两份数据各 30，不是合起来 30
+  for (const names of families) {
+    names.sort();
+    while (names.length > keep) {
+      const oldest = names.shift();
+      try {
+        await backupDir.removeEntry(oldest);
+      } catch {
+        break;
+      }
     }
   }
 }
