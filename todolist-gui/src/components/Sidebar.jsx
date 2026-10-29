@@ -85,13 +85,14 @@ export default function Sidebar({ store, collapsed = false }) {
 
   // 四个固定视图各有一个图标：图标不是装饰，它是这四条目在"一眼扫过"时的
   // 唯一可用线索 —— 中文标签两个字宽窄相近，光靠文字很难快速分流。
+  // 图标略小于文字（文字 13px）：锚点要显眼，但不能压过标签本身。
   const item = (view, label, icon, count) => (
     <button
       className={`nav-item${store.view === view ? ' active' : ''}`}
       onClick={() => store.selectView(view)}
       aria-current={store.view === view ? 'true' : undefined}
     >
-      <Icon name={icon} size={16} className="nav-icon" />
+      <Icon name={icon} size={13} className="nav-icon" />
       <span className="nav-label">{label}</span>
       {count != null && <span className="count">{count}</span>}
     </button>
