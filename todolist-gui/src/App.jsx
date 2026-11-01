@@ -3,7 +3,7 @@ import dayjs from 'dayjs';
 import { useTodoStore } from './hooks/useTodoStore';
 import { useNativeShell } from './hooks/useNativeShell';
 import { useAlwaysOnTop } from './hooks/useAlwaysOnTop';
-import { isTauri } from './lib/runtime.js';
+import { hostPlatform, isTauri, usesCustomTitlebar } from './lib/runtime.js';
 import { useTodoSnapshot } from './hooks/useTodoSnapshot';
 import useDebounce from './hooks/useDebounce';
 import useHotkeys from './hooks/useHotkeys';
@@ -19,6 +19,7 @@ import ChatPanel from './components/ChatPanel.jsx';
 import SettingsPage from './components/SettingsPage.jsx';
 import ToolsPage from './components/tools/ToolsPage.jsx';
 import Icon from './components/Icon.jsx';
+import { WindowControls, WindowResizeHandles } from './components/WindowChrome.jsx';
 
 // 三个页签是同一层级的"工作区"：对话（说）、列表（看）、工具（算）。
 // 顺序即 Ctrl+1 / 2 / 3 的绑定顺序，也是左侧活动栏自上而下的顺序。
@@ -560,6 +561,24 @@ function useTabSwitch(tab) {
   return switching;
 }
 
+// 引导 / 重新授权 / 不支持页没有活动栏与上下文条，但自绘标题栏仍需要一条
+// 可拖拽的横条：macOS 不这么做红绿灯会压在正文上；Windows 不这么做窗口既拖不动、
+// 也没有窗控可用（系统边框已被去掉）。
+function BareShell({ chrome, platform, children }) {
+  if (!chrome) return children;
+  const isWindows = platform === 'windows';
+  return (
+    <div className="app has-titlebar is-bare" data-platform={platform}>
+      <div className="titlebar" data-tauri-drag-region>
+        <span className="titlebar-title">待办清单</span>
+        {isWindows && <WindowControls />}
+      </div>
+      <div className="workspace">{children}</div>
+      {isWindows && <WindowResizeHandles />}
+    </div>
+  );
+}
+
 export default function App() {
   const store = useTodoStore();
   // 壳级行为：关窗握手刷盘 / 启动时一次 git 提交 / 09:00 提醒。
@@ -614,6 +633,11 @@ export default function App() {
     goTab('tools');
   };
   const { openMenu } = useContextMenu();
+  // macOS 用 overlay 标题栏、Windows 用自绘标题栏，都把上下文条抬到窗口第一行；
+  // 浏览器与 Linux 保留各自的原生窗口框，不为了统一外观去换掉系统的命中测试。
+  const shellPlatform = isTauri() ? hostPlatform() : 'web';
+  const customTitlebar = usesCustomTitlebar(shellPlatform);
+  const isWindowsShell = shellPlatform === 'windows';
 
   const findFocusedTask = () =>
     store.todoEntries.find((e) => e.id === store.focusedId && e.kind === 'task') || null;
@@ -727,12 +751,52 @@ export default function App() {
     // 让 Esc 能读到最新的开关状态。
   }, [settingsOpen]);
 
-  if (!store.supported) return <UnsupportedPage />;
-  if (!store.dirReady && store.authNeeded) return <ReauthPage store={store} />;
-  if (!store.dirReady) return <WelcomePage store={store} />;
+  if (!store.supported) {
+    return (
+      <BareShell chrome={customTitlebar} platform={shellPlatform}>
+        <UnsupportedPage />
+      </BareShell>
+    );
+  }
+  if (!store.dirReady && store.authNeeded) {
+    return (
+      <BareShell chrome={customTitlebar} platform={shellPlatform}>
+        <ReauthPage store={store} />
+      </BareShell>
+    );
+  }
+  if (!store.dirReady) {
+    return (
+      <BareShell chrome={customTitlebar} platform={shellPlatform}>
+        <WelcomePage store={store} />
+      </BareShell>
+    );
+  }
+
+  const topBar = (
+    <TopBar
+      store={store}
+      tab={tab}
+      settingsOpen={settingsOpen}
+      count={listCount}
+      sidebarCollapsed={sidebarCollapsed}
+      onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
+      chrome={customTitlebar}
+    />
+  );
 
   return (
-    <div className="app">
+    <div
+      className={'app' + (customTitlebar ? ' has-titlebar' : '')}
+      data-platform={shellPlatform}
+    >
+      {customTitlebar && (
+        <div className="titlebar">
+          {topBar}
+          {isWindowsShell && <WindowControls />}
+        </div>
+      )}
+
       <Tabs
         tab={tab}
         onChange={goTab}
@@ -744,14 +808,7 @@ export default function App() {
       />
 
       <div className="workspace">
-        <TopBar
-          store={store}
-          tab={tab}
-          settingsOpen={settingsOpen}
-          count={listCount}
-          sidebarCollapsed={sidebarCollapsed}
-          onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
-        />
+        {!customTitlebar && topBar}
 
         <div
           className={
@@ -789,6 +846,7 @@ export default function App() {
       <EditDrawer store={store} />
       <Toast toast={store.toast} onClose={store.dismissToast} />
       {store.conflict && <ConflictModal store={store} />}
+      {isWindowsShell && <WindowResizeHandles />}
     </div>
   );
 }

@@ -92,6 +92,9 @@ const PAIRS = [
   ['control-line', 'surface', 3, '控件描边 / 卡片'],
   ['control-line', 'bg', 3, '控件描边 / 页面底'],
   ['accent', 'surface', 3, '焦点环 / 卡片'],
+  // Windows 自绘窗控：关闭图标是承载"关闭"语义的图形，按界面控件 ≥3:1
+  ['win-close-fg', 'win-close-bg', 3, '关闭图标 / 悬停红底'],
+  ['win-close-fg', 'win-close-bg-active', 3, '关闭图标 / 按下红底'],
   // 图表（RTI 工具）：画布底 = --surface，全部在画布里画，不继承 CSS 颜色
   // 文字类（刻度 / 轴标题 / 标注）按正文阈值；线条与数据点按图形对象阈值 ≥3:1
   ['chart-axis', 'surface', 4.5, '图表刻度文字 / 画布'],

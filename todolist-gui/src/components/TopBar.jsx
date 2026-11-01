@@ -44,6 +44,7 @@ export default function TopBar({
   count = null,
   sidebarCollapsed = false,
   onToggleSidebar,
+  chrome = false,
 }) {
   const isList = tab === 'list' && !settingsOpen;
 
@@ -64,7 +65,10 @@ export default function TopBar({
   const toggleSort = () => store.setSortMode(store.sortMode === 'manual' ? 'auto' : 'manual');
 
   return (
-    <header className="topbar">
+    <header
+      className="topbar"
+      data-tauri-drag-region={chrome ? 'true' : undefined}
+    >
       {isList && onToggleSidebar && (
         <button
           type="button"
@@ -78,7 +82,7 @@ export default function TopBar({
         </button>
       )}
 
-      <div className="crumb">
+      <div className="crumb" data-tauri-drag-region={chrome ? 'deep' : undefined}>
         {isList && listDot && (
           <span className="nav-dot" style={{ background: listDot }} aria-hidden="true" />
         )}
@@ -88,7 +92,7 @@ export default function TopBar({
         {isList && count != null && <span className="n">{count} 项</span>}
       </div>
 
-      <span className="spacer" />
+      <span className="spacer" data-tauri-drag-region={chrome ? 'true' : undefined} />
 
       {isList && (
         <>

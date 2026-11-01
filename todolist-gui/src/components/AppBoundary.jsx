@@ -13,6 +13,8 @@
 // 那时用户只会觉得"这个按钮也是坏的"。
 import { Component } from 'react';
 import Icon from './Icon.jsx';
+import { hostPlatform, isTauri, usesCustomTitlebar } from '../lib/runtime.js';
+import { WindowControls, WindowResizeHandles } from './WindowChrome.jsx';
 
 export default class AppBoundary extends Component {
   constructor(props) {
@@ -41,7 +43,7 @@ export default class AppBoundary extends Component {
   render() {
     if (!this.state.error) return this.props.children;
     const err = this.state.error;
-    return (
+    const body = (
       <div className="app-crash" role="alert">
         <div className="app-crash-card">
           <div className="app-crash-main">
@@ -66,6 +68,21 @@ export default class AppBoundary extends Component {
             </button>
           </div>
         </div>
+      </div>
+    );
+
+    // 自绘标题栏的平台在崩溃页也必须保留窗控：系统边框已经去掉，
+    // 否则这条最后的安全网只剩 Alt+F4 一条出路。
+    const platform = isTauri() ? hostPlatform() : 'web';
+    if (!usesCustomTitlebar(platform)) return body;
+    return (
+      <div className="app has-titlebar is-bare" data-platform={platform}>
+        <div className="titlebar" data-tauri-drag-region>
+          <span className="titlebar-title">待办清单</span>
+          {platform === 'windows' && <WindowControls />}
+        </div>
+        <div className="workspace">{body}</div>
+        {platform === 'windows' && <WindowResizeHandles />}
       </div>
     );
   }

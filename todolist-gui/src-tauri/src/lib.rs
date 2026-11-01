@@ -246,6 +246,10 @@ pub fn run() {
             setup_tray(app.handle())?;
             // 窗口在配置里是隐藏的，这里显式显示，避免 headless 模式闪一下白窗
             if let Some(win) = app.get_webview_window("main") {
+                // Windows 走自绘标题栏：必须在 show 之前去掉系统边框，否则会先闪一帧
+                // 原生标题栏。macOS 保留系统红绿灯（titleBarStyle=Overlay），不能去边框。
+                #[cfg(target_os = "windows")]
+                let _ = win.set_decorations(false);
                 let _ = win.show();
             }
             Ok(())

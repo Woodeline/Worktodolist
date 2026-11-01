@@ -12,6 +12,28 @@ export function isTauri() {
   return Boolean(window.__TAURI__ || window.__TAURI_INTERNALS__);
 }
 
+/**
+ * 从 UA 判断宿主平台。只服务外壳布局（macOS overlay / Windows 自绘标题栏），
+ * 不参与任何数据/业务判断 —— 所以浏览器里也能安全地返回 macos/windows。
+ */
+export function platformFromUA(ua) {
+  const s = String(ua || '');
+  if (/Macintosh|Mac OS X/.test(s)) return 'macos';
+  if (/Windows/.test(s)) return 'windows';
+  if (/Linux|X11/.test(s)) return 'linux';
+  return 'web';
+}
+
+export function hostPlatform() {
+  if (typeof navigator === 'undefined') return 'web';
+  return platformFromUA(navigator.userAgent);
+}
+
+/** 外壳是否把上下文条抬进窗口第一行（自绘/合并标题栏）。浏览器与 Linux 不参与。 */
+export function usesCustomTitlebar(platform) {
+  return platform === 'macos' || platform === 'windows';
+}
+
 function resolveInvoke() {
   if (typeof window === 'undefined') return null;
   const g = window.__TAURI__;

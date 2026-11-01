@@ -145,6 +145,15 @@
   /* --- 外壳骨架（原型 v2）：46px 活动栏 + 36px 上下文条 + 可折叠概览条 + 26px 状态栏。
          这几个数字是外壳的唯一口径 —— 组件里不要再手写轨道宽度或条高。 --- */
   --rail-w: 46px;
+  --titlebar-h: 44px; /* 自绘 / 合并标题栏的第一行：macOS 红绿灯与 Windows 窗控都住这里 */
+  --mac-lights-w: 92px; /* 红绿灯 16 起排，屏幕实测止于 ~76；右边留 16 给面包屑 */
+  /* Windows 自绘窗控：悬停/按下用半透明墨（随主题反转），关闭键沿用 Fluent
+     系统红（平台约定，不跟主题换色相）。白字对 #c42b1c 实测 5.66:1。 */
+  --win-caption-hover: rgba(0, 0, 0, 0.06);
+  --win-caption-pressed: rgba(0, 0, 0, 0.1);
+  --win-close-bg: #c42b1c;
+  --win-close-bg-active: #b0271a;
+  --win-close-fg: #ffffff;
   --ctl-h: 34px; /* 活动栏按钮 */
   --ctxbar-h: 36px;
   --nav-h: 24px; /* 侧栏导航行：紧凑两档（只有侧栏的条目行与分组行在用），触屏另有 44px 命中区兜底 */
@@ -251,6 +260,10 @@
     --tip-bg: #3a3d42;
     --tip-fg: #f2f3f5;
     --live: #4ec08d;
+
+    /* 窗控悬停/按下在暗底上提亮；关闭红沿用亮色的同一值 */
+    --win-caption-hover: rgba(255, 255, 255, 0.08);
+    --win-caption-pressed: rgba(255, 255, 255, 0.14);
 
     /* 暗底上兜边要反过来：色点比底亮，描边得压暗才不会让圆点看起来"变大了" */
     --dot-edge: rgba(0, 0, 0, 0.45);
@@ -474,6 +487,208 @@ code {
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   min-width: 0;
   min-height: 0;
+}
+
+/* --- 自绘 / 合并标题栏：上下文条抬到窗口第一行 -----------------------------
+   macOS 用 overlay（系统红绿灯由 WindowServer 画在内容之上，左侧留
+   --mac-lights-w）；Windows 去掉系统边框，自绘窗控与缩放把手（见下方
+   Windows 段）。其它平台保留原生窗口框，不拿系统命中测试换统一外观。
+   其余空白交给 TopBar 的 data-tauri-drag-region。 */
+.app.has-titlebar {
+  grid-template-rows: var(--titlebar-h) minmax(0, 1fr);
+}
+
+.app.has-titlebar .titlebar {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: flex;
+  min-width: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.app.has-titlebar .tabs {
+  grid-row: 2;
+}
+
+.app.has-titlebar .workspace {
+  grid-row: 2;
+  /* 上下文条已经搬进 titlebar，少一行 36px 的 topbar */
+  grid-template-rows: minmax(0, 1fr) auto auto;
+}
+
+.titlebar .topbar {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding-left: var(--mac-lights-w);
+  border-bottom: 0;
+  background: transparent;
+}
+
+/* 引导 / 重新授权 / 不支持页：没有活动栏与上下文条，只留一条可拖拽标题条 */
+.app.is-bare {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--titlebar-h) minmax(0, 1fr);
+}
+
+.app.is-bare .workspace {
+  grid-row: 2;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.app.is-bare .titlebar {
+  justify-content: center;
+}
+
+.app.is-bare .titlebar-title {
+  align-self: center;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.app.is-bare .welcome {
+  height: 100%;
+}
+
+/* 崩溃页放进标题栏壳后不能再按整窗 100vh 算，否则会被标题条挤掉底部 */
+.app.has-titlebar .app-crash {
+  min-height: 100%;
+}
+
+/* --- Windows 自绘标题栏 -----------------------------------------------------
+   去系统边框后，标题条、窗控与缩放把手全部由前端画。Snap Layouts 依赖系统
+   caption 按钮的悬停热区，自绘后不复存在 —— 这是本版明确接受的取舍。
+   Windows 没有红绿灯要避让，上下文条直接顶到左边，窗控贴右缘。 */
+.app[data-platform='windows'] .titlebar .topbar {
+  padding-left: var(--sp-3);
+}
+
+.app[data-platform='windows'].is-bare .titlebar {
+  justify-content: flex-start;
+  padding-left: var(--sp-3);
+}
+
+.win-controls {
+  display: flex;
+  flex: none;
+  align-self: stretch;
+  margin-left: auto;
+}
+
+/* 46×44 是 Fluent caption 按钮的比例：与标题条同高，悬停块贴到窗口右上角。 */
+.win-caption-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: default;
+}
+
+.win-caption-btn:hover {
+  background: var(--win-caption-hover);
+}
+
+.win-caption-btn:active {
+  background: var(--win-caption-pressed);
+}
+
+.win-caption-btn.is-close:hover {
+  background: var(--win-close-bg);
+  color: var(--win-close-fg);
+}
+
+.win-caption-btn.is-close:active {
+  background: var(--win-close-bg-active);
+  color: var(--win-close-fg);
+}
+
+.win-caption-btn:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.win-caption-btn.is-close:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--win-close-fg);
+}
+
+/* 缩放命中区：4px 边 + 10px 角。tao 的 undecorated + shadow 只保留上边缘的
+   系统缩放，其余三边四角靠这里补；最大化时组件不渲染。z-index 高于所有浮层，
+   与系统窗口边框一致 —— 贴边按下先缩窗，而不是点到底下的内容。 */
+.resize-handle {
+  position: fixed;
+  z-index: 300;
+  touch-action: none;
+}
+
+.resize-n,
+.resize-s {
+  left: 10px;
+  right: 10px;
+  height: 4px;
+  cursor: ns-resize;
+}
+
+.resize-n {
+  top: 0;
+}
+
+.resize-s {
+  bottom: 0;
+}
+
+.resize-w,
+.resize-e {
+  top: 10px;
+  bottom: 10px;
+  width: 4px;
+  cursor: ew-resize;
+}
+
+.resize-w {
+  left: 0;
+}
+
+.resize-e {
+  right: 0;
+}
+
+.resize-nw,
+.resize-ne,
+.resize-sw,
+.resize-se {
+  width: 10px;
+  height: 10px;
+}
+
+.resize-nw {
+  top: 0;
+  left: 0;
+  cursor: nwse-resize;
+}
+
+.resize-ne {
+  top: 0;
+  right: 0;
+  cursor: nesw-resize;
+}
+
+.resize-sw {
+  bottom: 0;
+  left: 0;
+  cursor: nesw-resize;
+}
+
+.resize-se {
+  bottom: 0;
+  right: 0;
+  cursor: nwse-resize;
 }
 
 /* --- 活动栏：46px 纵向轨道，图标即页签 --- */
@@ -5186,6 +5401,37 @@ mark {
     grid-template-rows: 44px minmax(0, 1fr);
   }
 
+  /* 窄屏上活动栏翻成横向页签：标题条 / 页签 / 内容三行 */
+  .app.has-titlebar {
+    grid-template-rows: var(--titlebar-h) 44px minmax(0, 1fr);
+  }
+
+  .app.has-titlebar .titlebar {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .app.has-titlebar .tabs {
+    grid-row: 2;
+  }
+
+  .app.has-titlebar .workspace {
+    grid-row: 3;
+  }
+
+  .app.is-bare {
+    grid-template-rows: var(--titlebar-h) minmax(0, 1fr);
+  }
+
+  .app.is-bare .workspace {
+    grid-row: 2;
+  }
+
+  /* Windows 窗控在窄屏收窄，给面包屑与搜索让出空间 */
+  .app[data-platform='windows'] .win-caption-btn {
+    width: 40px;
+  }
+
   .tabs {
     flex-direction: row;
     align-items: center;
@@ -5515,6 +5761,16 @@ mark {
     --fs-2xl: 21px;
     --row-pad: 12px;
     --overview-h: 92px;
+  }
+
+  /* Windows 窗控固定占掉 3 个按钮；排序是这一排唯一可让位的宽控件，
+     排序仍可从列表右键菜单进入 */
+  .app[data-platform='windows'] .topbar .ctx-btn:not(.ctx-btn-icon) {
+    display: none;
+  }
+
+  .app[data-platform='windows'] .win-caption-btn {
+    width: 38px;
   }
 
   .task-row {
