@@ -33,11 +33,18 @@ if (!lightMatch) {
   console.error('[contrast] 没找到 :root 令牌块');
   process.exit(1);
 }
-const darkMatch = css.match(/prefers-color-scheme:\s*dark\s*\)\s*\{\s*:root\s*\{([\s\S]*?)\}/);
+const darkMatch = css.match(/:root\[data-theme=["']dark["']\]\s*\{([\s\S]*?)\}/);
+if (!darkMatch) {
+  console.error(
+    '[contrast] 没找到 :root[data-theme="dark"] 令牌块 —— 暗色那一整套对比度这次一条也没测。\n' +
+      '  暗色令牌的选择器形状是本脚本的解析依据，改了样式记得同步改这里（档位解析在 lib/theme.js）。'
+  );
+  process.exit(1);
+}
 
 const themes = {
   '明色 (light)': parseTokens(lightMatch[1]),
-  '暗色 (dark) ': darkMatch ? { ...parseTokens(lightMatch[1]), ...parseTokens(darkMatch[1]) } : null,
+  '暗色 (dark) ': { ...parseTokens(lightMatch[1]), ...parseTokens(darkMatch[1]) },
 };
 
 // ---------- 颜色解析与 WCAG 计算 ----------

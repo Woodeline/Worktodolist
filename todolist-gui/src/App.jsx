@@ -3,6 +3,8 @@ import dayjs from 'dayjs';
 import { useTodoStore } from './hooks/useTodoStore';
 import { useNativeShell } from './hooks/useNativeShell';
 import { useAlwaysOnTop } from './hooks/useAlwaysOnTop';
+import { useTheme } from './hooks/useTheme';
+import { THEME_ICONS, THEME_LABELS, THEME_MODES } from './lib/theme.js';
 import { hostPlatform, isTauri, usesCustomTitlebar } from './lib/runtime.js';
 import { useTodoSnapshot } from './hooks/useTodoSnapshot';
 import useDebounce from './hooks/useDebounce';
@@ -31,6 +33,14 @@ export const TABS = [
 
 // 活动栏是纯图标：图标只负责"认出是哪个区"，文字交给悬停提示。
 const TAB_ICONS = { chat: 'message-square', list: 'list', tools: 'toolbox' };
+
+// 主题按钮的状态文字。档位 +（跟随系统时）它此刻落到了哪一边 ——
+// 只看"跟随系统"三个字，用户没法知道现在屏幕上是什么。
+function themeTip(mode, effective) {
+  const label = THEME_LABELS[mode] || THEME_LABELS.auto;
+  if (mode && mode !== 'auto') return '主题 · ' + label;
+  return '主题 · ' + label + '（现在' + (effective === 'dark' ? '深' : '浅') + '）';
+}
 
 
 export function UnsupportedPage() {
@@ -308,10 +318,22 @@ export function MainList({ store, query }) {
 //
 // 保留的契约：
 //   · 三个页签仍在 .tabs-group .tab 里，且文字内容就是页签名（QA 依赖这一条）；
-//   · 应用菜单 / 置顶 / 设置三个入口一个不少，只是从顶栏右端搬到了轨道底部。
+//   · 应用菜单 / 置顶 / 主题 / 设置四个入口一个不少，只是从顶栏右端搬到了轨道底部。
 // ---------------------------------------------------------------------------
-export function Tabs({ tab, onChange, store, onOpenSettings, settingsOpen, alwaysOnTop, onToggleTop }) {
-  const { openAt } = useContextMenu();
+export function Tabs({
+  tab,
+  onChange,
+  store,
+  onOpenSettings,
+  settingsOpen,
+  alwaysOnTop,
+  onToggleTop,
+  themeMode,
+  themeEffective,
+  onToggleTheme,
+  onPickTheme,
+}) {
+  const { openAt, openMenu } = useContextMenu();
   const menuBtnRef = useRef(null);
 
   // 列表页的动作需要先切页签再聚焦，React 提交后再 focus。
@@ -327,6 +349,16 @@ export function Tabs({ tab, onChange, store, onOpenSettings, settingsOpen, alway
     };
     requestAnimationFrame(() => tryFocus(4));
   };
+
+  // 主题三档的一份菜单条目，按钮右键与应用菜单「外观」共用。
+  // 按钮本体只做浅↔深：从肉眼当前看到的那一屏出发，点一下必然有变化。
+  // 「跟随系统」只有在三档同时摆出来时才说得清，所以它住在菜单里。
+  const themeItems = THEME_MODES.map((m) => ({
+    type: 'item',
+    label: THEME_LABELS[m],
+    checked: (themeMode || 'auto') === m,
+    onClick: () => onPickTheme && onPickTheme(m),
+  }));
 
   const openAppMenu = () => {
     const btn = menuBtnRef.current;
@@ -381,6 +413,9 @@ export function Tabs({ tab, onChange, store, onOpenSettings, settingsOpen, alway
           store.setSortMode('auto');
         },
       },
+      { type: 'sep' },
+      { type: 'header', label: '外观' },
+      ...themeItems,
       { type: 'sep' },
       { type: 'header', label: '窗口' },
       {
@@ -446,6 +481,19 @@ export function Tabs({ tab, onChange, store, onOpenSettings, settingsOpen, alway
         >
           <Icon name="pin" size={17} />
           <span className="tip">{alwaysOnTop ? '取消置顶' : '窗口置顶'}</span>
+        </button>
+      )}
+      {onToggleTheme && (
+        <button
+          type="button"
+          className={'tab' + (themeMode && themeMode !== 'auto' ? ' is-on' : '')}
+          onClick={onToggleTheme}
+          onContextMenu={(e) => onPickTheme && openMenu(e, themeItems)}
+          title={themeTip(themeMode, themeEffective) + ' · 点按切浅↔深，右键选档'}
+          aria-pressed={Boolean(themeMode && themeMode !== 'auto')}
+        >
+          <Icon name={THEME_ICONS[themeMode] || THEME_ICONS.auto} size={17} />
+          <span className="tip">{themeTip(themeMode, themeEffective)}</span>
         </button>
       )}
       {onOpenSettings && (
@@ -586,6 +634,13 @@ export default function App() {
   useNativeShell(store);
   // 窗口置顶：状态由壳广播回传，按钮与托盘菜单共用一个真相。
   const { onTop: alwaysOnTop, toggle: toggleAlwaysOnTop } = useAlwaysOnTop();
+  // 明暗档位：不进壳、不进数据目录，只落本机配置 + <html data-theme>。
+  const {
+    mode: themeMode,
+    effective: themeEffective,
+    pick: pickThemeMode,
+    toggle: toggleThemeMode,
+  } = useTheme();
   const query = useDebounce(store.search, 150);
   const [tab, setTab] = useState('chat');
   // 侧栏折叠只是"看不看目录"，不影响任何数据 —— 因此不进 store，也不落盘。
@@ -805,6 +860,10 @@ export default function App() {
         settingsOpen={settingsOpen}
         alwaysOnTop={alwaysOnTop}
         onToggleTop={toggleAlwaysOnTop}
+        themeMode={themeMode}
+        themeEffective={themeEffective}
+        onToggleTheme={toggleThemeMode}
+        onPickTheme={pickThemeMode}
       />
 
       <div className="workspace">

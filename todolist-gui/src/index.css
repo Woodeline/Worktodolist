@@ -213,85 +213,86 @@
 }
 
 /* 暗色：同一套语义令牌换值，组件代码一行不动。
-   明暗同语义换明度（暗色饱和度微升补偿）；跟随系统偏好（本应用没有主题开关，
-   因此不做单方面覆盖）。 */
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
+   明暗同语义换明度（暗色饱和度微升补偿）。
+   档位（跟随系统 / 浅色 / 深色）由 lib/theme.js 解析成 <html data-theme="…">，
+   这里只认这个属性 —— 「跟随系统」不在样式里写媒体查询，暗色令牌才能全场只有一份
+   （抄两份迟早漏改一条）。JS 跑起来之前那一帧没有属性可依，首屏底色由 index.html
+   的内联样式用媒体查询兜住。 */
+:root[data-theme="dark"] {
+  color-scheme: dark;
 
-    /* 暗色锚点 #131417 / #ecedef；中间表面 Oklch L 等感知镜像 */
-    --bg: #131417;
-    --surface: #1c1e22;
-    --surface-2: #24262b;
-    --surface-3: #2e3137;
-    --border: #2c2f35;
-    --border-strong: #4b5058;
-    --control-line: #8b919b;
+  /* 暗色锚点 #131417 / #ecedef；中间表面 Oklch L 等感知镜像 */
+  --bg: #131417;
+  --surface: #1c1e22;
+  --surface-2: #24262b;
+  --surface-3: #2e3137;
+  --border: #2c2f35;
+  --border-strong: #4b5058;
+  --control-line: #8b919b;
 
-    --text: #ecedef;
-    --text-2: #c3c7ce;
-    --muted: #949aa4;
-    --accent: #46c9ec;
-    --accent-hover: #5bd3ea;
-    --accent-fg: #06161b;
-    --accent-soft: #12333e;
-    --accent-line: #2b5e6f;
-    --danger: #ff9c92;
-    --danger-soft: #3a201d;
-    --danger-line: #5f3430;
-    --warn: #e8bd63;
-    --warn-soft: #362c17;
-    --ok: #7dd3a2;
-    --ok-soft: #163024;
-    --mark-bg: #6b4c0d;
-    --mark-fg: #ffe9b0;
+  --text: #ecedef;
+  --text-2: #c3c7ce;
+  --muted: #949aa4;
+  --accent: #46c9ec;
+  --accent-hover: #5bd3ea;
+  --accent-fg: #06161b;
+  --accent-soft: #12333e;
+  --accent-line: #2b5e6f;
+  --danger: #ff9c92;
+  --danger-soft: #3a201d;
+  --danger-line: #5f3430;
+  --warn: #e8bd63;
+  --warn-soft: #362c17;
+  --ok: #7dd3a2;
+  --ok-soft: #163024;
+  --mark-bg: #6b4c0d;
+  --mark-fg: #ffe9b0;
 
-    --sh-1: 0 1px 1px rgba(0,0,0,.5);
-    --sh-2: 0 1px 2px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.03);
-    --sh-3: 0 12px 28px rgba(0,0,0,.6), 0 2px 6px rgba(0,0,0,.4);
+  --sh-1: 0 1px 1px rgba(0,0,0,.5);
+  --sh-2: 0 1px 2px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.03);
+  --sh-3: 0 12px 28px rgba(0,0,0,.6), 0 2px 6px rgba(0,0,0,.4);
 
-    --overlay: rgba(0,0,0,.58);
+  --overlay: rgba(0,0,0,.58);
 
-    --ring: 0 0 0 2px rgba(53,195,224,.4);
+  --ring: 0 0 0 2px rgba(53,195,224,.4);
 
-    /* 选中块在暗底上要"提亮"而不是"压暗" */
-    --sel: rgba(255, 255, 255, 0.06);
-    --sel-strong: rgba(255, 255, 255, 0.1);
-    --tip-bg: #3a3d42;
-    --tip-fg: #f2f3f5;
-    --live: #4ec08d;
+  /* 选中块在暗底上要"提亮"而不是"压暗" */
+  --sel: rgba(255, 255, 255, 0.06);
+  --sel-strong: rgba(255, 255, 255, 0.1);
+  --tip-bg: #3a3d42;
+  --tip-fg: #f2f3f5;
+  --live: #4ec08d;
 
-    /* 窗控悬停/按下在暗底上提亮；关闭红沿用亮色的同一值 */
-    --win-caption-hover: rgba(255, 255, 255, 0.08);
-    --win-caption-pressed: rgba(255, 255, 255, 0.14);
+  /* 窗控悬停/按下在暗底上提亮；关闭红沿用亮色的同一值 */
+  --win-caption-hover: rgba(255, 255, 255, 0.08);
+  --win-caption-pressed: rgba(255, 255, 255, 0.14);
 
-    /* 暗底上兜边要反过来：色点比底亮，描边得压暗才不会让圆点看起来"变大了" */
-    --dot-edge: rgba(0, 0, 0, 0.45);
+  /* 暗底上兜边要反过来：色点比底亮，描边得压暗才不会让圆点看起来"变大了" */
+  --dot-edge: rgba(0, 0, 0, 0.45);
 
-    /* 图表令牌同步换值：同一组语义、另一组明度。系列色一律提亮到
-       能在暗底上满足 3:1，否则深色主题下细线会糊掉。 */
-    --chart-axis: #949aa4;
-    --chart-grid: #2c2f35;
-    --chart-frame: #7d828c;
-    --chart-thr: #ff9c92;
-    --chart-thr-ink: #ffc9c2;
-    --chart-warn: #e8bd63;
-    --chart-1: #7fb2f5;
-    --chart-2: #f0916a;
-    --chart-3: #6fd2ab;
-    --chart-4: #c0a3f0;
-    --chart-5: #e0c46a;
-    --chart-6: #f592b8;
-    --chart-7: #7fd0e0;
-    --chart-8: #c3bdb0;
+  /* 图表令牌同步换值：同一组语义、另一组明度。系列色一律提亮到
+     能在暗底上满足 3:1，否则深色主题下细线会糊掉。 */
+  --chart-axis: #949aa4;
+  --chart-grid: #2c2f35;
+  --chart-frame: #7d828c;
+  --chart-thr: #ff9c92;
+  --chart-thr-ink: #ffc9c2;
+  --chart-warn: #e8bd63;
+  --chart-1: #7fb2f5;
+  --chart-2: #f0916a;
+  --chart-3: #6fd2ab;
+  --chart-4: #c0a3f0;
+  --chart-5: #e0c46a;
+  --chart-6: #f592b8;
+  --chart-7: #7fd0e0;
+  --chart-8: #c3bdb0;
 
-    /* 顺序色阶（暗色）：同一语义、另一组明度 —— 阶与阶之间仍要能看出差 */
-    --ramp-1: #141f26;
-    --ramp-2: #1d3b4b;
-    --ramp-3: #2b5b72;
-    --ramp-4: #4a8cae;
-    --ramp-5: #86cde8;
-  }
+  /* 顺序色阶（暗色）：同一语义、另一组明度 —— 阶与阶之间仍要能看出差 */
+  --ramp-1: #141f26;
+  --ramp-2: #1d3b4b;
+  --ramp-3: #2b5b72;
+  --ramp-4: #4a8cae;
+  --ramp-5: #86cde8;
 }
 
 /* ============================================================================

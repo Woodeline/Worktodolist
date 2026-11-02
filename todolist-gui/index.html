@@ -5,15 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/x-icon" href="/todolist.ico" />
     <title>待办清单 · todo.txt</title>
-    <!-- 首屏底色：先于 CSS 生效，避免启动时闪一下白底（那是"网页加载"的观感） -->
+    <!-- 首屏底色：先于 CSS 生效，避免启动时闪一下白底（那是"网页加载"的观感）。
+         取值对齐令牌层的 --bg 两端锚点，否则这一帧本身就是一次跳色。
+         主题档位是 JS 落到 <html data-theme> 的，而这一帧 JS 还没跑，只能靠媒体查询；
+         于是"手动浅色 + 系统深色"这一种组合会闪一下亮底 —— 换不来把暗色令牌抄两份。 -->
     <style>
       html {
-        background: #f0f0f0;
+        background: #ececee;
       }
       @media (prefers-color-scheme: dark) {
-        html {
-          background: #1f1f1f;
+        html:not([data-theme='light']) {
+          background: #131417;
         }
+      }
+      html[data-theme='dark'] {
+        background: #131417;
       }
     </style>
   </head>

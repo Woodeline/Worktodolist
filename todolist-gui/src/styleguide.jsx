@@ -43,6 +43,8 @@ import { visibleTools } from './components/tools/registry.js';
 import ToolCallCard from './components/ToolCallCard.jsx';
 import Icon, { ICON_NAMES } from './components/Icon.jsx';
 import { ContextMenuProvider } from './hooks/useContextMenu.jsx';
+import { useTheme } from './hooks/useTheme';
+import { initTheme } from './lib/theme.js';
 import { buildTodoSnapshot } from './lib/todoSnapshot.js';
 
 const TODAY = dayjs().format('YYYY-MM-DD');
@@ -346,7 +348,15 @@ function Shell({ view, children }) {
   );
 }
 
+// 活动栏的主题按钮走真实档位（可点、可右键选档）：控件要渲染出来，也得真能按 ——
+// 否则截图与响应式 QA 量不到这颗按钮，深/浅两套也对照不了。
+function useThemeStage() {
+  const { mode, effective, pick, toggle } = useTheme();
+  return { themeMode: mode, themeEffective: effective, onToggleTheme: toggle, onPickTheme: pick };
+}
+
 function AppShell({ store, tab, listView, overviewOpen = false }) {
+  const themeStage = useThemeStage();
   const s = listView ? makeStore({ ...store, view: listView }) : store;
   const isList = tab === 'list';
   const count = isList
@@ -354,7 +364,7 @@ function AppShell({ store, tab, listView, overviewOpen = false }) {
     : null;
   return (
     <div className="app">
-      <Tabs tab={tab} onChange={() => {}} store={s} onOpenSettings={() => {}} />
+      <Tabs tab={tab} onChange={() => {}} store={s} onOpenSettings={() => {}} {...themeStage} />
       <div className="workspace">
         {/* 侧栏开关自 2026-10-18 起在页眉最左（仅列表页）。
             styleguide 是静态舞台，折叠状态恒为展开、点击空转 ——
@@ -432,7 +442,9 @@ function TokensDoc() {
         <h2>设计令牌</h2>
         <p className="sg-note">
           组件里禁止出现裸色值 / 裸字号 / 裸间距。改主题只改这一层，组件代码一行不动。
-          暗色主题跟随系统偏好，令牌在 <code>prefers-color-scheme: dark</code> 里整体换值。
+          暗色令牌写在 <code>:root[data-theme="dark"]</code> 里整体换值；档位（跟随系统 /
+          浅色 / 深色）由 <code>lib/theme.js</code> 解析后落到 <code>&lt;html data-theme&gt;</code>，
+          所以样式里不再有第二份暗色值，也没有媒体查询。
         </p>
         <h3>中性表面</h3>
         <div className="sg-swatches">
@@ -620,10 +632,11 @@ function MessageFlow() {
 
 function ChatFlowStage() {
   // 复用真实外壳，把消息流替换成固定样本，用于稳定地截图对照。
+  const themeStage = useThemeStage();
   const store = makeStore({ dirReady: false });
   return (
     <div className="app">
-      <Tabs tab="chat" onChange={() => {}} store={store} onOpenSettings={() => {}} />
+      <Tabs tab="chat" onChange={() => {}} store={store} onOpenSettings={() => {}} {...themeStage} />
       <div className="workspace">
         <TopBar store={store} tab="chat" />
         <div className="content">
@@ -676,6 +689,7 @@ function ChatFlowStage() {
 // 设置页：与产品同构（活动栏齿轮处于打开态 + 独立页面 + 底部状态栏）。
 // 渲染的是真实组件（当前内容是只读的快捷键速查）。
 function SettingsStage() {
+  const themeStage = useThemeStage();
   const store = makeStore({ dirReady: false });
   return (
     <div className="app">
@@ -685,6 +699,7 @@ function SettingsStage() {
         store={store}
         onOpenSettings={() => {}}
         settingsOpen
+        {...themeStage}
       />
       <div className="workspace">
         <TopBar store={store} tab="chat" settingsOpen />
@@ -703,6 +718,7 @@ function SettingsStage() {
 // 所以不需要模拟"从对话页路由进来"，工具拿到的 params 仍是 null；
 // toolId 为空时首屏是卡片墙（目录态）。
 function ToolsStage({ toolId = null }) {
+  const themeStage = useThemeStage();
   const store = makeStore({ dirReady: true });
   // 工具页拿的是**只读投影**（与产品同一条链路），不是 store 本身
   const snapshot = buildTodoSnapshot({
@@ -714,7 +730,7 @@ function ToolsStage({ toolId = null }) {
   const request = toolId ? { id: toolId, params: null, seq: 1 } : null;
   return (
     <div className="app">
-      <Tabs tab="tools" onChange={() => {}} store={store} onOpenSettings={() => {}} />
+      <Tabs tab="tools" onChange={() => {}} store={store} onOpenSettings={() => {}} {...themeStage} />
       <div className="workspace">
         <TopBar store={store} tab="tools" />
         <div className="content">
@@ -796,6 +812,10 @@ if (new URLSearchParams(location.search).get('view') === 'chatflow') {
 }
 
 // 样式指南里渲染的是真实组件，真实组件依赖右键菜单 Provider，所以这里也要包一层。
+// 主题同样要走真实链路：QA 脚本用 CDP 模拟 prefers-color-scheme 截暗色图，
+// 而暗色令牌只认 <html data-theme>，所以这一页也要先把档位投上去。
+initTheme();
+
 createRoot(document.getElementById('sg-root')).render(
   <ContextMenuProvider>
     <Root />

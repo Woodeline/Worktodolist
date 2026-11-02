@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cmpSeries, fmtH, fmtR2, normRange, toNum } from '../../../lib/rti/calc.js';
 import { CMP_Y_TOP, cmpNearest, cmpValuesAt, drawCmpChart, palette, seriesStyle } from '../../../lib/rti/chart.js';
 import { downloadCanvasPNG, stamp } from '../../../lib/rti/files.js';
+import { subscribeTheme } from '../../../lib/theme.js';
 import NumberCell from './NumberCell.jsx';
 
 /** 两次命中是否指向同一处（用于"再点一次取消固定"） */
@@ -36,14 +37,10 @@ function CompareChart({ series, xRange, logY, onError }) {
   const [hoverChip, setHoverChip] = useState(null);
   const [pin, setPin] = useState(null);
 
-  // 图表配色来自样式令牌，而令牌会跟着系统深浅色切换 —— 所以要监听一次偏好变化
+  // 图表配色来自样式令牌，而令牌会随主题档位换值 —— 所以要订阅主题模块而不是自己盯
+  // 媒体查询：手动选浅色/深色时 prefers-color-scheme 压根没变，画布会停在旧配色上。
   const [pal, setPal] = useState(palette);
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const on = () => setPal(palette());
-    mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
-  }, []);
+  useEffect(() => subscribeTheme(() => setPal(palette())), []);
 
   const redraw = useCallback(() => {
     const cv = canvasRef.current;
