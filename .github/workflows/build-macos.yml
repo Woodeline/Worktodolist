@@ -42,10 +42,12 @@ jobs:
       - name: 拉取代码
         uses: actions/checkout@v4
 
+      # 必须是 22+：qa-css-check.mjs / qa-hooks.mjs 用了 node:fs 的 globSync（Node 22 才有），
+      # Node 20 下 test:ui 直接 SyntaxError。理由同 Windows 流水线。
       - name: 安装 Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: todolist-gui/package-lock.json
 

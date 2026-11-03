@@ -26,10 +26,13 @@ jobs:
       - name: 拉取代码
         uses: actions/checkout@v4
 
+      # 必须是 22+：scripts/qa-css-check.mjs 与 qa-hooks.mjs 用了 node:fs 的 globSync，
+      # 该导出 Node 22 才有，Node 20 会直接 SyntaxError（门禁整步失败、构建中断）。
+      # Node 20 本身也已 EOL（2026-04 结束维护），行动镜像早就提示 deprecated。
       - name: 安装 Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: todolist-gui/package-lock.json
 
