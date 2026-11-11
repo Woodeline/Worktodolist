@@ -199,7 +199,6 @@ function formFromTask(task, store) {
     title: task.title,
     priority: task.priority || '',
     dueDate: task.dueDate || '',
-    thresholdDate: task.thresholdDate || '',
     remindAt: task.remindAt || '',
     recurrence: task.recurrence || '',
     note: noteOf(store, task.stableId),
@@ -275,7 +274,6 @@ function EditForm({ task, store }) {
     title: form.title.trim(),
     priority: form.priority || null,
     dueDate: form.dueDate || null,
-    thresholdDate: form.thresholdDate || null,
     remindAt: form.remindAt || null,
     recurrence: form.recurrence || null,
     contexts: toList(form.contexts, '@'),
@@ -284,11 +282,12 @@ function EditForm({ task, store }) {
   });
 
   const save = async () => {
+    // 只提交表单里有的字段；未列出的（如 t: 阈值日期）由 applyPatch 原样保留，
+    // 编辑一次不该把已有数据抹掉。
     store.updateTask(task.id, {
       title: form.title.trim(),
       priority: form.priority || null,
       dueDate: form.dueDate || null,
-      thresholdDate: form.thresholdDate || null,
       remindAt: form.remindAt || null,
       recurrence: form.recurrence || null,
       contexts: toList(form.contexts, '@'),
@@ -384,11 +383,6 @@ function EditForm({ task, store }) {
         <label className="field">
           <span>截止日期</span>
           <input type="date" value={form.dueDate} onChange={set('dueDate')} />
-        </label>
-
-        <label className="field">
-          <span>阈值日期（到期前在“今天”隐藏）</span>
-          <input type="date" value={form.thresholdDate} onChange={set('thresholdDate')} />
         </label>
 
         <label className="field">

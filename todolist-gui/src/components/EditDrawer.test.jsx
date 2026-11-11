@@ -72,6 +72,16 @@ describe('EditDrawer 渲染', () => {
     delete store.getNote;
     expect(() => render(store)).not.toThrow();
   });
+
+  it('不再提供阈值日期输入项，其他日期字段与源文本预览仍在', () => {
+    const task = parseSingleLine('写周报 due:2026-10-25 t:2026-10-05 rem:2026-10-23T15:00 id:aaa111');
+    const markup = render(makeStore(task));
+    expect(markup).not.toContain('阈值日期');
+    expect(markup).toContain('截止日期');
+    expect(markup).toContain('提醒时刻');
+    // 预览是「源文本行」：已有的 t: 不因为表单删了字段就被抹掉
+    expect(markup).toContain('t:2026-10-05');
+  });
 });
 
 // ② 结构约束：Hooks 的数量必须在每次渲染里恒定。
@@ -100,5 +110,10 @@ describe('EditDrawer 的 Hook 规则', () => {
       if (m) violations.push(`${i + 1}: ${m.join(', ')}`);
     }
     expect(violations).toEqual([]);
+  });
+
+  it('表单状态与提交参数里不再有 thresholdDate', () => {
+    expect(src).not.toContain('form.thresholdDate');
+    expect(src).not.toContain('task.thresholdDate');
   });
 });
