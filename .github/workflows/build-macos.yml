@@ -61,13 +61,11 @@ jobs:
         with:
           workspaces: todolist-gui/src-tauri
 
-      # --force 不能省：package.json 里显式声明了 @esbuild/win32-x64（Windows 构建要用），
-      # 而 npm ci 在 darwin/arm64 上会因平台不匹配直接失败（EBADPLATFORM: Unsupported
-      # platform for @esbuild/win32-x64）。本地 start-mac.sh 也是靠 npm install --force
-      # 绕同一个问题。将来若把该依赖挪进 optionalDependencies，这里就能去掉 --force。
+      # @esbuild/win32-x64（Windows 构建要用）已挪进 optionalDependencies：
+      # 平台不匹配时 npm 只是跳过，不再抛 EBADPLATFORM，所以这里不需要 --force。
       - name: 安装前端依赖
         working-directory: todolist-gui
-        run: npm ci --force
+        run: npm ci
 
       # 测试门禁放在 Rust 编译之前：失败就尽早退出，不烧几分钟的编译时间。
       # test:guard 会以 JSON reporter 重跑一遍 vitest 并核对磁盘上的测试文件数，

@@ -79,11 +79,4 @@ export const DEMO_CMP = {
   ],
 };
 
-/** 页 1 / 页 3 的空态骨架（新开一组数据时的初始行数） */
-export const EMPTY_LIFE = { name: '', T: '', p0: '', pts: [{ t: null, v: null }] };
-export const EMPTY_RTI = {
-  name: '',
-  p0: '',
-  temps: [{ T: null, rows: [[null, null], [null, null], [null, null]] }],
-};
 export const EMPTY_CMP = { mats: [], xMax: 160, xMin: 60, logY: true };

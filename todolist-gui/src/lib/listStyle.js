@@ -52,12 +52,6 @@ export function colorHex(id) {
   return (BY_ID.get(id) || BY_ID.get(FALLBACK_ID)).hex;
 }
 
-/** 色 id → 中文名（无障碍标签用）。 */
-export function colorLabel(id) {
-  const p = BY_ID.get(id);
-  return p ? p.label : '默认';
-}
-
 /**
  * 解析某个项目最终该用什么色。
  * 显式配过的用配置；没配过的走稳定散列 —— 所以"没设置过"和"设置成灰色"是两回事，

@@ -67,8 +67,3 @@ export function buildTodoSnapshot(src = {}) {
   // 冻结的意义是让"投影里没有写入口"成为运行时事实，而不是一句注释。
   return Object.freeze(snapshot);
 }
-
-/** 快照里是否含任何函数型字段（只读断言用；正常应恒为 false）。 */
-export function hasMutators(snapshot) {
-  return Object.values(snapshot || {}).some((v) => typeof v === 'function');
-}

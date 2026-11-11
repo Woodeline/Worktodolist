@@ -94,15 +94,6 @@ export async function loadDirHandle() {
   }
 }
 
-export async function clearDirHandle() {
-  if (isTauri()) return;
-  try {
-    await withStore('readwrite', (store) => store.delete(DIR_KEY));
-  } catch {
-    // 忽略清理失败
-  }
-}
-
 export async function verifyPermission(handle, request = false) {
   if (isTauri()) {
     if (!handle) return false;

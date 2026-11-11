@@ -29,7 +29,7 @@ if [ ! -x "$NODE" ]; then
 fi
 
 if [ ! -d "$GUI/node_modules/vite" ]; then
-  echo "依赖未安装，请先在 $GUI 下执行：npm install --force" >&2
+  echo "依赖未安装，请先在 $GUI 下执行：npm install" >&2
   exit 1
 fi
 

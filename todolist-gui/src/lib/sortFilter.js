@@ -7,10 +7,6 @@ export function isOverdue(task, today) {
   return !task.completed && Boolean(task.dueDate) && task.dueDate < today;
 }
 
-export function isDueToday(task, today) {
-  return !task.completed && task.dueDate === today;
-}
-
 export function isThresholdReached(task, today) {
   return !task.thresholdDate || task.thresholdDate <= today;
 }

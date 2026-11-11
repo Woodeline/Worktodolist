@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>仓库清理与代码精简 · 交付报告</title>
+<style>
+  :root {
+    --bg: #f4f4f5; --surface: #ffffff; --surface-2: #f8f8f9;
+    --line: #dcdce0; --line-soft: #e8e8eb;
+    --text: #1c1e22; --text-2: #4c515a; --muted: #747a84;
+    --accent: #147d94; --danger: #b4443c;
+    --mono: "Cascadia Mono", Consolas, "SF Mono", "DejaVu Sans Mono", monospace;
+    --ui: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.75 var(--ui); -webkit-font-smoothing: antialiased; }
+  main { max-width: 1120px; margin: 0 auto; padding: 48px 28px 96px; }
+  .sheet { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  header { padding: 38px 44px 30px; border-bottom: 1px solid var(--line); }
+  .kicker { font: 12px/1.5 var(--mono); color: var(--muted); }
+  h1 { margin: 10px 0 12px; font-size: 30px; line-height: 1.3; font-weight: 600; }
+  .lede { margin: 0; max-width: 820px; color: var(--text-2); font-size: 15px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 6px 30px; margin: 26px 0 0; padding: 0; }
+  .facts div { display: flex; gap: 8px; align-items: baseline; }
+  .facts dt { font: 11px/1.6 var(--mono); color: var(--muted); margin: 0; }
+  .facts dd { margin: 0; font: 12px/1.6 var(--mono); color: var(--text-2); font-variant-numeric: tabular-nums; }
+  section.row { display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 22px; padding: 28px 44px; border-bottom: 1px solid var(--line-soft); }
+  section.row:last-child { border-bottom: 0; }
+  .row-label { font: 11px/1.9 var(--mono); color: var(--muted); }
+  .row-body { min-width: 0; }
+  h2 { margin: 0 0 14px; font-size: 17px; font-weight: 600; }
+  h3 { margin: 22px 0 8px; font-size: 14px; font-weight: 600; }
+  h3:first-child { margin-top: 0; }
+  p { margin: 0 0 12px; }
+  p:last-child { margin-bottom: 0; }
+  .note { color: var(--text-2); }
+  .muted { color: var(--muted); }
+  code { font: 12px/1.6 var(--mono); background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 4px; padding: 1px 5px; color: var(--text-2); }
+  pre { margin: 12px 0 0; padding: 14px 16px; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 8px; overflow-x: auto; font: 12px/1.8 var(--mono); color: var(--text-2); }
+  ul, ol { margin: 0 0 12px; padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th { font: 11px/1.6 var(--mono); color: var(--muted); font-weight: 400; }
+  td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  tfoot td { font-family: var(--mono); font-variant-numeric: tabular-nums; border-top: 1px solid var(--line); color: var(--text); }
+  .callout { border-left: 3px solid var(--accent); background: var(--surface-2); padding: 12px 16px; border-radius: 0 6px 6px 0; color: var(--text-2); margin: 14px 0; }
+  .callout.warn { border-left-color: var(--danger); }
+  .bar { height: 8px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--line-soft); overflow: hidden; margin: 4px 0 2px; }
+  .bar span { display: block; height: 100%; background: var(--accent); }
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .card { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; background: var(--surface-2); }
+  .card h4 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+  .card p { margin: 0; font-size: 13px; color: var(--text-2); }
+  .kv { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .ok { color: var(--accent); }
+  .bad { color: var(--danger); }
+  footer { padding: 20px 44px 26px; color: var(--muted); font: 11px/1.8 var(--mono); }
+  @media (max-width: 760px) {
+    main { padding: 20px 12px 56px; }
+    header, section.row, footer { padding-left: 20px; padding-right: 20px; }
+    section.row { grid-template-columns: 1fr; gap: 8px; }
+    .grid2 { grid-template-columns: 1fr; }
+    td:first-child { white-space: normal; }
+  }
+</style>
+</head>
+<body>
+<main>
+<div class="sheet">
+
+<header>
+  <div class="kicker">delivery / 2026-11-11</div>
+  <h1>仓库清理与代码精简</h1>
+  <p class="lede">
+    一次纯维护性质的整理：清掉 4.6 GB 构建与临时产物、删除已过期和被 Rust 取代的文件、
+    修掉三处会让 CI 或新机器踩坑的配置、删掉 10 处确认无人调用的死代码。
+    <strong>没有改动任何产品行为</strong> —— 743 个用例、19 条排版契约、44 条中文指令、全仓 Hook 门禁全绿，
+    前端产物 hash 与清理前逐字节一致。
+  </p>
+  <dl class="facts">
+    <div><dt>体积</dt><dd>4.7 GB → 99 MB</dd></div>
+    <div><dt>源文件</dt><dd>125 → 124</dd></div>
+    <div><dt>源码行</dt><dd>26 494 → 26 371</dd></div>
+    <div><dt>门禁</dt><dd>all pass</dd></div>
+    <div><dt>产物 hash</dt><dd>index-BtDcLjA8</dd></div>
+  </dl>
+</header>
+
+<section class="row">
+  <div class="row-label">01 · 结论</div>
+  <div class="row-body">
+    <h2>先看这条</h2>
+    <p class="note">
+      体积从 4.7 GB 降到 99 MB，<strong>其中 4.6 GB 是随时可重建的编译与截图产物</strong>，
+      真正从仓库里删掉的文件只有 4 个（合计约 3.6 MB）。代码侧净减 123 行，
+      全部是「确认没有任何引用」的死代码，因此构建产物 hash 没变 —— 这也正好证明没有误伤。
+    </p>
+    <div class="bar"><span style="width:2%"></span></div>
+    <p class="muted" style="font-size:12px">清理后 99 MB 中：node_modules 74 MB、.git 4.7 MB、docs 4.0 MB、dist 0.6 MB（验证时重建）、源码与配置约 4 MB、backup 160 KB —— 可再删的只有 node_modules。</p>
+    <div class="callout">
+      <strong>最值得记的一条</strong>：<code>@esbuild/win32-x64</code> 从 <code>devDependencies</code> 挪进
+      <code>optionalDependencies</code> 后，macOS / Linux 上的 <code>npm ci</code> 不再抛
+      <code>EBADPLATFORM</code>，CI 里那个 <code>npm ci --force</code> 和本地
+      <code>npm install --force</code> 的口头约定可以一起删掉 —— 这是之前反复踩的坑的根治。
+    </div>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">02 · 空间</div>
+  <div class="row-body">
+    <h2>删了什么，为什么可以删</h2>
+    <table>
+      <thead>
+        <tr><th style="width:44%">路径</th><th style="width:14%">体积</th><th>判断依据</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>src-tauri/target/</code>（debug + release）</td><td class="num">4.4 GB</td><td>Cargo 编译产物，已在 <code>.gitignore</code>；下次构建自动重建</td></tr>
+        <tr><td><code>todolist-gui/.tmp/</code></td><td class="num">206 MB</td><td>vitest / esbuild / Rust 的临时目录，被 <code>vite.config.js</code> 指到项目内</td></tr>
+        <tr><td><code>.tmp/</code>（仓库根）</td><td class="num">20 MB</td><td><code>build-mac.sh</code> 把 <code>TMPDIR</code> 指到这里，内容全是编译缓存与 QA 截图</td></tr>
+        <tr><td><code>qa-artifacts/</code></td><td class="num">2.1 MB</td><td>20 张门禁截图，<code>--shots</code> 时按需重建（脚本自带 <code>mkdirSync</code>）</td></tr>
+        <tr><td><code>dist/</code></td><td class="num">556 KB</td><td>前端构建产物，<code>npm run build</code> 重新生成并内嵌进 exe</td></tr>
+        <tr><td><code>vite.config.js.timestamp-*.mjs</code></td><td class="num">8 KB</td><td>vite 写配置时的临时副本，进程异常退出才会残留</td></tr>
+        <tr><td><code>.DS_Store</code> × 6</td><td class="num">—</td><td>Finder 元数据，已在 <code>.gitignore</code></td></tr>
+      </tbody>
+      <tfoot>
+        <tr><td>合计释放</td><td class="num">≈ 4.63 GB</td><td>全部可从源码重建，无需备份</td></tr>
+      </tfoot>
+    </table>
+
+    <h3>从仓库移除的文件（进 git 历史）</h3>
+    <table>
+      <thead>
+        <tr><th style="width:44%">文件</th><th style="width:14%">体积</th><th>原因</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>Worktodolist.exe</code></td><td class="num">3.6 MB</td><td>v1.0.4 的构建快照，与当前 v1.3.0 差三个版本；二进制入库本身也不健康，分发走 Releases</td></tr>
+        <tr><td><code>todolist-icon-preview.png</code></td><td class="num">3.8 KB</td><td>图标预览图，全仓零引用</td></tr>
+        <tr><td><code>scripts/daily_reminder.py</code></td><td class="num">3.9 KB</td><td>提醒逻辑已由 <code>reminder.rs</code> 接管，脚本被 Rust 实现完全替代</td></tr>
+        <tr><td><code>src/hooks/useMediaQuery.js</code></td><td class="num">29 行</td><td>被 <code>useLayoutMode</code>（ResizeObserver）取代后无人 import</td></tr>
+      </tbody>
+    </table>
+
+    <h3>看过但决定保留的</h3>
+    <ul>
+      <li><strong><code>docs/design/assets/</code> 30 张设计截图（3.0 MB）</strong> —— 逐张核对过引用，<em>30 张全部</em>至少被一份设计交付文档引用，没有「零散无主图」可删。删了会让四份 HTML 交付说明里大片断链。</li>
+      <li><strong><code>backup/</code>（160 KB）</strong> —— 每日备份是用户数据，不是产物。</li>
+      <li><strong><code>todolist.ico</code></strong> —— 图标生成的源文件（<code>scripts/make_icon*.py</code> 的输出目标），不是预览图。</li>
+      <li><strong><code>scripts/ui-rebase-*.py</code>（97 KB / 3 个）</strong> —— 2026-10 那次 UI 重构的一次性工具，但 <code>docs/README.md</code> 仍写着「可随时用它重新生成令牌差异表」，所以留着。</li>
+    </ul>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">03 · 代码</div>
+  <div class="row-body">
+    <h2>删掉的死代码，都验证过零引用</h2>
+    <p class="note">
+      方法：静态求出从 <code>main.jsx</code> / <code>styleguide.jsx</code> 出发的 import 可达集，
+      再对每个 <code>export</code> 在整个 <code>src/</code>（含测试、含脚本）里做标识符计数。
+      下面 10 处计数都是 1（只有定义本身），逐个复核过不是「同名遮蔽」的假阳性。
+    </p>
+    <table>
+      <thead>
+        <tr><th style="width:34%">位置</th><th style="width:26%">符号</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>lib/proposals.js</code></td><td><code>makeCreateProposal</code><br><code>makeEditProposal</code><br><code>proposalWrittenLines</code></td><td>只有 <code>batch</code> 类提议由工具产出；这两个工厂连测试都没调过。连带的 <code>draftLine()</code> 与 <code>applyPatch</code> 导入一并移除 —— 该文件 233 行 → 103 行</td></tr>
+        <tr><td><code>lib/fileStore.js</code></td><td><code>clearDirHandle</code></td><td>浏览器模式下清理已存目录句柄，从未有调用方</td></tr>
+        <tr><td><code>lib/listStyle.js</code></td><td><code>colorLabel</code></td><td>色板 id → 中文名，无障碍标签改走别处后失去调用方</td></tr>
+        <tr><td><code>lib/rti/demo.js</code></td><td><code>EMPTY_LIFE</code><br><code>EMPTY_RTI</code></td><td>演示数据的空态骨架，新建条目走的是各页自己的初始值</td></tr>
+        <tr><td><code>lib/sortFilter.js</code></td><td><code>isDueToday</code></td><td>「今天到期」判定已在视图层内联，此导出无人使用（<code>isOverdue</code> / <code>isThresholdReached</code> 仍在用，保留）</td></tr>
+        <tr><td><code>lib/todoSnapshot.js</code></td><td><code>hasMutators</code></td><td>快照只读断言，实际断言改用「冻结后写入抛错」的方式</td></tr>
+        <tr><td><code>lib/rti/chart.js</code></td><td><code>cmpPinHit</code></td><td>对比图「右键取消固定点」的命中判定；固定/取消实际走左键 <code>sameHit</code> 切换，这个分支从未接上</td></tr>
+        <tr><td><code>hooks/useMediaQuery.js</code></td><td>整文件</td><td>窄边判定换成 <code>lib/layoutMode.js</code> + <code>useLayoutMode</code> 的 ResizeObserver 后彻底闲置</td></tr>
+      </tbody>
+    </table>
+    <p class="muted" style="font-size:12px">
+      另有 36 处「只在本文件内使用、却被 <code>export</code> 出去」的符号（如 <code>SettingsPage.splitKeys</code>、
+      <code>chart.js</code> 的一组绘制辅助函数）。这些<strong>没有删</strong>：删 <code>export</code> 关键字只减少导出面、
+      不减少运行时代码，而它们是既有测试的观测入口，动它们要连带改测试，收益为零。
+    </p>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">04 · 配置</div>
+  <div class="row-body">
+    <h2>三处会真出问题的设定</h2>
+    <div class="grid2">
+      <div class="card">
+        <h4>CI 的 Node 版本与代码要求不符</h4>
+        <p>
+          <code>qa-css-check.mjs</code> / <code>qa-hooks.mjs</code> 用了 <code>node:fs</code> 的
+          <code>globSync</code>（Node 22 才有），但两个 workflow 都钉着 <code>node-version: 20</code> ——
+          CI 上 <code>test:ui</code> 会在 import 阶段直接 <code>SyntaxError</code>。
+          已升到 22，并在 <code>package.json</code> 补上 <code>engines.node &gt;= 22</code>（此前并不存在，只是约定）。
+        </p>
+      </div>
+      <div class="card">
+        <h4>Windows 专用包卡住了别的平台</h4>
+        <p>
+          <code>@esbuild/win32-x64</code> 原在 <code>devDependencies</code>，在 macOS / Linux 上
+          <code>npm ci</code> 直接 <code>EBADPLATFORM</code> 失败。挪进 <code>optionalDependencies</code> 后
+          平台不匹配只是跳过。已用 <code>npm ci --dry-run</code> 在 darwin/arm64 实测通过
+          （输出 <code>removed 1 package</code>，正是跳过它）。
+        </p>
+      </div>
+      <div class="card">
+        <h4>dayjs 是 dev 依赖，却声明成运行时依赖</h4>
+        <p>
+          <code>dayjs</code> 全仓只被 <code>styleguide.jsx</code> 使用，而样式指南<strong>不进产品构建</strong>
+          （<code>vite build</code> 只以 <code>index.html</code> 为入口，<code>dist/</code> 里没有 <code>styleguide</code>）。
+          已移入 <code>devDependencies</code>，<code>package-lock.json</code> 同步更新。
+        </p>
+      </div>
+      <div class="card">
+        <h4>提醒链路：Python 已被 Rust 取代</h4>
+        <p>
+          <code>register_reminder_task.py</code> 原本注册的是 <code>python daily_reminder.py</code>，
+          而 <code>reminder.rs</code> 早已支持 <code>Worktodolist.exe --reminder</code> 隐藏实例。
+          注册脚本改写为拉起该入口：<strong>不再需要机器上装 Python</strong>，提醒文案与解析只有一个实现。
+          顺带加上 <code>--time</code> / <code>--delete</code> / <code>--dry-run</code>。
+        </p>
+      </div>
+    </div>
+    <p class="note" style="margin-top:14px">
+      <code>README.md</code> 的「每日提醒」段落与目录结构说明已同步改写；
+      <code>start-mac.sh</code> 里「<code>npm install --force</code>」的提示也改回普通安装。
+    </p>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">05 · 验证</div>
+  <div class="row-body">
+    <h2>该跑的全跑了</h2>
+    <table>
+      <thead>
+        <tr><th style="width:34%">门禁</th><th style="width:22%">结果</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>npm test</code></td><td class="num ok">41 文件 / 743 用例</td><td>全通过，与清理前同数</td></tr>
+        <tr><td><code>npm run test:ui</code></td><td class="num ok">全通过</td><td>CSS 令牌 + WCAG 对比度 + 排版 19/19 + Hook 门禁 43 文件</td></tr>
+        <tr><td><code>npm run test:nl</code></td><td class="num ok">44/44 · drift 一致</td><td>174 条触发词 / 12 条命令规则两份词表一致</td></tr>
+        <tr><td><code>npm run test:guard</code></td><td class="num ok">41 / 743</td><td>磁盘测试文件与实跑数量一致，无「假绿」</td></tr>
+        <tr><td><code>npm run build</code></td><td class="num ok">115 模块 / 374 ms</td><td><code>index-BtDcLjA8.js</code> 335.69 kB（gzip 115.97 kB）、<code>index-D4MGSDH5.css</code> 91.31 kB（gzip 15.69 kB）—— hash 与清理前一致</td></tr>
+        <tr><td><code>npm ci --dry-run</code></td><td class="num ok">通过</td><td>darwin/arm64 上不再 <code>EBADPLATFORM</code>，<code>--force</code> 可退休</td></tr>
+      </tbody>
+    </table>
+    <div class="callout">
+      <strong>产物 hash 未变是这次的关键证据</strong>：删掉的都是运行时走不到的代码，树摇（tree-shaking）本来就把它们排除了。
+      如果有任何一条被误删且仍被引用，构建会直接报「无法解析导入」，而不会是静默的体积变化。
+    </div>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">06 · 未动</div>
+  <div class="row-body">
+    <h2>看到了但没改的（建议留着下一轮再议）</h2>
+    <ul>
+      <li>
+        <strong><code>useTodoStore</code> 每次渲染返回新对象</strong>，40 多个字段全在同一个字面量里，
+        任一状态变化都会让所有消费者重渲染。真要治，得给整张返回值加 <code>useMemo</code> 并保证每个函数引用稳定 ——
+        这正好踩在「Hook 数量必须恒定」那条铁律旁边，收益在几百条任务规模下几乎为零，风险却不小。
+      </li>
+      <li>
+        <strong><code>App.jsx</code> 1120 行</strong>，其中 <code>LedgerPreview</code>（引导页，185 行）与
+        <code>GroupHead</code> 是内联组件。可抽成 <code>components/WelcomePage.jsx</code>，
+        但会牵动 <code>qa-hooks</code> 的文件清单与类名契约，属于「改动面大于收益」。
+      </li>
+      <li>
+        <strong><code>proposalToIntent</code> 的 <code>create</code> / <code>edit</code> 分支已无生产者</strong>
+        （对应的工厂这轮删了）。保留是因为它是 dispatch 的契约面，将来若对话页改走提议模型可直接复用；
+        已在文件头注释里写明现状。
+      </li>
+      <li>
+        <strong><code>scripts/add_bin_to_user_path.py</code>、<code>install_topydo_shim.py</code></strong>
+        全仓零引用（环境一次性脚本，共 3.7 KB）。没删是因为 topydo 协作属于项目长期价值，可能还要用。
+      </li>
+      <li>
+        <strong><code>index.css</code> 6871 行、约 20 个选择器出现两次</strong>。逐条看过，多为明暗分档或
+        媒体查询里的必要覆盖，合并会破坏令牌门禁的现有断言，不动。
+      </li>
+      <li>
+        <strong><code>CHANGELOG.md</code> 没加本次条目</strong>：它按发版节奏写，这次是纯维护、
+        无用户可见行为变化，等下次发版一并记。
+      </li>
+    </ul>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">07 · 复现</div>
+  <div class="row-body">
+    <h2>下次再想清一遍</h2>
+<pre># 构建与临时产物（都可重建，删完直接构建即可）
+rm -rf todolist-gui/src-tauri/target \
+       todolist-gui/.tmp .tmp \
+       todolist-gui/qa-artifacts todolist-gui/dist
+rm -f  todolist-gui/vite.config.js.timestamp-*.mjs
+find . -name .DS_Store -not -path "*/node_modules/*" -delete
+
+# 验证（必须在 todolist-gui 下）
+cd todolist-gui
+npm test &amp;&amp; npm run test:ui &amp;&amp; npm run test:nl &amp;&amp; npm run test:guard &amp;&amp; npm run build</pre>
+    <p class="muted" style="font-size:12px;margin-top:12px">
+      注意：<code>src-tauri/target/release/</code> 删掉后，macOS 打包要全量重编（数分钟）；
+      只想省空间又想快速再打包的话，可以只删 <code>target/debug</code>。
+    </p>
+  </div>
+</section>
+
+<footer>
+  Worktodolist · 2026-11-11 · 本次变更未改动产品行为，未触碰 todo.txt / done.txt / backup / 任何偏好存储
+</footer>
+
+</div>
+</main>
+</body>
+</html>

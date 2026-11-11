@@ -7,74 +7,16 @@
 //   create  新建：只有草稿字段（与对话页的"修改后新建"是同一个模型）
 //   edit    改已存在任务的字段（逐条 patch）
 //   batch   一次对多条做同一动作（op 见 todoTools/ops.js）
+// 目前只有 batch 由工具产出，所以本模块只留 makeBatchProposal；
+// create / edit 仍由 proposalToIntent 兜底，字段口径不变。
 //
 // 一条硬口径：**预览就是最终落盘内容**。两侧共用 todoTools/ops.js 与
 // todoParser.serializeTask，不各算一遍。
-import { applyPatch, serializeTask } from './todoParser.js';
+import { serializeTask } from './todoParser.js';
 import { applyOp, opLabel, previewLine } from './todoTools/ops.js';
 
 /** 弹窗里最多摊开多少条明细（其余折叠成"还有 N 条"）。 */
 export const PREVIEW_LIMIT = 40;
-
-function draftLine(fields, today) {
-  return serializeTask({
-    kind: 'task',
-    raw: '',
-    title: String(fields.title || '').trim(),
-    priority: fields.priority || null,
-    dueDate: fields.dueDate || null,
-    contexts: [...(fields.contexts || [])],
-    projects: [...(fields.projects || [])],
-    completed: false,
-    // 与 store.addTask 完全同构：新建任务自动补当天创建日期（对齐 topydo），
-    // 预览里就必须带上它，否则"预览"和"落盘"差一个日期字段。
-    createdAt: today || null,
-    thresholdDate: null,
-    starValue: null,
-    extraTags: [],
-  });
-}
-
-/**
- * 新建提议。
- * @param {{title:string,priority?:string,dueDate?:string,contexts?:string[],projects?:string[]}} fields
- */
-export function makeCreateProposal(fields, today) {
-  const after = draftLine(fields, today);
-  return {
-    kind: 'create',
-    items: [{ title: fields.title, fields: { ...fields } }],
-    preview: [{ title: fields.title, after }],
-    summary: '往 todo.txt 追加 1 行',
-    count: 1,
-  };
-}
-
-/**
- * 修改提议（逐条 patch）。
- * @param {Array<{task:object, patch:object}>} entries
- */
-export function makeEditProposal(entries) {
-  const items = [];
-  for (const e of entries || []) {
-    if (!e || !e.task || !e.patch) continue;
-    const after = serializeTask(applyPatch(e.task, e.patch));
-    items.push({
-      id: e.task.id,
-      title: e.task.title,
-      before: e.task.raw || serializeTask(e.task),
-      after,
-      patch: { ...e.patch },
-    });
-  }
-  return {
-    kind: 'edit',
-    items,
-    preview: items.map((i) => ({ title: i.title, before: i.before, after: i.after })),
-    summary: `修改 ${items.length} 条已存在任务`,
-    count: items.length,
-  };
-}
 
 /**
  * 批量提议（同一个操作作用在多条任务上）。
@@ -161,9 +103,3 @@ export function proposalToIntent(p) {
   return null;
 }
 
-/** 提议涉及的"落盘后文本"（供验收断言：未确认时应当与磁盘现状逐行一致）。 */
-export function proposalWrittenLines(p) {
-  if (!p) return [];
-  if (p.kind === 'create') return p.preview.map((i) => i.after);
-  return p.preview.map((i) => i.after).filter((x) => typeof x === 'string');
-}

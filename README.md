@@ -46,6 +46,7 @@ npm run build:app          # 只构建 exe（等价于 tauri build --no-bundle�
 
 - **列表页**：今天/全部视图、逾期置顶、搜索（`/`）、快录（`n`）、拖拽排序、点选式优先级/截止日、完成撤销（Ctrl+Z）、外部修改检测（与 topydo/编辑器双轨互通）。
 - **列表外观**：每个 `+项目` 在侧栏是一个带色的列表，颜色在设置页挑（8 色板）；没挑过的按名字自动取色，同名永远同色。颜色是偏好，只存本机，不写进 todo.txt。
+- **日历视图**：列表页可切成「按日期」看（顶栏开关 / 应用菜单 / 设置页三处入口）—— 42 格月网格、当日详情、无日期托盘；双击日期新建（预填 `due:`），拖任务改期或拖进托盘清日期，`← →` 移日、`PageUp / PageDown` 翻月、`Home` 回今天。已完成视图按完成日期锚定、只读。模式是本机偏好，同样不写进 todo.txt。
 - **子任务**：双击任务在编辑浮窗里添加；列表里缩进显示，父任务显示 `1/3` 进度。关系写在子任务那一行上（`parent:<id>`），不用缩进 —— 缩进在 topydo 和记事本里活不下来。
 - **重复**：`rec:+1w` / `rec:+1m` / `rec:mon,thu` 等，完成后自动生成下一次（以 `due` 为锚点推进，不是以今天推进，所以逾期完成不会让间隔越缩越短），撤销完成会连带撤掉下一次。下次到期写在 toast 里，列表行上一个 `↻` 标记。
 - **备注**：双击任务在编辑浮窗里写；存数据目录的 `notes.md`（每条是 `## <id>` 起头的一节），**不进 todo.txt** —— 它多行、长、带格式，塞进那一行会打破「一行一条」和所有依赖它的工具。文件头的说明原样保留，保存是「读·改·写」，不会覆盖你在外部编辑器里同时改的别的备注。有备注的行显示 `✎`。删任务不删备注；每日备份连 notes.md 一起拷（todo.txt / notes.md 各保留 30 份）。
@@ -67,7 +68,7 @@ npm run build:app          # 只构建 exe（等价于 tauri build --no-bundle�
 ├── build_todolist_tauri.cmd        启动器调用的构建入口（可见构建窗口）
 ├── todo.txt / done.txt             数据（唯一真源）
 ├── backup/                         每日自动备份（保留 30 份）
-├── scripts/                        工具脚本（每日提醒、提醒任务注册、环境辅助）
+├── scripts/                        工具脚本（计划任务注册、指南 HTML 生成、环境与一次性迁移）
 └── todolist-gui/
     ├── src/                        React 前端（src/lib 纯函数 / src/hooks 状态 / src/components 展示）
     └── src-tauri/                  Tauri 2 桌面壳（Rust）
@@ -94,15 +95,17 @@ npm run build:app          # 只构建 exe（等价于 tauri build --no-bundle�
 
 ## 每日提醒（可选）
 
-把「今天到期/逾期」的任务在每天 09:00 弹窗告知（应用没打开也会提醒）：
+把「今天到期/逾期」的任务在每天 09:00 弹系统通知（应用没打开也会提醒）。
+提醒逻辑在壳里（`src-tauri/src/reminder.rs`），计划任务只负责拉起一次
+`Worktodolist.exe --reminder` 的无界面实例，**不需要 Python 运行时**：
 
 ```
-python scripts/register_reminder_task.py
+python scripts/register_reminder_task.py            # 注册／覆盖，默认 09:00
+python scripts/register_reminder_task.py --time 8:30
+python scripts/register_reminder_task.py --delete   # 删除
 ```
 
-删除：`schtasks /Delete /TN "Worktodolist每日提醒" /F`
-
-> 应用**正在运行**时，提醒由壳自己弹（`src-tauri/src/reminder.rs`），不需要计划任务；
+> 应用**正在运行**时，提醒由壳自己弹，不需要计划任务；
 > 计划任务这条只为「应用没打开」的场景兜底。
 
 ## 开发

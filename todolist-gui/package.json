@@ -20,7 +20,8 @@
     "test:nl:verbose": "node scripts/qa-nl-coverage.mjs --verbose",
     "test:nl:drift": "node scripts/qa-nl-drift.mjs",
     "test:nl:heldout": "node scripts/qa-nl-heldout.mjs",
-    "test:ui": "node scripts/qa-css-check.mjs && node scripts/qa-contrast.mjs && node scripts/qa-hooks.mjs",
+    "test:ui": "node scripts/qa-css-check.mjs && node scripts/qa-contrast.mjs && node scripts/qa-typography.mjs && node scripts/qa-hooks.mjs",
+    "test:typography": "node scripts/qa-typography.mjs",
     "test:hooks": "node scripts/qa-hooks.mjs",
     "test:settings": "node scripts/qa-settings.mjs",
     "test:settings:shots": "node scripts/qa-settings.mjs --shots",
@@ -35,12 +36,14 @@
     "test:attack-chat3": "node --import ./scripts/register-qa-loader.mjs scripts/qa-chat-attack3.mjs"
   },
   "dependencies": {
-    "dayjs": "^1.11.13",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
+  "optionalDependencies": {
+    "@esbuild/win32-x64": "0.21.5"
+  },
   "devDependencies": {
-    "@esbuild/win32-x64": "0.21.5",
+    "dayjs": "^1.11.13",
     "@tauri-apps/cli": "^2",
     "@vitejs/plugin-react": "^4.3.4",
     "vite": "^5.4.11",
