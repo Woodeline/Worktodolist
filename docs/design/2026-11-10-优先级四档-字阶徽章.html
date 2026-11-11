@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>优先级四档 · 字阶徽章交付说明</title>
+<style>
+  :root {
+    --bg: #f4f4f5;
+    --surface: #ffffff;
+    --surface-2: #f8f8f9;
+    --line: #dcdce0;
+    --line-soft: #e8e8eb;
+    --text: #1c1e22;
+    --text-2: #4c515a;
+    --muted: #747a84;
+    --accent: #147d94;
+    --danger: #b4443c;
+    --mono: "Cascadia Mono", Consolas, "SF Mono", "DejaVu Sans Mono", monospace;
+    --ui: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.75 var(--ui); -webkit-font-smoothing: antialiased; }
+  main { max-width: 1120px; margin: 0 auto; padding: 48px 28px 96px; }
+  .sheet { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  header { padding: 38px 44px 30px; border-bottom: 1px solid var(--line); }
+  .kicker { font: 12px/1.5 var(--mono); color: var(--muted); }
+  h1 { margin: 10px 0 12px; font-size: 30px; line-height: 1.3; font-weight: 600; }
+  .lede { margin: 0; max-width: 780px; color: var(--text-2); font-size: 15px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 6px 30px; margin: 26px 0 0; padding: 0; }
+  .facts div { display: flex; gap: 8px; align-items: baseline; }
+  .facts dt { font: 11px/1.6 var(--mono); color: var(--muted); }
+  .facts dd { margin: 0; font: 12px/1.6 var(--mono); color: var(--text-2); font-variant-numeric: tabular-nums; }
+
+  section.row { display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 22px; padding: 28px 44px; border-bottom: 1px solid var(--line-soft); }
+  section.row:last-child { border-bottom: 0; }
+  .row-label { font: 11px/1.9 var(--mono); color: var(--muted); }
+  .row-body { min-width: 0; }
+  h2 { margin: 0 0 14px; font-size: 17px; font-weight: 600; }
+  h3 { margin: 22px 0 8px; font-size: 14px; font-weight: 600; }
+  p { margin: 0 0 12px; }
+  p:last-child { margin-bottom: 0; }
+  .note { color: var(--text-2); }
+  .muted { color: var(--muted); }
+  .tag { display: inline-block; font: 11px/1.6 var(--mono); border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; color: var(--text-2); background: var(--surface-2); }
+  code { font: 12px/1.6 var(--mono); background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 4px; padding: 1px 5px; color: var(--text-2); }
+  pre { margin: 12px 0 0; padding: 14px 16px; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 8px; overflow-x: auto; font: 12px/1.8 var(--mono); color: var(--text-2); }
+  ul { margin: 0 0 12px; padding-left: 20px; }
+  li { margin-bottom: 6px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th { font: 11px/1.6 var(--mono); color: var(--muted); font-weight: 400; }
+  td:first-child { width: 150px; font: 12px/1.7 var(--mono); color: var(--text-2); }
+  tr:last-child td { border-bottom: 0; }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  .tones { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 10px 0 18px; }
+  .tone { border: 1px solid var(--line); border-radius: 8px; padding: 16px 12px; text-align: center; background: var(--surface-2); }
+  .tone .k { font: 11px/1.6 var(--mono); color: var(--muted); }
+  .tone .v { margin: 10px auto 8px; width: 46px; height: 26px; display: flex; align-items: center; justify-content: center; font-size: 13px; border: 1px solid transparent; border-radius: 4px; }
+  .tone.t-none .v { border: 1px dashed #b4b4bc; }
+  .tone.t-low .v { color: #5d636d; font-weight: 400; }
+  .tone.t-mid .v { border-color: #767b83; color: #16181c; font-weight: 500; }
+  .tone.t-high .v { background: #16181c; color: #f9f9fa; font-weight: 600; }
+  .tone .d { font: 11px/1.6 var(--mono); color: var(--muted); }
+
+  .figures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 8px; }
+  figure { margin: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface-2); }
+  figure img { display: block; width: 100%; height: auto; }
+  figcaption { padding: 8px 12px; font: 11px/1.6 var(--mono); color: var(--muted); border-top: 1px solid var(--line); background: var(--surface); }
+  .callout { border-left: 3px solid var(--accent); background: var(--surface-2); padding: 12px 16px; border-radius: 0 6px 6px 0; color: var(--text-2); }
+  .warn { border-left-color: var(--danger); }
+  footer { padding: 20px 44px 26px; color: var(--muted); font: 11px/1.8 var(--mono); }
+  @media (max-width: 760px) {
+    main { padding: 20px 12px 56px; }
+    header, section.row, footer { padding-left: 20px; padding-right: 20px; }
+    section.row { grid-template-columns: 1fr; gap: 8px; }
+    .figures, .tones { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+</style>
+</head>
+<body>
+<main>
+<div class="sheet">
+
+<header>
+  <div class="kicker">Worktodolist · UI / 2026-11-10</div>
+  <h1>优先级四档 · 字阶徽章</h1>
+  <p class="lede">把「无 / 低 / 中 / 高」从只靠字重 400·500·600 的微弱差别，补成一眼能数出急缓的四档形状梯度：虚线空框 → 浅字 → 细描边 → 实心底反白。全程中性墨，不给优先级任何语义色。</p>
+  <dl class="facts">
+    <div><dt>方向</dt><dd>字阶徽章（用户裁决 B）</dd></div>
+    <div><dt>覆盖</dt><dd>全产品贯通 · 7 处渲染点</dd></div>
+    <div><dt>用例</dt><dd>39 文件 / 726 条</dd></div>
+    <div><dt>对比度</dt><dd>110 组 · 全过</dd></div>
+    <div><dt>状态</dt><dd>工作树内 · 未提交</dd></div>
+  </dl>
+</header>
+
+<section class="row">
+  <div class="row-label">01 / 诉求</div>
+  <div class="row-body">
+    <h2>为什么改</h2>
+    <p>11-07 定下「界面读高 / 中 / 低，字重三档，中性可读色」之后，四档实际只剩字重一个维度：13px 的中文单字在 400 与 600 之间的差别太轻，扫列表时读不出急缓；「无」又是一个不画任何东西的空槽。用户这轮的原话是「希望有区分急缓层次的效果」。</p>
+    <p>给了四个方向做对比（刻度徽记 / 字阶徽章 / 暖色强度 / 行首强度条），裁决为 <strong>字阶徽章</strong>、范围 <strong>全产品贯通</strong>。暖色强度被否掉的理由很直接：它最直观，但要放开「颜色只编码状态」，而「逾期」是本产品整行唯一的强色，多一套红会把这个语义稀释掉。</p>
+    <div class="callout">设计原则没变，只是把「视觉重量编码优先级」这条从<strong>一个维度</strong>扩成<strong>三个维度</strong>：形状（框 / 边 / 实心底）、字重、中性明度。颜色仍然只编码状态。</div>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">02 / 规格</div>
+  <div class="row-body">
+    <h2>四档梯度</h2>
+    <div class="tones">
+      <div class="tone t-none"><div class="k">无 · 空槽</div><div class="v"></div><div class="d">虚线空框</div></div>
+      <div class="tone t-low"><div class="k">低 · (C)</div><div class="v">低</div><div class="d">浅字 400</div></div>
+      <div class="tone t-mid"><div class="k">中 · (B)</div><div class="v">中</div><div class="d">细描边 500</div></div>
+      <div class="tone t-high"><div class="k">高 · (A)</div><div class="v">高</div><div class="d">实心底 600</div></div>
+    </div>
+    <table>
+      <tr><th>档位</th><th>文件原文</th><th>界面读数</th><th>形状</th><th>字重</th><th>前景 / 底</th><th>语义</th></tr>
+      <tr><td>无</td><td>不写括号字母</td><td>空（不画「中」）</td><td>1px 虚线空框</td><td>—</td><td><code>--prio-empty-line</code> / 透明</td><td>「没填」这个记号，不是第四种等级的值</td></tr>
+      <tr><td>低</td><td><code>(C)</code></td><td>低</td><td>无框无底</td><td>400</td><td><code>--muted</code> / 透明</td><td>最轻，但保持 13px、不压到看不见</td></tr>
+      <tr><td>中</td><td><code>(B)</code></td><td>中</td><td>1px 实线细描边</td><td>500</td><td><code>--text</code> / <code>--control-line</code></td><td>描边沿用 WCAG 1.4.11 的 3:1 契约线</td></tr>
+      <tr><td>高</td><td><code>(A)</code></td><td>高</td><td>实心底反白</td><td>600</td><td><code>--prio-strong-fg</code> / <code>--prio-strong-bg</code></td><td>四档里唯一的实心块，扫一眼压住整行</td></tr>
+      <tr><td>其它</td><td><code>(D)…(Z)</code></td><td>原字母</td><td>虚线框 + 浅字</td><td>400</td><td><code>--muted</code> / <code>--prio-empty-line</code></td><td>解析器允许任意大写字母，界面不假装它不存在</td></tr>
+    </table>
+    <p class="note" style="margin-top:12px">明暗两套令牌：浅色下「高」是深墨底白字，暗色下反过来提亮成浅底深字 —— 语义都是「最重的一档」。新增 3 个语义令牌（<code>--prio-strong-bg</code> / <code>--prio-strong-fg</code> / <code>--prio-empty-line</code>），都写在 CSS §1 令牌层，令牌层外没有裸色值。</p>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">03 / 结构</div>
+  <div class="row-body">
+    <h2>单一真相源，七处渲染点</h2>
+    <p>过去各组件各拼一套类名：任务行用 <code>priorityClass()</code>，对话快照自己拼 <code>'p-' + letter</code>，日历 chip 借同一函数却把「无」落成 <code>p-other</code>，样式指南的手写快照甚至把「无」画成「中」。档位一多，散拼必然漂移。</p>
+    <pre>lib/priority.js          priorityTone / priorityClass / priorityLabel / priorityTitle
+                          + PRIORITY_STEPS（无 → 低 → 中 → 高 的梯度顺序）
+components/PriorityMark.jsx   badge 形态（带中文） / mark 形态（纯形状，读屏跳过）
+                          统一产出 prio-none | prio-low | prio-mid | prio-high | prio-other</pre>
+    <table>
+      <tr><th>位置</th><th>形态</th><th>说明</th></tr>
+      <tr><td>任务行 <code>TaskRow</code></td><td>badge</td><td>四档徽章 + 悬停里的 <code>todo.txt 写作 (A)</code></td></tr>
+      <tr><td>对话快照 <code>ChatPanel</code></td><td>badge · 收窄</td><td>252px 窄列只收尺寸（22×18），形状不缩水</td></tr>
+      <tr><td>日历 chip / 无日期托盘</td><td>mark</td><td>8px 记号，与项目色点同排；不带中文（chip 里已有标题）</td></tr>
+      <tr><td>快速添加写入行 chip</td><td>mark</td><td>仍抄原文「高 (A)」，前面加档位记号 + 字重</td></tr>
+      <tr><td>编辑抽屉 / 提议弹窗</td><td>mark</td><td>四个按钮各带档位形状，选之前就能横向比较</td></tr>
+      <tr><td>任务行右键菜单</td><td>mark</td><td>对勾表「当前选中」，记号表「这一档有多急」，两者不混</td></tr>
+      <tr><td>样式指南 <code>chatflow</code></td><td>badge · 收窄</td><td>手写假快照改用真实组件，修掉「无画成中」</td></tr>
+    </table>
+    <p class="note" style="margin-top:12px">窄屏（&lt;480）把日历 chip 压成 8px 色块，形状装不下，降级为同一条中性明度梯度：<code>--prio-empty-line</code> 空圈 → <code>--muted</code> → <code>--control-line</code> → <code>--text</code>，四档齐全。状态色（今天 / 逾期 / 已完成）仍排在后面压过档位。</p>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">04 / 漂移</div>
+  <div class="row-body">
+    <h2>顺手修掉的旧账</h2>
+    <ul>
+      <li><strong>日历只有三档</strong>：<code>.cal-chip.p-A</code> / <code>.cal-chip.p-C</code> 有规则，<code>p-B</code> 与「无」都落回默认态；托盘同样只认两档。现在四档共用 <code>.prio-mark</code>。</li>
+      <li><strong>样式指南把「无」画成「中」</strong>：<code>styleguide.jsx</code> 的 <code>chatflow</code> 手写快照写死 <code>{t.priority || '中'}</code>，且只输出字母、不带档位类。这正是 11-07 明令禁止的回退。</li>
+      <li><strong>窄屏三档色块</strong>：<code>.cal-chip.p-A</code> / <code>.cal-chip.p-C</code> 之外全是默认灰，B 和「无」并成一档。</li>
+      <li><strong>CSS 注释自相矛盾</strong>：文件头写「视觉重量编码优先级」，优先级段却写「字重 + 明度三档」、下一段又改成「只靠字重」。现在统一成四档字阶徽章的口径。</li>
+      <li><strong>D~Z 无定义类</strong>：对话快照会拼出不存在的 <code>p-D</code>。现在由 <code>prio-other</code> 兜底。</li>
+    </ul>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">05 / 红线</div>
+  <div class="row-body">
+    <h2>没有动的东西</h2>
+    <ul>
+      <li><strong>颜色只编码状态</strong>：四档全部中性墨。逾期仍是整行唯一强色，accent 只表选中 / 今天到期 / 焦点。<code>qa-settings.mjs</code> 新增一条浏览器断言，实测高档实心底的 RGB 三通道差 ≤24，防止以后有人把「高」改回红色。</li>
+      <li><strong>界面读数仍是中文</strong>「高 / 中 / 低」；<code>(A)/(B)/(C)</code> 只在 title、写入行 chip、编辑抽屉选择器、右键菜单里供核对。</li>
+      <li><strong>「无」是空的</strong>：虚线框是「没填」的记号，不带任何字、<code>aria-hidden="true"</code>。固定 26×20px 让右侧日期列成一条直线。</li>
+      <li><strong>外观偏好不进 todo.txt</strong>：这次只改渲染与本机样式，数据格式零改动。</li>
+      <li><strong>菜单顺序不变</strong>：仍是「无 / 高 / 中 / 低」，只给每项加了记号，不重排用户肌肉记忆。</li>
+    </ul>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">06 / 验证</div>
+  <div class="row-body">
+    <h2>门禁结果</h2>
+    <table>
+      <tr><th>门禁</th><th>结果</th><th>本轮新增</th></tr>
+      <tr><td><code>npm test</code></td><td class="num">39 文件 / 726 用例</td><td><code>priority.test.js</code> 8 条、<code>PriorityMark.test.jsx</code> 6 条，TaskRow / CalendarView / QuickAdd 补 5 条</td></tr>
+      <tr><td><code>test:ui</code></td><td class="num">110 组对比度 · Hook 42 文件</td><td>+6 组：反白字 / 实心底 / 中档描边落 chip 底；+3 条虚线空框 REFERENCE</td></tr>
+      <tr><td><code>test:guard</code></td><td class="num">39 / 39</td><td>两份新测试文件确实跑到</td></tr>
+      <tr><td><code>test:nl</code></td><td class="num">44 / 44 · 174 词表</td><td>—</td></tr>
+      <tr><td><code>test:settings</code></td><td class="num">29 / 29</td><td>+7 条：四档同屏、中文读数、computed 形状、字重递进、中性墨、日历四档记号</td></tr>
+      <tr><td><code>test:tools</code></td><td class="num">74 / 74</td><td>—</td></tr>
+      <tr><td><code>test:responsive</code></td><td class="num">38 档 / 539 项</td><td>—</td></tr>
+      <tr><td><code>npm run build</code></td><td class="num">333.70 kB JS</td><td>—</td></tr>
+    </table>
+    <p class="note" style="margin-top:12px"><code>qa-css-check.mjs</code> 的 RUNTIME_VALUES 由 <code>p-A/p-B/p-C/p-other + priority-none/snapshot-prio-none</code> 换成五个 <code>prio-*</code> 值 —— 旧白名单之所以没拦住漂移，是因为它把「无」当成 <code>p-other</code> 放行了。</p>
+    <div class="callout warn"><strong>一次真实事故，已补测试</strong>：把 <code>// 注释</code> 写在 JSX 子元素位置，React 会当成文本节点渲染进任务行。页面不报错，单测全绿，但行里凭空多两行中文、把布局撑到触屏命中区失效 —— <code>test:responsive</code> 报了 6 项「复选框被遮挡」。改成 <code>{/* */}</code> 后恢复，并在 <code>TaskRow.test.jsx</code> 加了一条「元信息簇里没有裸文本」的断言。这是「组件级改动必须补渲染测试」这条规矩的又一次兑现。</div>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">07 / 界面</div>
+  <div class="row-body">
+    <h2>真实界面截图</h2>
+    <p class="note">由 <code>npm run test:settings:shots</code> 生成，已抹掉样式指南外壳，是产品界面的原样。</p>
+    <div class="figures">
+      <figure>
+        <img src="assets/2026-11-10/priority-tones-1280.png" alt="浅色主题下的四档优先级徽章">
+        <figcaption>浅色 · 列表：高＝实心底、中＝描边、低＝浅字、无＝虚线空框</figcaption>
+      </figure>
+      <figure>
+        <img src="assets/2026-11-10/priority-tones-dark-1280.png" alt="暗色主题下的四档优先级徽章">
+        <figcaption>暗色 · 列表：高档反转成浅底深字，四档仍清晰</figcaption>
+      </figure>
+      <figure>
+        <img src="assets/2026-11-10/calendar-1280.png" alt="日历视图里的紧凑档位记号">
+        <figcaption>日历：chip / 托盘用 8px 紧凑记号，日详情用完整徽章</figcaption>
+      </figure>
+      <figure>
+        <img src="assets/2026-11-10/calendar-390.png" alt="窄屏日历的四档明度色块">
+        <figcaption>390 窄屏：chip 降级为四档中性明度色块</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">08 / 边界</div>
+  <div class="row-body">
+    <h2>取舍与剩余空白</h2>
+    <ul>
+      <li><strong>「高」的实心块确实抢眼</strong>：这是 B 方案已知的代价，用户接受。它用中性墨而不是红色，所以不会和逾期红抢语义。</li>
+      <li><strong>紧凑形态不带中文</strong>：日历 chip 只有 11px、还要放项目色点和标题，塞中文会糊。形状语言与完整徽章共用同一组档位类，不另立一套。</li>
+      <li><strong>写入行仍是原文</strong>：快速添加 chip 保持 <code>高 (A)</code>，只在前面加记号 —— 那是展示 todo.txt 真实内容的地方，不做界面释义替换。</li>
+      <li><strong>右键菜单 / 抽屉选择器的点击链路仍未自动化</strong>：项目没有 jsdom / testing-library，菜单展开、点击改优先级这类 DOM 事件链路仍靠手工演示。渲染层与档位映射已有断言。</li>
+      <li><strong>浏览器门禁仍不入 CI</strong>：runner 需预装 Edge / Chrome，与 11-10 日历交付同一条结论。</li>
+      <li><strong>未提交、未发版</strong>：连同 11-07 UI 重做、11-08 日历、11-10 日历补齐与本次改动，全部仍在工作树里；CHANGELOG 最新仍是 v1.3.0。</li>
+    </ul>
+  </div>
+</section>
+
+<footer>Worktodolist · 2026-11-10 · 优先级四档字阶徽章 · docs/design/2026-11-10-优先级四档-字阶徽章.html</footer>
+
+</div>
+</main>
+</body>
+</html>

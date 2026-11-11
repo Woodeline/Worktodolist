@@ -101,7 +101,7 @@ export default function BulkPrioTool({ snapshot, propose }) {
     <>
       <section className="tool-sec">
         <h3 className="tool-sec-title">
-          <Icon name="filter" size={15} /> 筛选
+          <Icon name="filter" size={16} /> 筛选
         </h3>
         <div className="tool-fields">
           <label className="tool-field">

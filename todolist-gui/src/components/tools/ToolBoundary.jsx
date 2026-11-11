@@ -47,7 +47,7 @@ export default class ToolBoundary extends Component {
         <div className="tool-crash" role="alert">
           <div className="tool-crash-main">
             <span className="tool-crash-icon">
-              <Icon name="alert-triangle" size={18} />
+              <Icon name="alert-triangle" size={16} />
             </span>
             <div>
               <p className="tool-crash-title">这个工具刚刚出错了</p>

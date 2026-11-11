@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>日历视图 · 补齐与交付说明</title>
+<style>
+  :root {
+    --bg: #f4f4f5;
+    --surface: #ffffff;
+    --surface-2: #f8f8f9;
+    --line: #dcdce0;
+    --line-soft: #e8e8eb;
+    --text: #1c1e22;
+    --text-2: #4c515a;
+    --muted: #747a84;
+    --accent: #147d94;
+    --danger: #b4443c;
+    --mono: "Cascadia Mono", Consolas, "SF Mono", "DejaVu Sans Mono", monospace;
+    --ui: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.75 var(--ui); -webkit-font-smoothing: antialiased; }
+  main { max-width: 1120px; margin: 0 auto; padding: 48px 28px 96px; }
+  .sheet { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  header { padding: 38px 44px 30px; border-bottom: 1px solid var(--line); }
+  .kicker { font: 12px/1.5 var(--mono); color: var(--muted); }
+  h1 { margin: 10px 0 12px; font-size: 30px; line-height: 1.3; font-weight: 600; }
+  .lede { margin: 0; max-width: 780px; color: var(--text-2); font-size: 15px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 6px 30px; margin: 26px 0 0; padding: 0; }
+  .facts div { display: flex; gap: 8px; align-items: baseline; }
+  .facts dt { font: 11px/1.6 var(--mono); color: var(--muted); }
+  .facts dd { margin: 0; font: 12px/1.6 var(--mono); color: var(--text-2); font-variant-numeric: tabular-nums; }
+
+  section.row { display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 22px; padding: 28px 44px; border-bottom: 1px solid var(--line-soft); }
+  section.row:last-child { border-bottom: 0; }
+  .row-label { font: 11px/1.9 var(--mono); color: var(--muted); }
+  .row-body { min-width: 0; }
+  h2 { margin: 0 0 14px; font-size: 17px; font-weight: 600; }
+  h3 { margin: 22px 0 8px; font-size: 14px; font-weight: 600; }
+  p { margin: 0 0 12px; }
+  p:last-child { margin-bottom: 0; }
+  .note { color: var(--text-2); }
+  .muted { color: var(--muted); }
+  .tag { display: inline-block; font: 11px/1.6 var(--mono); border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; color: var(--text-2); background: var(--surface-2); }
+  code { font: 12px/1.6 var(--mono); background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 4px; padding: 1px 5px; color: var(--text-2); }
+  pre { margin: 12px 0 0; padding: 14px 16px; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 8px; overflow-x: auto; font: 12px/1.8 var(--mono); color: var(--text-2); }
+  ul { margin: 0 0 12px; padding-left: 20px; }
+  li { margin-bottom: 6px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th { font: 11px/1.6 var(--mono); color: var(--muted); font-weight: 400; }
+  td:first-child { width: 150px; font: 12px/1.7 var(--mono); color: var(--text-2); }
+  tr:last-child td { border-bottom: 0; }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  .figures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 8px; }
+  figure { margin: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface-2); }
+  figure img { display: block; width: 100%; height: auto; }
+  figcaption { padding: 8px 12px; font: 11px/1.6 var(--mono); color: var(--muted); border-top: 1px solid var(--line); background: var(--surface); }
+  .callout { border-left: 3px solid var(--accent); background: var(--surface-2); padding: 12px 16px; border-radius: 0 6px 6px 0; color: var(--text-2); }
+  .warn { border-left-color: var(--danger); }
+  footer { padding: 20px 44px 26px; color: var(--muted); font: 11px/1.8 var(--mono); }
+  @media (max-width: 760px) {
+    main { padding: 20px 12px 56px; }
+    header, section.row, footer { padding-left: 20px; padding-right: 20px; }
+    section.row { grid-template-columns: 1fr; gap: 8px; }
+    .figures { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+<div class="sheet">
+
+<header>
+  <div class="kicker">Worktodolist / 设计交付 / 2026-11-10</div>
+  <h1>日历视图 · 补齐与交付说明</h1>
+  <p class="lede">11-08 落地的「日历」是清单的第二种显示模式，核心逻辑与接线当时已经完整，但入口、门禁、测试与文档都还缺一截。本轮把这些补齐，不动已有的设计取舍。数据面零改动：<code>todo.txt</code> / <code>done.txt</code> / <code>notes.md</code> 的格式一个字节没动。</p>
+  <dl class="facts">
+    <div><dt>状态</dt><dd>未提交 · 未发版</dd></div>
+    <div><dt>基线</dt><dd>v1.3.0 + 11-07 UI 重做</dd></div>
+    <div><dt>用例</dt><dd>37 文件 / 708 条</dd></div>
+    <div><dt>门禁</dt><dd>22 + 74 + 38 档，全绿</dd></div>
+  </dl>
+</header>
+
+<section class="row">
+  <div class="row-label">01 / 定位</div>
+  <div class="row-body">
+    <h2>不是第四个页签，是同一个列表的另一种排布</h2>
+    <p>页签（对话 / 列表 / 工具）管「做什么」，侧栏视图管「看哪一批」，显示模式管「怎么排」。日历与列表共用侧栏过滤、搜索、store 动作和快速添加，只是把按行排换成按日期摊开 —— 所以它挂在列表页里，不占页签、不另造数据源。</p>
+    <div class="callout">
+      <strong>红线仍然成立</strong>：模式是本机外观偏好，走 <code>configStore</code> 的一个独立键 <code>worktodolist.list-mode.v1</code>；不写进 todo.txt、不进数据目录、不进 git。换台机器打开同一份文件，各看各的。
+    </div>
+    <h3>投影层的三条既有语义（本轮沿用，未改）</h3>
+    <ul>
+      <li><strong>选中日是唯一真相</strong>，显示月份恒由它派生；翻月带着选中日一起走，「选中日不在显示月内」从结构上不可能发生。月网格固定 42 格，翻月时视线不跳。</li>
+      <li><strong>「今天」视图在日历里放宽为全部未完成</strong>：列表里的 today 是紧急度过滤（<code>due &lt;= 今天</code>），但日历天生是提前看未来的镜头，照搬会把未来全清空。<code>t:</code> 阈值同理不参与。</li>
+      <li><strong>「已完成」按完成日期锚定、整体只读</strong>：不能拖、不能建、没有托盘，看的是「每天做完了什么」。</li>
+    </ul>
+    <p class="note">拖任务 chip 改期刻意不借用 <code>store.dragId</code> —— 那是列表手动排序的信号，借了会被 <code>TaskRow</code> 的落点逻辑误认成重排。日历的拖拽状态留在组件内。</p>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">02 / 契约</div>
+  <div class="row-body">
+    <h2>交互契约</h2>
+    <table>
+      <tr><th>入口</th><th>行为</th></tr>
+      <tr><td>顶栏分段开关</td><td>列表 / 日历两档，<code>aria-pressed</code> 标当前档；三处入口读同一份配置，切一处另两处跟着变。</td></tr>
+      <tr><td>应用菜单</td><td>「显示模式」分组，两项都会先切回列表页再改模式。</td></tr>
+      <tr><td>设置页</td><td><span class="tag">本轮新增</span> 「显示模式」一节 + 「日历」快捷键速查组；页头仍注明快捷键只读、偏好存本机。</td></tr>
+      <tr><td>鼠标</td><td>单击日期 = 选中，日详情跟着走；双击空白日期 / 点「新建」/ <code>Enter</code> = 在这天新建（预填 <code>due:</code>，仍走原 <code>addTask</code>）；拖 chip 到别的日期 = 改期，拖进「无日期」托盘 = 清日期。</td></tr>
+      <tr><td>键盘（焦点在格子上）</td><td><code>← →</code> ±1 天、<code>↑ ↓</code> ±1 周（在日详情里改为上下移行）、<code>PageUp / PageDown</code> 翻月、<code>Home</code> 回今天、<code>空格</code> 选中、<code>N / Enter</code> 在这天新建。</td></tr>
+      <tr><td>只读态</td><td>已完成视图显示「只读」，收掉托盘、新建按钮与所有可拖条目；<code>Enter</code> 被吃掉但不产生写入。</td></tr>
+    </table>
+    <p class="note" style="margin-top:12px">chip 与 <code>+N</code> 是格子里的鼠标摘要，不进 Tab 序列 —— 日期格子本身可聚焦，选中后日详情里的 <code>TaskRow</code> 可聚焦，键盘用户在那儿完成编辑 / 勾选 / 删除，路径不缺。<strong>托盘例外</strong>：无日期任务不在日详情里，本轮给它补了键盘入口（见 04）。</p>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">03 / 基线</div>
+  <div class="row-body">
+    <h2>动手前先确认已有的没坏</h2>
+    <p>11-08 那批改动没有留下验证记录，所以先跑了一遍全套：<span class="num">36 文件 / 694 用例</span>、静态门禁（CSS 类名 / 96 组对比度 / Hook 规则）、三个浏览器门禁（设置 15、工具 74、响应式 38 档 539 项）全部通过。也就是说本轮是在一条绿基线上补缺口，不是在救火。</p>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">04 / 补齐</div>
+  <div class="row-body">
+    <h2>本轮补了什么</h2>
+    <table>
+      <tr><th>缺口</th><th>处理</th><th>文件</th></tr>
+      <tr><td>设置页入口</td><td>新增「显示模式」分组（复用顶栏同一套 <code>mode-switch</code> 控件与 <code>configStore</code>），速查表新增「日历」六条键；页头说明同步为「快捷键只读 · 外观与显示偏好存本机」。</td><td><code>SettingsPage.jsx</code></td></tr>
+      <tr><td>门禁零覆盖</td><td><code>qa-settings</code> 分组清单由四节改六节，新增 7 条断言：真实访问 <code>?view=calendar</code> / <code>calendar-done</code>，验 42 格、选中态、月导航 / 日详情 / 托盘、模式开关按下态、只读态收掉编辑入口、无横向溢出。</td><td><code>qa-settings.mjs</code></td></tr>
+      <tr><td>无效菜单项</td><td>日历恒按日期分组、组内 <code>compareAuto</code>，排序模式对它没有作用对象 —— 日历下收起主区右键里的两项排序，列表里照旧。</td><td><code>App.jsx</code></td></tr>
+      <tr><td>键盘可达性</td><td>托盘条目补 <code>role="button"</code> / <code>tabIndex</code> / <code>aria-label</code>，<code>Enter</code> 与空格等价于鼠标单击打开编辑；同步补一条渲染断言。</td><td><code>CalendarView.jsx</code><br><code>CalendarView.test.jsx</code></td></tr>
+      <tr><td>交互层零单测</td><td>把键位映射与拖放结果抽成两个纯函数 <code>calendarKeyAction</code> / <code>dropReschedule</code>，组件只负责分派；不必引入 DOM 依赖就能钉死「←→ 跨月进位」「同日松手零写入」这类语义。新增 6 条用例。</td><td><code>lib/calendar.js</code><br><code>lib/calendar.test.js</code></td></tr>
+      <tr><td>模式存储无测试</td><td>导出 <code>normalizeListMode</code> / <code>saveListMode</code>，补 7 条契约测试：值域只有两个、脏值静默回落、落盘后读点立刻跟着变、localStorage 不可用时不抛异常。</td><td><code>lib/listMode.js</code><br><code>lib/listMode.test.js</code></td></tr>
+      <tr><td>类名 / 色彩门禁</td><td><code>qa-css-check</code> 的运行时清单补齐 <code>overdue</code> / <code>now</code>（此前删掉逾期 chip 样式门禁不会红）；<code>qa-contrast</code> 补 4 组日历专属搭配 + 2 条装饰描边参考值，共 104 组。</td><td><code>qa-css-check.mjs</code><br><code>qa-contrast.mjs</code></td></tr>
+      <tr><td>文档与截图</td><td>本说明页 + 4 张抹掉样式指南外壳的真实界面截图；README 功能清单补一条。</td><td><code>docs/design/…</code><br><code>README.md</code></td></tr>
+    </table>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">05 / 取舍</div>
+  <div class="row-body">
+    <h2>刻意没动的地方</h2>
+    <p>审查里还列出几处「看起来不一致」，但它们是 11-08 写在注释里的设计取舍，改了反而会破坏口径，因此只在这里写清楚，不在这轮动：</p>
+    <ul>
+      <li><strong>同一视图两种「N 项」</strong>：列表页眉数的是 <code>displayOrder</code>，日历数的是 <code>projection.tasks</code>；today 视图在日历里被放宽，两个数字天然不同。日历内部另有「本月到期 / 全库逾期 / 当日 N 项」三个读数，各自服务不同的问题，不合并。</li>
+      <li><strong>逾期是全库口径</strong>：翻到任何一个月都该看到欠账总数，欠账不会因为翻月消失。今日概览另有一套取数，两者并存。</li>
+      <li><strong>Esc 不回今天</strong>：它只清搜索 / 取消选中，日历选中日是导航状态不是临时选中，按 Esc 把人弹回本月会很突兀。</li>
+      <li><strong>应用菜单的排序分组仍在</strong>：那是全局排序设置，改了会带回列表；主区右键那两项才是「就在日历里点、却没有任何作用」。</li>
+      <li><strong>浏览器门禁仍不在 CI</strong>：CI 只跑 <code>test:guard / test:nl / test:ui</code>。本轮补的日历断言进了 <code>test:settings</code>，本地与 macOS 上可复现（见 07）；要不要把浏览器门禁接进 CI 是另一件事，涉及 runner 上装 Edge/Chrome，另行决定。</li>
+    </ul>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">06 / 验证</div>
+  <div class="row-body">
+    <h2>全绿</h2>
+    <table>
+      <tr><th>门禁</th><th>结果</th></tr>
+      <tr><td><code>npm test</code></td><td><span class="num">37 文件 / 708 用例</span> 全过（新增 14 条：模式存储 7、键位与改期 6、托盘键盘 1）</td></tr>
+      <tr><td><code>test:ui</code></td><td>类名契约无缺失 / 运行时拼接值无缺失 / 无裸色值与裸字号；对比度 <span class="num">104 组 0 失败</span>；Hook 规则 41 文件通过</td></tr>
+      <tr><td><code>test:guard</code></td><td>磁盘 37 个测试文件全部真的跑到</td></tr>
+      <tr><td><code>test:nl</code></td><td>44/44 + 174 触发词词表一致</td></tr>
+      <tr><td><code>test:settings</code></td><td><span class="num">22/22</span>（原 15，新增 7 条日历 / 模式断言）</td></tr>
+      <tr><td><code>test:tools</code></td><td>74/74</td></tr>
+      <tr><td><code>test:responsive</code></td><td>38 档 / 539 项，失败 0（含 8 个日历档位）</td></tr>
+      <tr><td><code>npm run build</code></td><td>通过，<span class="num">333.14 kB</span> JS（gzip 114.92 kB）</td></tr>
+    </table>
+    <h3>macOS 上复现浏览器门禁</h3>
+    <pre>cd todolist-gui
+npm run dev                         # Vite 监听 [::1]:15181
+env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy \
+  EDGE=/tmp/unslop/chrome-qa SG_BASE=http://localhost:15181 \
+  npm run test:settings            # 同理 test:tools / test:responsive
+npm run test:settings:shots        # 附送 4 张干净界面截图</pre>
+    <p class="note" style="margin-top:10px"><code>/tmp/unslop/chrome-qa</code> 是给本机 Chrome 补 <code>--no-sandbox</code> 的 sh 包装；截 localhost 必须去掉代理变量，否则请求会被代理吃掉。</p>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">07 / 界面</div>
+  <div class="row-body">
+    <h2>补齐后的真实界面</h2>
+    <p class="note">全部由 <code>styleguide.html?view=…</code> 渲染真实组件 + 演示数据，截图前抹掉 <code>.sg-nav</code>、清零 <code>.sg-stage</code> padding；日期相对真实今天生成。</p>
+    <div class="figures">
+      <figure><img src="assets/2026-11-10/calendar-1280.png" alt="日历视图 1280 宽"><figcaption>01 / 日历 · 1280 —— 42 格月网格、日详情、无日期托盘</figcaption></figure>
+      <figure><img src="assets/2026-11-10/settings-1280.png" alt="设置页 1280 宽"><figcaption>02 / 设置 · 1280 —— 新增「显示模式」与「日历」速查组</figcaption></figure>
+      <figure><img src="assets/2026-11-10/calendar-dark-1280.png" alt="暗色日历视图"><figcaption>03 / 日历 · 暗色 —— 令牌层之外无硬编码色值</figcaption></figure>
+      <figure><img src="assets/2026-11-10/calendar-390.png" alt="窄屏日历视图"><figcaption>04 / 日历 · 390 —— 日详情转底部，chip 降级成色点</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">08 / 边界</div>
+  <div class="row-body">
+    <div class="callout warn">
+      <strong>未提交、未发版</strong>：本轮连同 11-07 的 UI 全量重做、11-08 的日历改动都还在工作树里（<code>M</code> / <code>??</code>），没有 commit、没有 tag、没有 Release。CHANGELOG 最新条目仍是 v1.3.0；等决定发版时再补版本条目，并同步 <code>package.json</code> / <code>tauri.conf.json</code> / <code>Cargo.toml</code> 三处版本号。
+    </div>
+    <p style="margin-top:12px">另有一处可以继续做的空白：<code>CalendarStage</code> 的拖放改期、双击新建目前只有手工演示，没有浏览器级自动化交互断言；本轮把键位与改期语义抽成纯函数并单测覆盖，但 DOM 事件链路仍未自动化。若以后要加，沿用 <code>qa-settings.mjs</code> 的 CDP 骨架即可，不必引入新依赖。</p>
+  </div>
+</section>
+
+<footer>Worktodolist · 纯文本是唯一数据源 · 外观偏好不进 todo.txt · 2026-11-10</footer>
+</div>
+</main>
+</body>
+</html>

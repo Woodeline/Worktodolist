@@ -25,6 +25,11 @@ const FALLBACK = {
   '--text-2': '#444444',
   '--font-ui': 'sans-serif',
   '--font-mono': 'monospace',
+  // 11-10 起画布字号 / 字重也读令牌，无 DOM 时按同一套值兜底。
+  '--fs-2xs': '11px',
+  '--fs-xs': '12px',
+  '--fs-md': '14px',
+  '--fw-title': '600',
 };
 
 export function token(name) {
@@ -52,6 +57,12 @@ export function palette() {
     label: token('--text-2'),
     fontUi: token('--font-ui'),
     fontMono: token('--font-mono'),
+    // 画布刻度不再硬编码 11 / 12 / 15px：改 --fs-* 时图表必须跟着变。
+    // 字重也走语义令牌，不再用等价于 700 的 'bold'。
+    fs2xs: parseFloat(token('--fs-2xs')) || 11,
+    fsXs: parseFloat(token('--fs-xs')) || 12,
+    fsMd: parseFloat(token('--fs-md')) || 14,
+    fwTitle: parseInt(token('--fw-title'), 10) || 600,
   };
 }
 
@@ -82,8 +93,12 @@ export function seriesStyle(index) {
    画布基础设施
    ------------------------------------------------------------------------- */
 
-const fnt = (pal, size, weight, mono) =>
-  `${weight ? `${weight} ` : ''}${size}px ${mono ? pal.fontMono : pal.fontUi}`;
+/** 字体串只从 palette 取值：fsKey / fwKey 是 palette 里的键名，不是像素数字。
+    这样「哪一处用哪一档字号」在调用点读得出来，也不会再出现裸 px。 */
+const fnt = (pal, fsKey = 'fsXs', fwKey = '', mono = false) => {
+  const weight = fwKey ? pal[fwKey] : '';
+  return `${weight ? `${weight} ` : ''}${pal[fsKey]}px ${mono ? pal.fontMono : pal.fontUi}`;
+};
 
 /**
  * 按设备像素比设置画布尺寸。
@@ -123,7 +138,7 @@ export function frame(ctx, m, xmin, xmax, ymin, ymax, fmtX, fmtY, xTitle, yTitle
   const px = (x) => m.l + ((x - xmin) / (xmax - xmin)) * (w - m.l - m.r);
   const py = (y) => h - m.b - ((y - ymin) / (ymax - ymin)) * (h - m.t - m.b);
 
-  ctx.font = fnt(pal, 11, '', true);
+  ctx.font = fnt(pal, 'fs2xs', '', true);
   ctx.lineWidth = 1;
   const xt = xticks || niceTicks(Math.min(xmin, xmax), Math.max(xmin, xmax), 7);
   const yt = yticks || niceTicks(Math.min(ymin, ymax), Math.max(ymin, ymax), 6);
@@ -165,7 +180,7 @@ export function frame(ctx, m, xmin, xmax, ymin, ymax, fmtX, fmtY, xTitle, yTitle
   ctx.stroke();
 
   ctx.fillStyle = pal.axis;
-  ctx.font = fnt(pal, 12);
+  ctx.font = fnt(pal, 'fsXs');
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(xTitle, (m.l + w - m.r) / 2, h - 4);
@@ -259,7 +274,7 @@ export function drawLifeChart(cv, R, pal = palette()) {
     ctx.lineTo(w - m.r, py(thr));
   });
   ctx.fillStyle = pal.thrInk;
-  ctx.font = fnt(pal, 11, '', true);
+  ctx.font = fnt(pal, 'fs2xs', '', true);
   ctx.textAlign = 'right';
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(`50% 阈值 = ${+thr.toPrecision(4)}`, w - m.r - 4, py(thr) - 6);
@@ -292,7 +307,7 @@ export function drawLifeChart(cv, R, pal = palette()) {
   });
   diamond(ctx, X50, Y50, 4.5, pal.panel, pal.thrInk);
   ctx.fillStyle = pal.thrInk;
-  ctx.font = fnt(pal, 12, 'bold', true);
+  ctx.font = fnt(pal, 'fsXs', 'fwTitle', true);
   ctx.textAlign = X50 > w - 140 ? 'right' : 'left';
   ctx.fillText(`t₅₀ = ${fmtTick(t50)} h`, X50 + (X50 > w - 140 ? -10 : 10), Y50 + 22);
 }
@@ -424,7 +439,7 @@ export function drawRtiChart(cv, R, pal = palette()) {
       ctx.lineTo(w - m.r, py(yv));
     });
     ctx.fillStyle = pal.axis;
-    ctx.font = fnt(pal, 11, '', true);
+    ctx.font = fnt(pal, 'fs2xs', '', true);
     ctx.textAlign = 'right';
     ctx.textBaseline = 'alphabetic';
     ctx.fillText(`${L.toLocaleString('en-US')} h`, w - m.r - 4, py(yv) - 5);
@@ -441,9 +456,9 @@ export function drawRtiChart(cv, R, pal = palette()) {
       ctx.textAlign = right ? 'left' : 'right';
       const lx = X + (right ? 10 : -10);
       ctx.fillStyle = pal.thrInk;
-      ctx.font = fnt(pal, 12, 'bold', true);
+      ctx.font = fnt(pal, 'fsXs', 'fwTitle', true);
       ctx.fillText(`RTI = ${mk.rti.toFixed(1)} °C`, lx, Y + 20);
-      ctx.font = fnt(pal, 11, '', true);
+      ctx.font = fnt(pal, 'fs2xs', '', true);
       ctx.fillText(
         mk.ci ? `95%CI [${mk.ci.lo.toFixed(1)}, ${mk.ci.hi.toFixed(1)}]` : '95%CI 不可得',
         lx,
@@ -638,7 +653,7 @@ export function drawCmpChart(cv, opts) {
     ctx.lineTo(w - m.r, py(yRef));
   });
   ctx.fillStyle = pal.axis;
-  ctx.font = fnt(pal, 11, '', true);
+  ctx.font = fnt(pal, 'fs2xs', '', true);
   ctx.textAlign = 'right';
   ctx.textBaseline = 'alphabetic';
   ctx.fillText('50,000 h', w - m.r - 4, py(yRef) - 5);
@@ -758,16 +773,6 @@ export function cmpNearest(chart, mx, my) {
     }
   });
   return best;
-}
-
-/** 右键命中：固定点附近 / 两条辅助线上 —— 只有点在附近才算"取消固定"，避免误触 */
-export function cmpPinHit(chart, mx, my) {
-  if (!chart.pinned) return false;
-  const { X, Y } = cmpGeomAt(chart, chart.pinned);
-  if (Math.hypot(mx - X, my - Y) < 30) return true;
-  if (Math.abs(mx - X) < 8 && my >= Y && my <= chart.h - chart.m.b) return true;
-  if (Math.abs(my - Y) < 8 && mx >= chart.m.l && mx <= X) return true;
-  return false;
 }
 
 function drawHover(ctx, chart) {
@@ -897,14 +902,14 @@ function drawPinned(ctx, chart) {
   // 温度标注统一贴在 X 轴上方。字号比图里其它小字大一档，让读数成为主角。
   // 相邻标注若干涉，则把**右侧**那条整行抬高一层（还挤就继续往上找空行）——
   // 不再横向硬推：硬推会让标注中心偏离它所指的那条竖线，读数跟着指错。
-  const labelFont = 15;
+  const labelFont = pal.fsMd;
   const rowH = labelFont + 6;
   const gap = 8;
   const labels = [
     { col, Xc: X, Tc: pv.T },
     ...hits.map((hh) => ({ col: hh.col, Xc: hh.Xc, Tc: hh.Tc })),
   ].map((l) => ({ ...l, text: `T = ${fmtTempTick(l.Tc)} °C` }));
-  ctx.font = fnt(pal, labelFont, 'bold', true);
+  ctx.font = fnt(pal, 'fsMd', 'fwTitle', true);
   labels.forEach((l) => {
     l.tw = ctx.measureText(l.text).width;
   });

@@ -225,6 +225,10 @@ async function main() {
       }),
       hasInput: !!q('.settings input, .settings textarea, .settings input[type=checkbox]'),
       footButtons: document.querySelectorAll('.settings-foot button').length,
+      // 显示模式是本机偏好，设置页也要有入口；日历键必须进速查表。
+      modeBtns: document.querySelectorAll('.settings-group .mode-switch .mode-btn').length,
+      modePressed: Array.from(document.querySelectorAll('.settings-group .mode-switch .mode-btn')).map((b) => b.getAttribute('aria-pressed')),
+      keyText: Array.from(document.querySelectorAll('.settings-row')).map((r) => r.textContent).join(' '),
       oldNet: !!q('#set-net-hosts') || !!q('#set-net-timeout') || !!q('#set-net-maxbytes'),
       gearOn: !!q('.tabs .tab.is-on'),
       overflow: document.documentElement.scrollWidth - window.innerWidth,
@@ -232,11 +236,16 @@ async function main() {
   })()`);
   check('设置页结构完整（页头 / 返回 / 分组 / 底栏）', shape.head && shape.back && shape.foot, JSON.stringify(shape));
   check('标题为「设置」', shape.title === '设置', `title=${shape.title}`);
+  // 2026-11-10 补齐日历后设置页共六节：两项本机偏好 + 四组快捷键速查。
+  // 仍然是严格顺序比较：少一节、多一节、换顺序都会红。
+  const WANT_GROUPS = ['列表外观', '显示模式', '全局', '列表页', '日历', '对话页'];
   check(
-    '分组为「全局 / 列表页 / 对话页」',
-    JSON.stringify(shape.groupTitles) === JSON.stringify(['全局', '列表页', '对话页']),
+    '分组为「列表外观 / 显示模式 / 全局 / 列表页 / 日历 / 对话页」',
+    JSON.stringify(shape.groupTitles) === JSON.stringify(WANT_GROUPS),
     JSON.stringify(shape.groupTitles)
   );
+  check('设置页有两个显示模式按钮，且恰好一个处于按下态', shape.modeBtns === 2 && shape.modePressed.filter((v) => v === 'true').length === 1, JSON.stringify(shape.modePressed));
+  check('速查表列出日历键（翻月 / 回今天 / 在这天新建）', ['PageUp', 'PageDown', 'Home', '在选中那天新建'].every((k) => shape.keyText.includes(k)), shape.keyText.slice(0, 160));
   check('每组至少一条、且每条快捷键都有键名与说明', shape.rows >= 12 && shape.rowsComplete, `rows=${shape.rows} complete=${shape.rowsComplete}`);
   check('页头注明本页只读', shape.note.includes('只读'), shape.note);
   check('没有任何输入控件（只读页，不需要保存）', shape.hasInput === false);
@@ -259,7 +268,190 @@ async function main() {
   check('对话页已移除诊断状态条（.chat-status 不存在）', chatStatus.hasStatusBar === false);
   check('页面不再出现「本地规则引擎 / 无网络请求」提示词', chatStatus.mentionsEngine === false);
 
-  // ── 3. 窄屏几何：设置页在 390 宽下不横向溢出 ────────────────────────────
+  // ── 3. 日历视图：模式开关真的挂上了，网格 / 只读态真的渲染出来 ─────────
+  // 设置页门禁过去只访问 settings / chat，日历作为「列表的第二种模式」
+  // 完全不在视野里 —— 顶栏开关写错、网格塌成 0 格都不会红。这里补上。
+  await goto('calendar', 1280, 820);
+  const cal = await evalJs(`(() => {
+    const q = (s) => document.querySelector(s);
+    const modes = Array.from(document.querySelectorAll('.mode-switch .mode-btn'));
+    return {
+      cells: document.querySelectorAll('.cal-grid .cal-cell').length,
+      selected: document.querySelectorAll('.cal-cell.is-selected').length,
+      head: !!q('.cal-head'),
+      side: !!q('.cal-side'),
+      tray: !!q('.cal-tray'),
+      prioMarks: document.querySelectorAll('.cal-chip .prio-mark, .cal-tray-item .prio-mark').length,
+      prioTones: ['prio-high', 'prio-mid', 'prio-low', 'prio-none']
+        .map((t) => document.querySelectorAll('.cal-chip .prio-mark.' + t + ', .cal-tray-item .prio-mark.' + t).length),
+      modeBtns: modes.length,
+      calendarPressed: modes.some((b) => b.getAttribute('aria-pressed') === 'true' && /日历/.test(b.textContent)),
+      overflow: document.documentElement.scrollWidth - window.innerWidth,
+    };
+  })()`);
+  check('日历是 42 格、恰好一天被选中', cal.cells === 42 && cal.selected === 1, JSON.stringify(cal));
+  check('月导航 / 日详情 / 无日期托盘都渲染出来', cal.head && cal.side && cal.tray, JSON.stringify(cal));
+  check('顶栏模式开关存在且「日历」处于按下态', cal.modeBtns === 2 && cal.calendarPressed, JSON.stringify(cal));
+  check('日历 chip / 托盘用同一套四档记号，不再缺「中」和「无」', cal.prioMarks > 0
+    && cal.prioTones[0] > 0 && cal.prioTones[1] > 0 && cal.prioTones[3] > 0,
+    JSON.stringify({ marks: cal.prioMarks, tones: cal.prioTones }));
+  check('日历在 1280 宽下无横向溢出', cal.overflow <= 0, `overflow=${cal.overflow}`);
+  if (WANT_SHOTS) {
+    await shot('calendar-1280.png');
+    await goto('calendar', 390, 844);
+    await shot('calendar-390.png');
+    await goto('calendar', 1280, 820, true);
+    await shot('calendar-dark-1280.png');
+  }
+
+  await goto('calendar-done', 1280, 820);
+  const calDone = await evalJs(`(() => ({
+    readonly: !!document.querySelector('.cal-stats-ro'),
+    tray: !!document.querySelector('.cal-tray'),
+    draggable: document.querySelectorAll('.cal-chip[draggable=true], .cal-tray-item[draggable=true]').length,
+  }))()`);
+  check('已完成视图只读：标了只读、无托盘、没有可拖条目', calDone.readonly && !calDone.tray && calDone.draggable === 0, JSON.stringify(calDone));
+
+  // ── 3.5 优先级四档：真实浏览器里形状 / 字重 / 中性色都真的分开了 ─────────
+  // 单测只能证明类名对，证明不了 computed style。这里直接读渲染后的样式，
+  // 钉死「无＝虚线空框 / 低＝浅字 / 中＝细描边 / 高＝实心底反白」四档互不相同，
+  // 并锁住高档底色必须是中性墨 —— 防止有人把「高」改回红色，稀释逾期这个唯一强色。
+  await goto('list', 1280, 820);
+  const prio = await evalJs(`(() => {
+    const style = (tone) => {
+      const el = document.querySelector('.prio-badge.' + tone);
+      if (!el) return null;
+      const s = getComputedStyle(el);
+      return {
+        bg: s.backgroundColor,
+        borderStyle: s.borderTopStyle,
+        borderColor: s.borderTopColor,
+        weight: s.fontWeight,
+        color: s.color,
+        text: el.textContent.trim(),
+      };
+    };
+    const count = (tone) => document.querySelectorAll('.prio-badge.' + tone).length;
+    return {
+      counts: {
+        high: count('prio-high'), mid: count('prio-mid'),
+        low: count('prio-low'), none: count('prio-none'),
+      },
+      high: style('prio-high'), mid: style('prio-mid'),
+      low: style('prio-low'), none: style('prio-none'),
+      // 字体排版（2026-11-10 A+B）：静态门禁管令牌值，这里管真实 computed。
+      crumbSize: (() => { const el = document.querySelector('.crumb b'); return el ? getComputedStyle(el).fontSize : null; })(),
+      group: (() => { const el = document.querySelector('.group-title'); if (!el) return null; const s = getComputedStyle(el); return { size: s.fontSize, weight: s.fontWeight, family: s.fontFamily }; })(),
+      bodyNumeric: getComputedStyle(document.body).fontVariantNumeric,
+      monoCjk: getComputedStyle(document.documentElement).getPropertyValue('--font-mono-cjk').trim(),
+      overflow: document.documentElement.scrollWidth - window.innerWidth,
+    };
+  })()`);
+  const allFour = Object.values(prio.counts).every((n) => n > 0);
+  check('列表视图同时出现高 / 中 / 低 / 无四档徽章', allFour, JSON.stringify(prio.counts));
+  check('四档中文读数正确，「无」是空的', prio.high && prio.mid && prio.low && prio.none
+    && prio.high.text === '高' && prio.mid.text === '中' && prio.low.text === '低'
+    && prio.none.text === '', JSON.stringify(prio));
+  const opaque = (v) => v && !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(v);
+  const neutral = (v) => {
+    const c = (v.match(/\d+/g) || []).slice(0, 3).map(Number);
+    return c.length === 3 && Math.max(...c) - Math.min(...c) <= 24;
+  };
+  check('高档是实心底反白、中档细描边、无档虚线空框', prio.high && prio.mid && prio.none
+    && opaque(prio.high.bg) && prio.mid.borderStyle === 'solid' && opaque(prio.mid.borderColor)
+    && !opaque(prio.low.borderColor) && prio.none.borderStyle === 'dashed', JSON.stringify(prio));
+  check('字重按 600 / 500 / 400 递进', prio.high && prio.mid && prio.low
+    && prio.high.weight === '600' && prio.mid.weight === '500' && prio.low.weight === '400',
+    JSON.stringify({ h: prio.high && prio.high.weight, m: prio.mid && prio.mid.weight, l: prio.low && prio.low.weight }));
+  check('高档实心底是中性墨，不给优先级任何语义色', prio.high && neutral(prio.high.bg),
+    prio.high && prio.high.bg);
+  check('列表视图在 1280 宽下无横向溢出', prio.overflow <= 0, `overflow=${prio.overflow}`);
+  check('上下文条主段 16px，与 13px 副段拉开落差', prio.crumbSize === '16px', `crumb=${prio.crumbSize}`);
+  check('分组名是 11px / 500 的 mono 刻度标签，中文有显式回退', prio.group
+    && prio.group.size === '11px' && prio.group.weight === '500'
+    && /Mono|mono/.test(prio.group.family)
+    && /PingFang|YaHei/.test(prio.monoCjk), JSON.stringify({ g: prio.group, stack: prio.monoCjk }));
+  check('body 数字统一等宽（tabular-nums）', /tabular-nums/.test(prio.bodyNumeric || ''), prio.bodyNumeric);
+  if (WANT_SHOTS) {
+    await shot('priority-four-tones-1280.png');
+    // 暗色下高档徽章会反过来「提亮」，浅底深字也必须过 4.5:1 —— 留一张对照图。
+    await goto('list', 1280, 820, true);
+    await shot('priority-four-tones-dark-1280.png');
+    // 字体排版的字阶表 / 三层落差陈列（样式指南 tokens 页，明暗各一张）。
+    await goto('tokens', 1280, 1700);
+    await shot('typography-tokens-1280.png');
+    await goto('tokens', 1280, 1700, true);
+    await shot('typography-tokens-dark-1280.png');
+  }
+
+  // 独立页头（设置页）真的用上 22px 的 --fs-display，而不是只改了令牌没接线。
+  await goto('settings', 1280, 820);
+  const pageTitle = await evalJs(`(() => {
+    const el = document.querySelector('.settings-title');
+    if (!el) return null;
+    const s = getComputedStyle(el);
+    return { size: s.fontSize, weight: s.fontWeight, lineHeight: s.lineHeight };
+  })()`);
+  check('独立页头 22px / 600（--fs-display 已接线）', pageTitle
+    && pageTitle.size === '22px' && pageTitle.weight === '600', JSON.stringify(pageTitle));
+
+  // ── 3.7 窄边自动降级：偏好不变、有效布局临时切列表、宽边自动还原 ──────────
+  // 决策逻辑由 lib/layoutMode.test.js 钉死；这里验证真实浏览器里的可见结果，
+  // 尤其「三处开关仍显示用户选的日历」—— 偏好绝不能被窗口宽度改写。
+  await goto('calendar-autonarrow', 390, 844);
+  const narrowAuto = await evalJs(`(() => {
+    const q = (s) => document.querySelector(s);
+    const modes = Array.from(document.querySelectorAll('.mode-switch .mode-btn'));
+    return {
+      notice: q('.layout-notice') ? q('.layout-notice').textContent.trim() : null,
+      noticeBtn: q('.layout-notice-btn') ? q('.layout-notice-btn').textContent.trim() : null,
+      calGrid: !!q('.cal-grid'),
+      taskRows: document.querySelectorAll('.task-row').length,
+      calendarPressed: modes.some((b) => b.getAttribute('aria-pressed') === 'true' && /日历/.test(b.textContent)),
+      crumbSub: q('.crumb span') ? q('.crumb span').textContent.trim() : null,
+      overflow: document.documentElement.scrollWidth - window.innerWidth,
+    };
+  })()`);
+  check('390 宽自动改用列表布局，日历网格消失、任务行仍在', !narrowAuto.calGrid
+    && narrowAuto.taskRows > 0, JSON.stringify(narrowAuto));
+  check('提示条给出可见解释（列表口径）与「仍用日历」出口', narrowAuto.notice
+    && narrowAuto.notice.includes('列表口径') && narrowAuto.noticeBtn === '仍用日历',
+    JSON.stringify(narrowAuto));
+  check('三处开关仍显示用户选的「日历」偏好（偏好未被改写）', narrowAuto.calendarPressed,
+    JSON.stringify(narrowAuto));
+  check('面包屑按当前实际布局，不再声称日历', narrowAuto.crumbSub
+    && !narrowAuto.crumbSub.includes('日历'), narrowAuto.crumbSub);
+  check('窄边降级后无横向溢出', narrowAuto.overflow <= 0, `overflow=${narrowAuto.overflow}`);
+  if (WANT_SHOTS) await shot('narrow-fallback-390.png');
+
+  // 用户显式覆盖：点「仍用日历」后，本次会话就要日历
+  const overridden = await evalJs(`(() => {
+    const b = document.querySelector('.layout-notice-btn');
+    if (!b) return null;
+    b.click();
+    return true;
+  })()`);
+  await sleep(300);
+  const manualCal = await evalJs(`(() => ({
+    calGrid: !!document.querySelector('.cal-grid'),
+    noticeBtn: document.querySelector('.layout-notice-btn')
+      ? document.querySelector('.layout-notice-btn').textContent.trim() : null,
+  }))()`);
+  check('点「仍用日历」后显式覆盖生效，提示改为「恢复自动」', overridden
+    && manualCal.calGrid && manualCal.noticeBtn === '恢复自动', JSON.stringify(manualCal));
+  if (WANT_SHOTS) await shot('narrow-fallback-manual-calendar-390.png');
+
+  await goto('calendar-autonarrow', 1280, 820);
+  const restored = await evalJs(`(() => ({
+    calGrid: !!document.querySelector('.cal-grid'),
+    notice: !!document.querySelector('.layout-notice'),
+    cells: document.querySelectorAll('.cal-grid .cal-cell').length,
+  }))()`);
+  check('恢复宽边自动回到日历（42 格），提示条消失', restored.calGrid
+    && !restored.notice && restored.cells === 42, JSON.stringify(restored));
+  if (WANT_SHOTS) await shot('narrow-fallback-restored-1280.png');
+
+  // ── 4. 窄屏几何：设置页在 390 宽下不横向溢出 ────────────────────────────
   await goto('settings', 390, 844);
   const narrow = await evalJs(`(() => {
     const q = (s) => document.querySelector(s);
@@ -275,7 +467,7 @@ async function main() {
   check('390 宽下底栏仍在（布局不塌）', narrow.footVisible === true);
   if (WANT_SHOTS) await shot('settings-390.png');
 
-  // ── 4. 暗色 ────────────────────────────────────────────────────────────
+  // ── 5. 暗色 ────────────────────────────────────────────────────────────
   await goto('settings', 1280, 820, true);
   if (WANT_SHOTS) await shot('settings-dark-1280.png');
 

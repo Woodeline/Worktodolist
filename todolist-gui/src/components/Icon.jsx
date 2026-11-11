@@ -6,8 +6,8 @@
 //
 // 名字 API 保持项目原有命名（plus / check-circle / …），到 Lucide 的对应关系写在每个条目后的注释里。
 //
-// 渲染规范（全组共用）：画布 24×24 · 描边 1.75 · 圆头圆角 · currentColor · 不填充。
-//   —— Lucide 原设定是 2px；这里保留项目原有的 1.75，以免整体视觉重量变化。
+// 渲染规范（全组共用）：画布 24×24 · 描边 1.5 · 圆头圆角 · currentColor · 不填充。
+//   一套图标一个描边；尺寸收敛到 12 / 16 / 24 三档，由调用点显式给出。
 //
 // 例外：dot / circle-half 是语义状态图形（实心圆点、半实心圆），Lucide 没有等价的填充形状，
 //       沿用项目自绘几何。
@@ -313,7 +313,7 @@ export default function Icon({ name, size = 16, title, className = '', ...rest }
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.75"
+      strokeWidth="1.5"
       strokeLinecap="round"
       strokeLinejoin="round"
       role={labelled ? 'img' : undefined}

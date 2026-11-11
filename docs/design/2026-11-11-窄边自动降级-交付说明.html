@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>窄边自动降级 · 交付说明</title>
+<style>
+  :root {
+    --bg: #f4f4f5; --surface: #ffffff; --surface-2: #f8f8f9;
+    --line: #dcdce0; --line-soft: #e8e8eb;
+    --text: #1c1e22; --text-2: #4c515a; --muted: #747a84;
+    --accent: #147d94; --danger: #b4443c;
+    --mono: "Cascadia Mono", Consolas, "SF Mono", "DejaVu Sans Mono", monospace;
+    --ui: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.75 var(--ui); -webkit-font-smoothing: antialiased; }
+  main { max-width: 1120px; margin: 0 auto; padding: 48px 28px 96px; }
+  .sheet { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  header { padding: 38px 44px 30px; border-bottom: 1px solid var(--line); }
+  .kicker { font: 12px/1.5 var(--mono); color: var(--muted); }
+  h1 { margin: 10px 0 12px; font-size: 30px; line-height: 1.3; font-weight: 600; }
+  .lede { margin: 0; max-width: 800px; color: var(--text-2); font-size: 15px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 6px 30px; margin: 26px 0 0; padding: 0; }
+  .facts div { display: flex; gap: 8px; align-items: baseline; }
+  .facts dt { font: 11px/1.6 var(--mono); color: var(--muted); }
+  .facts dd { margin: 0; font: 12px/1.6 var(--mono); color: var(--text-2); font-variant-numeric: tabular-nums; }
+  section.row { display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 22px; padding: 28px 44px; border-bottom: 1px solid var(--line-soft); }
+  section.row:last-child { border-bottom: 0; }
+  .row-label { font: 11px/1.9 var(--mono); color: var(--muted); }
+  .row-body { min-width: 0; }
+  h2 { margin: 0 0 14px; font-size: 17px; font-weight: 600; }
+  h3 { margin: 22px 0 8px; font-size: 14px; font-weight: 600; }
+  p { margin: 0 0 12px; }
+  p:last-child { margin-bottom: 0; }
+  .note { color: var(--text-2); }
+  .muted { color: var(--muted); }
+  .tag { display: inline-block; font: 11px/1.6 var(--mono); border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; color: var(--text-2); background: var(--surface-2); }
+  code { font: 12px/1.6 var(--mono); background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 4px; padding: 1px 5px; color: var(--text-2); }
+  pre { margin: 12px 0 0; padding: 14px 16px; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 8px; overflow-x: auto; font: 12px/1.8 var(--mono); color: var(--text-2); }
+  ul { margin: 0 0 12px; padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th { font: 11px/1.6 var(--mono); color: var(--muted); font-weight: 400; }
+  td:first-child { width: 165px; font: 12px/1.7 var(--mono); color: var(--text-2); }
+  tr:last-child td { border-bottom: 0; }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .callout { border-left: 3px solid var(--accent); background: var(--surface-2); padding: 12px 16px; border-radius: 0 6px 6px 0; color: var(--text-2); }
+  .warn { border-left-color: var(--danger); }
+  .figures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 8px; }
+  figure { margin: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface-2); }
+  figure img { display: block; width: 100%; height: auto; }
+  figcaption { padding: 8px 12px; font: 11px/1.6 var(--mono); color: var(--muted); border-top: 1px solid var(--line); background: var(--surface); }
+  footer { padding: 20px 44px 26px; color: var(--muted); font: 11px/1.8 var(--mono); }
+  @media (max-width: 760px) {
+    main { padding: 20px 12px 56px; }
+    header, section.row, footer { padding-left: 20px; padding-right: 20px; }
+    section.row { grid-template-columns: 1fr; gap: 8px; }
+    .figures { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+<div class="sheet">
+
+<header>
+  <div class="kicker">Worktodolist · UI / 2026-11-11</div>
+  <h1>窄边自动降级 · 交付说明</h1>
+  <p class="lede">当主区可用宽度不足以有效展示日历时，临时改用列表布局；用户偏好一个字都不改，宽边自动回到原视图，手动选择始终优先。这是 11-10 评估结论里<strong>唯一可行</strong>的那个版本。</p>
+  <dl class="facts">
+    <div><dt>用例</dt><dd>41 文件 / 743 条</dd></div>
+    <div><dt>浏览器</dt><dd>settings 40/40</dd></div>
+    <div><dt>响应式</dt><dd>40 档 / 575 项</dd></div>
+    <div><dt>阈值</dt><dd>进入 480 · 退出 560</dd></div>
+    <div><dt>状态</dt><dd>工作树内 · 未提交</dd></div>
+  </dl>
+</header>
+
+<section class="row">
+  <div class="row-label">01 / 裁决</div>
+  <div class="row-body">
+    <h2>为什么不是「自动切换模式」</h2>
+    <p>11-10 的评估结论是：<strong>按字面实现不可行</strong>。显示模式是 <code>configStore</code> 单键的持久化外观偏好（<code>worktodolist.list-mode.v1</code>，两值、默认列表、三处入口订阅同一份），窄边写盘等于把「窗口一时变窄」记成「用户永久选了列表」，宽边也不会自动还原；要还原就得新增「记住原模式」的状态，直接与「一个能力一个键、两值、可清除」的契约相撞。而且三处开关会与画面打架。</p>
+    <p>所以落地的是<strong>渲染层布局覆盖</strong>：偏好照旧持久化，另外算出「此刻该用哪种布局」。因为偏好从头到尾没动过，<strong>宽边还原是自然结果，不需要任何记忆状态</strong>。</p>
+    <pre>用户偏好 preferredMode   —— 持久化，三处开关显示它，永不因宽度改写
+运行时窄边 narrow        —— 主区可用宽度 + 双阈值迟滞，不落盘
+本次显式覆盖 override    —— 用户在窄边说「仍用日历」，只在本次窄边区间有效
+
+优先级：override &gt; 窄边自动降级 &gt; preferredMode</pre>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">02 / 边界</div>
+  <div class="row-body">
+    <h2>四个交互约束的落地答案</h2>
+    <table>
+      <tr><th>约束</th><th>结论</th><th>依据</th></tr>
+      <tr><td>触发与恢复</td><td>以<strong>主区可用宽度</strong>（不是视口）为准，低于 480 进列表、高于 560 才回日历；恢复宽边自动还原原视图。</td><td>视口宽不等于主区宽：侧栏折叠、设置页覆盖、对话快照列都会改变它。480 对应 CSS 里「日详情 / 托盘纵摞、chip 退化成 8px 色块」那一档，也就是用户截图里标题被截断、托盘文字读不出的那档。</td></tr>
+      <tr><td>手动选择优先级</td><td><strong>手动 &gt; 自动 &gt; 默认</strong>。窄边里点「日历」或提示条的「仍用日历」，本次就用日历；点「列表」或「恢复自动」交回自动判定。</td><td>显式覆盖是会话内状态，不落盘、不广播；回到宽边自动清空。设置页直接写偏好时也由订阅变化统一同步，三处入口不分叉。</td></tr>
+      <tr><td>连续宽度稳定</td><td>进入 / 退出用<strong>不同阈值</strong>，480–560 是滞回带，带内保持上一次布局；主区未挂载时保持上一次判定。</td><td>日历与列表是组件类型不同的三元分支，每次切换都会卸载 / 挂载。临界点反复翻转会丢 DOM 焦点、拖拽改期与滚动位置。</td></tr>
+      <tr><td>状态 / 数据 / 体验</td><td>保留一套、清理一套、提示一套（见 03 节）。</td><td>取数链口径本就不同，集合与计数会变；这是交付说明 05 节明列「刻意不改的口径」，用可见解释而不是偷偷改取数来化解。</td></tr>
+    </table>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">03 / 状态</div>
+  <div class="row-body">
+    <h2>切换时的状态契约</h2>
+    <table>
+      <tr><th>类别</th><th>内容</th><th>处理</th></tr>
+      <tr><td>保留</td><td>选中日与月份（App 顶层派生）、搜索词、侧栏过滤、当前视图、排序模式、侧栏折叠、概览开关</td><td>不重置。恢复宽边后用户回到原来选中的那一天。</td></tr>
+      <tr><td>清理</td><td>QuickAdd 里日历双击预填的 <code>due:YYYY-MM-DD </code>、日历 chip 选中的 <code>focusedId</code></td><td>从日历布局切走时清空 + 递增 resetKey。输入栏挂在条件渲染之外不会卸载，不清的话回车就会把那一行写进 <code>todo.txt</code>；清空刻意不抢焦点，键盘用户可能正在侧栏或搜索框。</td></tr>
+      <tr><td>自然丢弃</td><td>日历组件内部的拖拽改期状态、落点预览、网格 DOM 焦点</td><td>随组件卸载消失。拖放状态本来就不借 <code>store.dragId</code>，不会污染列表的手动排序。</td></tr>
+      <tr><td>可见解释</td><td>任务集合与页眉计数变化</td><td>提示条写明「已按列表排布（列表口径）」。today 在日历放宽为全部未完成且忽略 <code>t:</code>、已完成按完成日期锚定、页眉两条取数链不同 —— 这些口径<strong>一个都没改</strong>，只是让用户知道现在按哪一套读。</td></tr>
+    </table>
+    <div class="callout">三处模式开关（顶栏 / 应用菜单 / 设置页）显示的仍是<strong>用户选的偏好</strong>；面包屑、页眉计数、排序按钮、快捷键分派读<strong>有效布局</strong>。两者之间由提示条连接，不会出现「开关显示日历、画面却是列表」却无人解释的情况。</div>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">04 / 改动</div>
+  <div class="row-body">
+    <h2>改了哪些功能点</h2>
+    <table>
+      <tr><th>位置</th><th>内容</th></tr>
+      <tr><td><code>lib/layoutMode.js</code></td><td>新增。阈值常量、<code>hysteresisNarrow</code> 双阈值迟滞、<code>resolveEffectiveMode</code> 三层优先级、<code>noticeState</code> 提示条状态。全部纯函数，不碰 DOM、不读 localStorage。</td></tr>
+      <tr><td><code>hooks/useLayoutMode.js</code></td><td>新增。<code>ResizeObserver</code> 观测 <code>&lt;main&gt;</code> 内容盒宽度；窄边状态与显式覆盖都是会话内 state；回到宽边自动清覆盖。</td></tr>
+      <tr><td><code>components/LayoutNotice.jsx</code></td><td>新增。降级时的可见解释 +「仍用日历」/「恢复自动」出口。</td></tr>
+      <tr><td><code>App.jsx</code></td><td>偏好与有效布局分开：<code>isCalendar</code>、投影、计数、快捷键读有效布局；三处入口仍收偏好。切走时清 QuickAdd 预填与 focusedId。设置页等外部写入通过订阅变化统一同步覆盖态。</td></tr>
+      <tr><td><code>TopBar.jsx</code> / <code>QuickAdd.jsx</code></td><td>TopBar 新增 <code>effectiveMode</code> 只用于面包屑与排序按钮；QuickAdd 新增 <code>resetKey</code> 用于清空文本且不抢焦点。</td></tr>
+      <tr><td><code>styleguide.jsx</code></td><td>新增 <code>?view=calendar-autonarrow</code> 舞台，与产品走同一套 hook / 提示条；<strong>原有 8 个日历档仍强制日历</strong>，继续回归日历自身的窄屏降级，语义不变。</td></tr>
+      <tr><td>门禁</td><td><code>qa-settings.mjs</code> 33 → 40 条（新增 7 条降级 / 覆盖 / 还原断言）；<code>qa-responsive.mjs</code> 38 → 40 档（新增 390 降级与 1280 还原两档）。</td></tr>
+    </table>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">05 / 验证</div>
+  <div class="row-body">
+    <h2>门禁结果</h2>
+    <table>
+      <tr><th>门禁</th><th>结果</th></tr>
+      <tr><td><code>npm test</code> / <code>test:guard</code></td><td class="num">41 文件 / 743 用例，41/41 全部跑到</td></tr>
+      <tr><td><code>test:ui</code></td><td class="num">css-check 裸值 0 · 110 组对比度 · typography 19/19 · Hook 44 文件</td></tr>
+      <tr><td><code>test:settings</code></td><td class="num">40/40（含 7 条新增：自动切列表、提示条、偏好未被改写、面包屑、无溢出、显式覆盖、宽边还原 42 格）</td></tr>
+      <tr><td><code>test:tools</code> / <code>test:nl</code></td><td class="num">74/74 · 44/44 + 174 词表</td></tr>
+      <tr><td><code>test:responsive</code></td><td class="num">40 档 / 575 项，失败 0（新增两档验证降级后的窄屏几何）</td></tr>
+      <tr><td><code>npm run build</code></td><td class="num">335.69 kB JS，构建通过</td></tr>
+    </table>
+    <p class="note" style="margin-top:12px">决策逻辑（迟滞、三层优先级、提示条状态）由 <code>layoutMode.test.js</code> 17 条纯函数用例钉死；可见结果由真实浏览器 computed / DOM 断言钉死。项目没有 jsdom，抽纯函数是既定做法。</p>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">06 / 界面</div>
+  <div class="row-body">
+    <h2>真实界面截图</h2>
+    <p class="note">由 <code>npm run test:settings:shots</code> 生成，已抹掉样式指南外壳。</p>
+    <div class="figures">
+      <figure>
+        <img src="assets/2026-11-11/narrow-fallback-390.png" alt="390 宽自动改用列表布局">
+        <figcaption>390 宽：自动按列表排布，提示条说明「列表口径」并给「仍用日历」；顶栏开关仍显示用户选的日历</figcaption>
+      </figure>
+      <figure>
+        <img src="assets/2026-11-11/narrow-fallback-manual-calendar-390.png" alt="点击仍用日历后的显式覆盖">
+        <figcaption>点「仍用日历」：本次显式覆盖生效，回到日历，提示改为「恢复自动」</figcaption>
+      </figure>
+      <figure>
+        <img src="assets/2026-11-11/narrow-fallback-restored-1280.png" alt="恢复宽边后回到日历">
+        <figcaption>恢复宽边：自动回到日历（42 格），提示条消失 —— 不需要任何还原按钮</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">07 / 边界</div>
+  <div class="row-body">
+    <h2>已知边界与刻意没做的事</h2>
+    <ul>
+      <li><strong>768 宽仍是日历</strong>：那一档 CSS 已把日详情转成底部横排、chip 收成色块，属于既有降级设计；只有 480 以下才自动切列表。阈值是常量，若以后判定口径要改，改一处即可，但要同步文档与两档 QA。</li>
+      <li><strong>多窗口各自判定</strong>：configStore 的广播只在同一 JS 运行时内，没有跨窗口同步；每个窗口按自己的主区宽度算，互不影响。</li>
+      <li><strong>连续宽度变化本身没有浏览器回归</strong>：滞回带的稳定性由纯函数单测覆盖；浏览器门禁是逐档独立导航，没有模拟拖窗口。这是当前自动化边界。</li>
+      <li><strong>取数口径没改</strong>：today 放宽、已完成按完成日期锚定、页眉两条计数链，全部保持交付说明 05 节的既定取舍，只是加了可见解释。</li>
+      <li><strong>样式指南舞台默认强制日历</strong>：8 个日历档继续回归日历自身的窄屏降级；自动降级只在 <code>calendar-autonarrow</code> 视图启用。浏览器门禁按既定取舍仍不入 CI。</li>
+      <li><strong>红线没动</strong>：纯文本仍是唯一数据源；外观偏好仍不写进 <code>todo.txt</code>；日历仍是「列表的第二种显示模式」而非第四个页签。</li>
+    </ul>
+    <p class="note"><strong>状态</strong>：本次改动连同 11-10 字体排版、优先级四档、日历补齐、11-07 UI 重做全部仍在工作树里，未提交、未发版；本机 app 仍是 11-10 21:45 那次构建，不含本轮改动，需要时再跑一次 <code>sh build-mac.sh --install</code>。</p>
+  </div>
+</section>
+
+<footer>Worktodolist · 2026-11-11 · 窄边自动降级交付说明 · docs/design/2026-11-11-窄边自动降级-交付说明.html</footer>
+
+</div>
+</main>
+</body>
+</html>

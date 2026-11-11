@@ -72,12 +72,20 @@ console.log('\n缺失（JSX 用了但 CSS 未定义）:', missing.join(', ') || 
 // 动态运行时取值单独核对（这些由 `${...}` 拼出来，静态扫描看不到）
 const RUNTIME_VALUES = [
   'dot-ok', 'dot-warn', 'dot-danger',
-  'p-A', 'p-B', 'p-C', 'p-other',
+  // 优先级四档：lib/priority.js 的 priorityClass() 统一拼 prio-<tone>，
+  // 五个值都要有 CSS 规则。过去是 p-A/p-B/p-C/p-other + priority-none，
+  // 「无」在日历里被当成 p-other，所以那套白名单反而掩盖了漂移。
+  'prio-high', 'prio-mid', 'prio-low', 'prio-none', 'prio-other',
   'status-dot-running', 'status-dot-ok', 'status-dot-fail',
   'tool-ok', 'tool-fail', 'tool-running',
-  'row-overdue', 'row-readonly', 'priority-none', 'snapshot-prio-none',
+  'row-overdue', 'row-readonly',
   // 对话头像：className={'msg-avatar msg-avatar-' + who}
   'msg-avatar-agent', 'msg-avatar-user', 'msg-avatar-tool',
+  // 日历格子：cls 数组 join(' ')，静态扫描看不见（in-month 走默认样式，无规则）
+  'cal-cell', 'out-month', 'is-weekend', 'is-today', 'is-selected',
+  // 日历 chip 状态：chipState() 返回 ' cal-done' / ' overdue' / ' now'
+  // 三个都要列，否则删掉 .cal-chip.overdue / .cal-chip.now 的规则门禁也不会红。
+  'cal-done', 'overdue', 'now',
 ];
 const runtimeMissing = RUNTIME_VALUES.filter((c) => !cssClasses.has(c));
 console.log('\n运行时拼接值缺失:', runtimeMissing.join(', ') || '无');

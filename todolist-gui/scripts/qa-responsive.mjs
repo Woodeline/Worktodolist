@@ -86,6 +86,16 @@ const PROBES = {
   toolPane: '.tool-pane',
   rtiTab: '.tool-tab',
   rtiRowDel: '.tool-row-del',
+  // 日历（清单的第二种显示模式）：网格 / 格子 / 日详情 / 托盘 / 模式开关。
+  // calTray 在已完成（只读）视图里刻意不存在，断言按视图分流。
+  calGrid: '.cal-grid',
+  calCell: '.cal-cell',
+  calChip: '.cal-chip',
+  calSide: '.cal-side',
+  calDay: '.cal-day',
+  calTray: '.cal-tray',
+  calHead: '.cal-head',
+  modeSwitch: '.mode-switch',
 };
 
 // 三档视口 + 断点边界。width 是**视口**宽度（媒体查询看的就是这个）。
@@ -122,6 +132,20 @@ const CASES = [
   { name: 'coarse-390-tools', w: 390, h: 844, view: 'tools', tier: 'small', coarse: true, note: '触屏：卡片与星标命中区 ≥44px' },
   { name: 'coarse-390-tools-work', w: 390, h: 844, view: 'tools-rti', tier: 'small', coarse: true, note: '触屏：工作态页签命中区 ≥44px' },
   { name: 'dark-1280-tools', w: 1280, h: 800, view: 'tools', tier: 'wide', dark: true },
+  // 日历（清单的第二种显示模式）：宽档网格+右栏并排，窄档转纵向、chip 收成色块。
+  // 已完成（只读）视图单独留一档，验证"无托盘 / 无新建"的只读骨架。
+  { name: 'desktop-1280-calendar', w: 1280, h: 800, view: 'calendar', tier: 'wide' },
+  { name: 'mid-1080-calendar', w: 1080, h: 800, view: 'calendar', tier: 'mid', note: '断点线上，右栏收窄' },
+  { name: 'narrow-768-calendar', w: 768, h: 900, view: 'calendar', tier: 'narrow', note: '断点线上，日详情转底部横排' },
+  { name: 'mobile-390-calendar', w: 390, h: 844, view: 'calendar', tier: 'small', note: 'chip 收成色块，日详情/托盘纵摞' },
+  { name: 'mobile-360-calendar', w: 360, h: 780, view: 'calendar', tier: 'small' },
+  { name: 'coarse-390-calendar', w: 390, h: 844, view: 'calendar', tier: 'small', coarse: true, note: '触屏：日期格命中区 ≥44px' },
+  { name: 'dark-1280-calendar', w: 1280, h: 800, view: 'calendar', tier: 'wide', dark: true },
+  { name: 'desktop-1280-calendar-done', w: 1280, h: 800, view: 'calendar-done', tier: 'wide', note: '只读：无托盘 / 无新建' },
+  // 2026-11-11 窄边自动降级：上面 8 档强制日历，回归的是日历自身的窄屏降级；
+  // 这两档走产品同款的有效布局逻辑，回归「临时切列表 / 恢复宽边」后的几何。
+  { name: 'mobile-390-autonarrow', w: 390, h: 844, view: 'calendar-autonarrow', tier: 'small', note: '窄边自动降级：列表布局 + 提示条' },
+  { name: 'desktop-1280-autonarrow', w: 1280, h: 800, view: 'calendar-autonarrow', tier: 'wide', note: '恢复宽边：回到日历' },
 ];
 
 // ------------------------------------------------------------------ CDP 客户端
@@ -292,6 +316,19 @@ const MEASURE_FN = `(() => {
     out.cardsCols = getComputedStyle(cardsEl).gridTemplateColumns.split(' ').filter(Boolean).length;
   }
 
+  // 日历网格：42 格是硬契约（6×7，翻月高度不跳）；列数从 used value 读。
+  const calEl = document.querySelector('.cal-grid');
+  if (calEl) {
+    out.calCellCount = calEl.querySelectorAll('.cal-cell').length;
+    out.calCols = getComputedStyle(calEl).gridTemplateColumns.split(' ').filter(Boolean).length;
+  }
+  // 托盘条目在触屏窄屏会落到滚动区下方（首屏外），elementFromPoint 探不到，
+  // 直接量盒高 —— min-height:44 保证它无论滚到哪都是够大的拖拽源。
+  const trayItemEl = document.querySelector('.cal-tray-item');
+  if (trayItemEl) {
+    out.calTrayItemH = Math.round(trayItemEl.getBoundingClientRect().height);
+  }
+
   // 命中区实测 —— getBoundingClientRect 只给元素盒，
   // 触屏档的外扩是 ::before 伪元素，必须用 elementFromPoint 探出来。
   const hitBox = (sel) => {
@@ -327,6 +364,8 @@ const MEASURE_FN = `(() => {
     toolsfav: hitBox('.tools-card-fav'),
     rtitab: hitBox('.tool-tab'),
     rtidel: hitBox('.tool-row-del'),
+    calcell: hitBox('.cal-cell'),
+    modebtn: hitBox('.mode-btn'),
   };
   return JSON.stringify(out);
 })()`;
@@ -393,6 +432,9 @@ function assertions(c, m) {
   // 工具集两态：目录态有 .tools-wall（无 .tool-pane），工作态反之。
   // 断言按态分流，别拿一态的探针去套另一态。
   const isTools = m.toolsWall != null || m.toolPane != null;
+  // 日历是列表页的第二种显示模式：.layout 仍在（isList 为真），
+  // 额外的骨架断言按 .cal-grid 是否存在分流。
+  const isCal = m.calGrid != null;
 
   ok('无横向溢出', !m.overflowX, `docW=${m.docW} vw=${m.vw}`);
 
@@ -451,6 +493,27 @@ function assertions(c, m) {
     }
   }
 
+  // 日历：42 格 7 列是硬契约；宽档右栏并排、窄档转纵向、chip 收成色块。
+  if (isCal) {
+    ok('日历网格恒 42 格（6×7）', m.calCellCount === 42, `cells=${m.calCellCount}`);
+    ok('日历网格恒 7 列', m.calCols === 7, `cols=${m.calCols}`);
+    ok('模式开关在页眉（列表↔日历）', g('modeSwitch') != null && (g('modeSwitch')?.w ?? 0) > 0, JSON.stringify(g('modeSwitch')));
+    ok('日历头部已渲染（翻月 + 统计）', g('calHead') != null && (g('calHead')?.w ?? 0) > 0, JSON.stringify(g('calHead')));
+    ok('网格未溢出视口', (g('calGrid')?.x ?? -1) >= 0 && (g('calGrid')?.x ?? 0) + (g('calGrid')?.w ?? 0) <= m.vw + 1, JSON.stringify({ x: g('calGrid')?.x, w: g('calGrid')?.w, vw: m.vw }));
+    if (c.view === 'calendar-done') {
+      ok('只读视图无「无日期」托盘', g('calTray') == null, `tray=${JSON.stringify(g('calTray'))}`);
+    } else {
+      ok('「无日期」托盘已渲染', g('calTray') != null, `tray=${JSON.stringify(g('calTray'))}`);
+    }
+    if (c.tier === 'wide' || c.tier === 'mid') {
+      ok('日详情栏在网格右侧', (g('calSide')?.x ?? 0) >= (g('calGrid')?.x ?? 0) + (g('calGrid')?.w ?? 0) - 2, `side.x=${g('calSide')?.x} grid.right=${(g('calGrid')?.x ?? 0) + (g('calGrid')?.w ?? 0)}`);
+      ok('日详情栏与网格同排（顶部对齐）', Math.abs((g('calSide')?.y ?? 0) - (g('calGrid')?.y ?? 0)) <= 40, `side.y=${g('calSide')?.y} grid.y=${g('calGrid')?.y}`);
+    } else {
+      ok('日详情栏转到网格下方', (g('calSide')?.y ?? 0) >= (g('calGrid')?.y ?? 0) + (g('calGrid')?.h ?? 0) - 2, `side.y=${g('calSide')?.y} grid.bottom=${(g('calGrid')?.y ?? 0) + (g('calGrid')?.h ?? 0)}`);
+      ok('窄屏 chip 收成色块（宽 ≤10）', (g('calChip')?.w ?? 99) <= 10, `chip.w=${g('calChip')?.w}`);
+    }
+  }
+
   if (c.tier === 'small') {
     ok('--fs-2xl 降到 21px', m.fs2xl === '21px', m.fs2xl);
   }
@@ -499,6 +562,16 @@ function assertions(c, m) {
       // 工作态：工具内页签的命中区（页签只有 22px 高，靠 coarse 段撑到 44）
       if (m.toolPane != null) {
         ok('工具内页签命中高 ≥44', (h.rtitab?.h ?? 0) >= 44, `hit=${JSON.stringify(h.rtitab)}`);
+      }
+    }
+    if (isCal) {
+      // 日期格是面积型目标：7 列分摊宽度，6 行分摊高度 —— 宽必须 ≥44，
+      // 高在矮屏上允许 40（整格可点，不存在"点不中"的细条）。
+      ok('日期格命中宽 ≥44', (h.calcell?.w ?? 0) >= 44, `hit=${JSON.stringify(h.calcell)}`);
+      ok('日期格命中高 ≥40', (h.calcell?.h ?? 0) >= 40, `hit=${JSON.stringify(h.calcell)}`);
+      ok('模式按钮命中高 ≥32', (h.modebtn?.h ?? 0) >= 32, `hit=${JSON.stringify(h.modebtn)}`);
+      if (g('calTray') != null) {
+        ok('托盘条目盒高 ≥44', (m.calTrayItemH ?? 0) >= 44, `h=${m.calTrayItemH}`);
       }
     }
   } else {
@@ -620,7 +693,7 @@ async function main() {
     if (unknown.length) throw new Error('未知用例: ' + unknown.join(', ') + '（用 --list 看全部）');
   }
   // 默认 --shots 只截窄屏与暗色这几档，别把 19 张 PNG 全存下来
-  const shotNames = new Set((process.env.SHOT_ONLY || 'mobile-390,mobile-320,narrow-768,narrow-390-chat,dark-1440,dark-390').split(','));
+  const shotNames = new Set((process.env.SHOT_ONLY || 'mobile-390,mobile-320,narrow-768,narrow-390-chat,dark-1440,dark-390,desktop-1280-calendar,narrow-768-calendar,mobile-390-calendar,dark-1280-calendar').split(','));
 
   try {
     for (const c of cases) {

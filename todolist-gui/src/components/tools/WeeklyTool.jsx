@@ -52,7 +52,7 @@ export default function WeeklyTool({ snapshot }) {
       <div className="tool-metrics">
         <div className="tool-metric">
           <span className="tool-metric-label">
-            <Icon name="check-circle" size={13} /> 本周完成
+            <Icon name="check-circle" size={16} /> 本周完成
           </span>
           <span className="tool-metric-val">
             {stats.doneCount}
@@ -62,7 +62,7 @@ export default function WeeklyTool({ snapshot }) {
         </div>
         <div className="tool-metric">
           <span className="tool-metric-label">
-            <Icon name="circle-half" size={13} /> 活跃待办
+            <Icon name="circle-half" size={16} /> 活跃待办
           </span>
           <span className="tool-metric-val">
             {stats.activeCount}
@@ -72,7 +72,7 @@ export default function WeeklyTool({ snapshot }) {
         </div>
         <div className="tool-metric">
           <span className="tool-metric-label">
-            <Icon name="calendar" size={13} /> 本周到期
+            <Icon name="calendar" size={16} /> 本周到期
           </span>
           <span className="tool-metric-val">
             {stats.dueCount}
@@ -82,7 +82,7 @@ export default function WeeklyTool({ snapshot }) {
         </div>
         <div className="tool-metric">
           <span className="tool-metric-label">
-            <Icon name="alert-triangle" size={13} /> 逾期未完成
+            <Icon name="alert-triangle" size={16} /> 逾期未完成
           </span>
           <span className="tool-metric-val">
             {stats.overdueCount}

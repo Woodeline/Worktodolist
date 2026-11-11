@@ -197,15 +197,15 @@ export default function ToolsPage({ snapshot, store, request }) {
                   onClick={backToWall}
                   title="返回工具集（Esc）"
                 >
-                  <Icon name="chevron-left" size={13} />
+                  <Icon name="chevron-left" size={16} />
                   工具集
                 </button>
                 <span className="tool-head-icon">
-                  <Icon name={active.icon} size={15} />
+                  <Icon name={active.icon} size={16} />
                 </span>
                 <nav className="tool-crumb" aria-label="所在位置">
                   <span className="tool-crumb-prefix">工具集</span>
-                  <Icon name="chevron-right" size={11} />
+                  <Icon name="chevron-right" size={12} />
                   <h2 className="tool-title" title={active.detail}>
                     {active.name}
                   </h2>

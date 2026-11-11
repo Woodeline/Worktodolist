@@ -63,7 +63,7 @@ function ToolCard({ tool, isFav, recent, onOpen, onToggleFav, onContextMenu }) {
             onToggleFav(tool.id);
           }}
         >
-          <Icon name="star" size={14} fill={isFav ? 'currentColor' : 'none'} />
+          <Icon name="star" size={16} fill={isFav ? 'currentColor' : 'none'} />
         </button>
       </div>
 
@@ -88,7 +88,7 @@ function ToolCard({ tool, isFav, recent, onOpen, onToggleFav, onContextMenu }) {
         {tool.beta && <span className="tools-card-beta">beta</span>}
         {recent && (
           <span className="tools-card-mru">
-            <Icon name="clock" size={11} />
+            <Icon name="clock" size={12} />
             最近
           </span>
         )}
@@ -165,8 +165,7 @@ export default function ToolsWall({ tools, meta, onOpen, onToggleFav }) {
       ))}
       {withSlot && list.length < RESERVED_SLOT_LIMIT && (
         <div className="tools-slot" aria-hidden="true">
-          <span className="tools-slot-plus">＋</span>
-          <span>预留模块，登记后自动出现</span>
+          <span>还有位置留给新工具</span>
         </div>
       )}
     </div>
@@ -177,10 +176,10 @@ export default function ToolsWall({ tools, meta, onOpen, onToggleFav }) {
       <div className="tools-wall-head">
         <div>
           <h2 className="tools-wall-title">工具集</h2>
-          <p className="tools-wall-sub">{tools.length} 个模块 · 点卡片进入</p>
+          <p className="tools-wall-sub">{tools.length} 个工具</p>
         </div>
         <div className="tools-wall-search">
-          <Icon name="search" size={13} />
+          <Icon name="search" size={16} />
           <input
             type="search"
             value={query}

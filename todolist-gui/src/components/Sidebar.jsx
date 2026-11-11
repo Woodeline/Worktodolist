@@ -27,7 +27,7 @@ function SidebarGroup({ prefix, label, items, view, onSelect, dotFor }) {
         onClick={() => setOpen((v) => !v)}
       >
         <span className="sidebar-caret" aria-hidden="true">
-          <Icon name="chevron-right" size={13} />
+          <Icon name="chevron-right" size={16} />
         </span>
         <span className="sidebar-group-name">{label}</span>
       </button>
@@ -92,7 +92,7 @@ export default function Sidebar({ store, collapsed = false }) {
       onClick={() => store.selectView(view)}
       aria-current={store.view === view ? 'true' : undefined}
     >
-      <Icon name={icon} size={13} className="nav-icon" />
+      <Icon name={icon} size={16} className="nav-icon" />
       <span className="nav-label">{label}</span>
       {count != null && <span className="count">{count}</span>}
     </button>

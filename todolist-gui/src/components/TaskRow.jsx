@@ -3,7 +3,11 @@ import dayjs from 'dayjs';
 import { isOverdue, PRIORITY_LABELS } from '../lib/sortFilter';
 import { describeRecurrence } from '../lib/recurrence';
 import { useContextMenu } from '../hooks/useContextMenu.jsx';
+import PriorityMark from './PriorityMark.jsx';
 import Icon from './Icon.jsx';
+
+// 日历 chip / 托盘仍从本文件取档位类名，转发到单一真相源，避免两处各拼一套。
+export { priorityClass } from '../lib/priority.js';
 
 export function Highlight({ text, query }) {
   if (!query) return <>{text}</>;
@@ -32,10 +36,6 @@ export function dueLabel(due, today) {
   return dayjs(due).format('M月D日');
 }
 
-export function priorityClass(priority) {
-  return PRIORITY_LABELS[priority] ? `p-${priority}` : 'p-other';
-}
-
 // 下周一（不含今天）：周末口径锁定周六，所以这里从"下一个周一"起算
 function nextMonday() {
   const d = dayjs();
@@ -57,13 +57,16 @@ export default function TaskRow({
   readonly = false,
   depth = 0,
   kids = null,
+  dragDisabled = false,
 }) {
   const today = dayjs().format('YYYY-MM-DD');
   const isChild = depth > 0;
   const overdue = isOverdue(task, today);
   const fading = store.fadingIds.includes(task.id);
+  // 日历的日详情也复用这一行，但那里拖拽的语义是"改期"（由日历自己接管），
+  // 不是列表的手动重排 —— dragDisabled 把行级拖拽整个关掉，避免两套落点逻辑打架。
   const dragEnabled =
-    !readonly && store.sortMode === 'manual' && store.view !== 'today' && !task.completed;
+    !dragDisabled && !readonly && store.sortMode === 'manual' && store.view !== 'today' && !task.completed;
 
   // 退场窗口内的行：数据还没提交，但界面要提前「演」出结果 ——
   // 复选框按已勾上预览（否则点了勾选 180ms 内没有任何反馈）、标题划线扫过。
@@ -148,12 +151,14 @@ export default function TaskRow({
           {
             type: 'item',
             label: '无',
+            mark: <PriorityMark variant="mark" />,
             checked: !task.priority,
             onClick: () => store.updateTask(task.id, { priority: null }),
           },
           ...['A', 'B', 'C'].map((p) => ({
             type: 'item',
             label: `${PRIORITY_LABELS[p]} (${p})`,
+            mark: <PriorityMark priority={p} variant="mark" />,
             checked: task.priority === p,
             onClick: () => store.updateTask(task.id, { priority: p }),
           })),
@@ -301,19 +306,12 @@ export default function TaskRow({
         ) : null}
         {task.starValue ? (
           <span className="star" title="星标">
-            <Icon name="star" size={13} fill="currentColor" />
+            <Icon name="star" size={16} fill="currentColor" />
           </span>
         ) : null}
-        {task.priority ? (
-          <span className={`priority ${priorityClass(task.priority)}`}>
-            {PRIORITY_LABELS[task.priority] || task.priority}
-          </span>
-        ) : (
-          // UI 展示约定：无优先级任务显示弱化的“中”，与 (A)/(B)/(C) 实心标签区分。
-          <span className="priority priority-none" title="无优先级（默认显示为中）">
-            中
-          </span>
-        )}
+        {/* 四档字阶徽章：无＝虚线空框、低＝浅字、中＝细描边、高＝实心底反白。
+            固定宽度让右侧日期列成一条直线；「无」不是「中」，所以它始终是空的。 */}
+        <PriorityMark priority={task.priority} />
         {task.completedAt ? <span className="due">{task.completedAt} 完成</span> : null}
         {task.dueDate ? (
           // 今天到期 / 逾期各带一层浅底：这两种状态需要在扫视时"跳出来"，
@@ -344,7 +342,7 @@ export default function TaskRow({
             aria-label={task.starValue ? '取消星标' : '加星标'}
             onClick={() => store.updateTask(task.id, { starValue: task.starValue ? null : '1' })}
           >
-            <Icon name="star" size={13} fill={task.starValue ? 'currentColor' : 'none'} />
+            <Icon name="star" size={16} fill={task.starValue ? 'currentColor' : 'none'} />
           </button>
           <button
             type="button"
@@ -354,7 +352,7 @@ export default function TaskRow({
             aria-label="到期日设为今天"
             onClick={() => store.updateTask(task.id, { dueDate: today })}
           >
-            <Icon name="calendar" size={13} />
+            <Icon name="calendar" size={16} />
           </button>
           <button
             type="button"
@@ -364,7 +362,7 @@ export default function TaskRow({
             aria-label="删除任务"
             onClick={() => store.deleteTask(task)}
           >
-            <Icon name="trash" size={13} />
+            <Icon name="trash" size={16} />
           </button>
         </span>
       )}

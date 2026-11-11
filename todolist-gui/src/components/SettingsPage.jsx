@@ -1,12 +1,29 @@
-// 独立设置页：目前是「快捷键速查」+「列表外观」，将来有其它人工填写的参数再往这里追加分组。
+// 独立设置页：快捷键速查 + 两项本机外观偏好（列表外观 / 显示模式）。
 //
 // 设计约定：
 //  1. 设置不是"工作流的一部分"，所以它不是一个页签，而是一张独立页面
 //     （从顶栏齿轮 / 应用菜单 / Ctrl+, 进入，Esc 或「返回」退出）。
 //  2. 快捷键那一节只读：列的是键盘操作，点不了，也不需要"保存"。
-//     列表外观那一节会写本机配置 —— 它是偏好，不是数据，所以不进 todo.txt。
+//     列表外观 / 显示模式两节会写本机配置 —— 它们是偏好，不是数据，所以不进 todo.txt。
 import { PALETTE, colorHex, resolveColorId, useListStyle } from '../lib/listStyle.js';
+import { useListMode } from '../lib/listMode.js';
 import Icon from './Icon.jsx';
+
+// 键帽：把 "Ctrl + 1 / 2 / 3" 拆成一枚枚可扫的键，分隔符留在中间。
+// 纯函数，便于单测与复用；不改变原有字符串内容（速查表的断言仍成立）。
+export function splitKeys(text) {
+  return text.split(/(\s*[+/]\s*|\s+)/).filter(Boolean);
+}
+
+function Keycaps({ text }) {
+  return splitKeys(text).map((part, i) =>
+    /^\s*[+/]\s*$|^\s+$/.test(part) ? (
+      <span className="keycap-sep" key={i}>{part}</span>
+    ) : (
+      <kbd className="keycap" key={i}>{part}</kbd>
+    )
+  );
+}
 
 // 快捷键清单：与各处的实现保持同一份口径（useHotkeys / App 全局键 / ChatPanel 页内键）。
 const GROUPS = [
@@ -32,6 +49,18 @@ const GROUPS = [
       ['E', '编辑当前选中任务'],
       ['Ctrl + Z', '撤销上一步操作'],
       ['Esc', '清空搜索 / 取消选中'],
+    ],
+  },
+  {
+    title: '日历',
+    note: '焦点在日期格子上时生效；日详情里的任务行仍按「列表页」那组键操作。',
+    rows: [
+      ['← / →', '选中日期前后移一天'],
+      ['↑ / ↓', '前后移一周（在日详情里改为上下移行）'],
+      ['PageUp / PageDown', '上一月 / 下一月'],
+      ['Home', '回到今天'],
+      ['N / Enter', '在选中那天新建（预填 due:）'],
+      ['空格', '选中当前日期'],
     ],
   },
   {
@@ -121,21 +150,63 @@ function ListStyleSection({ projects }) {
   );
 }
 
+// 显示模式：与顶栏分段开关、应用菜单读的是同一份 configStore（一个能力一个键）。
+// 这里再放一份，是为了让「从设置页进来的人」也能找到它，并且把红线写清楚：
+// 选的是本机怎么排任务，不是写进 todo.txt 的字段。
+function DisplayModeSection() {
+  const [mode, pickMode] = useListMode();
+  return (
+    <section className="settings-group">
+      <div className="settings-group-side">
+        <h3 className="settings-group-title">显示模式</h3>
+        <p className="settings-group-note">
+          清单可以按行读，也可以按日期摊开。这是本机偏好，不写进 todo.txt —— 换台机器打开同一份文件，各看各的。
+        </p>
+      </div>
+      <div className="settings-fields">
+        <div className="mode-switch" role="group" aria-label="显示模式（本机偏好）">
+          <button
+            type="button"
+            className={'mode-btn' + (mode === 'list' ? ' active' : '')}
+            aria-pressed={mode === 'list'}
+            onClick={() => pickMode('list')}
+            title="按行看清单"
+          >
+            <Icon name="list" size={14} />
+            <span>列表（按行）</span>
+          </button>
+          <button
+            type="button"
+            className={'mode-btn' + (mode === 'calendar' ? ' active' : '')}
+            aria-pressed={mode === 'calendar'}
+            onClick={() => pickMode('calendar')}
+            title="按日期摊开（双击日期新建 · 拖任务改期）"
+          >
+            <Icon name="calendar" size={14} />
+            <span>日历（按日期）</span>
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function SettingsPage({ onClose, projects }) {
   return (
     <div className="settings">
       <div className="settings-head">
         <button type="button" className="settings-back" onClick={onClose} title="返回（Esc）">
-          <Icon name="chevron-left" size={15} />
+          <Icon name="chevron-left" size={16} />
           <span>返回</span>
         </button>
         <h2 className="settings-title">设置</h2>
         <span className="spacer" />
-        <span className="settings-head-note">列表外观存本机 · 快捷键在对应页签内生效</span>
+        <span className="settings-head-note">快捷键只读 · 外观与显示偏好存本机</span>
       </div>
 
       <div className="settings-body">
         <ListStyleSection projects={projects} />
+        <DisplayModeSection />
         {GROUPS.map((g) => (
           <section className="settings-group" key={g.title}>
             <div className="settings-group-side">
@@ -146,7 +217,7 @@ export default function SettingsPage({ onClose, projects }) {
             <div className="settings-fields">
               {g.rows.map(([keys, desc]) => (
                 <div className="settings-row settings-row-keys" key={keys}>
-                  <span className="settings-label">{keys}</span>
+                  <span className="settings-label"><Keycaps text={keys} /></span>
                   <div className="settings-control">
                     <span className="settings-range">{desc}</span>
                   </div>

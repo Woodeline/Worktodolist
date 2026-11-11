@@ -117,7 +117,7 @@ export default function StatsTool({ snapshot }) {
           <div className="tool-metrics">
             <div className="tool-metric">
               <span className="tool-metric-label">
-                <Icon name="circle-half" size={13} /> 活跃任务
+                <Icon name="circle-half" size={16} /> 活跃任务
               </span>
               <span className="tool-metric-val">
                 {counts.active || 0}
@@ -126,7 +126,7 @@ export default function StatsTool({ snapshot }) {
             </div>
             <div className="tool-metric">
               <span className="tool-metric-label">
-                <Icon name="alert-triangle" size={13} /> 逾期
+                <Icon name="alert-triangle" size={16} /> 逾期
               </span>
               <span className="tool-metric-val">
                 {counts.overdue || 0}
@@ -135,7 +135,7 @@ export default function StatsTool({ snapshot }) {
             </div>
             <div className="tool-metric">
               <span className="tool-metric-label">
-                <Icon name="calendar" size={13} /> 今天到期
+                <Icon name="calendar" size={16} /> 今天到期
               </span>
               <span className="tool-metric-val">
                 {counts.dueToday || 0}
@@ -144,7 +144,7 @@ export default function StatsTool({ snapshot }) {
             </div>
             <div className="tool-metric">
               <span className="tool-metric-label">
-                <Icon name="check-circle" size={13} /> 本周完成
+                <Icon name="check-circle" size={16} /> 本周完成
               </span>
               <span className="tool-metric-val">
                 {data.weekDone}
@@ -155,21 +155,21 @@ export default function StatsTool({ snapshot }) {
 
           <section className="tool-sec">
             <h3 className="tool-sec-title">
-              <Icon name="flag" size={15} /> 优先级分布
+              <Icon name="flag" size={16} /> 优先级分布
             </h3>
             <BarList rows={data.priority} />
           </section>
 
           <section className="tool-sec">
             <h3 className="tool-sec-title">
-              <Icon name="calendar" size={15} /> 截止日期分布
+              <Icon name="calendar" size={16} /> 截止日期分布
             </h3>
             <BarList rows={data.due} />
           </section>
 
           <section className="tool-sec">
             <h3 className="tool-sec-title">
-              <Icon name="filter" size={15} /> 分类 Top
+              <Icon name="filter" size={16} /> 分类 Top
             </h3>
             {data.contexts.length === 0 ? (
               <div className="tool-empty">没有带 @分类 的活跃任务</div>
@@ -180,7 +180,7 @@ export default function StatsTool({ snapshot }) {
 
           <section className="tool-sec">
             <h3 className="tool-sec-title">
-              <Icon name="columns" size={15} /> 项目 Top
+              <Icon name="columns" size={16} /> 项目 Top
             </h3>
             {data.projects.length === 0 ? (
               <div className="tool-empty">没有带 +项目 的活跃任务</div>
@@ -191,7 +191,7 @@ export default function StatsTool({ snapshot }) {
 
           <section className="tool-sec">
             <h3 className="tool-sec-title">
-              <Icon name="chart" size={15} /> 最近 14 天完成趋势
+              <Icon name="chart" size={16} /> 最近 14 天完成趋势
             </h3>
             <BarList rows={data.trend} />
           </section>

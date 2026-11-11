@@ -17,6 +17,7 @@ import { useState } from 'react';
 import { PRIORITY_LABELS } from '../lib/sortFilter';
 import { PREVIEW_LIMIT } from '../lib/proposals';
 import { serializeTask } from '../lib/todoParser';
+import PriorityMark from './PriorityMark.jsx';
 import Icon from './Icon.jsx';
 
 const PRIORITY_ORDER = ['A', 'B', 'C'];
@@ -84,7 +85,7 @@ function CreateForm({ source, busy, onConfirm, onCancel }) {
         <div className="drawer-header">
           <h3>修改后新建</h3>
           <button className="icon-btn" onClick={onCancel} title="关闭（Esc）">
-            <Icon name="x" size={15} />
+            <Icon name="x" size={16} />
           </button>
         </div>
 
@@ -100,6 +101,7 @@ function CreateForm({ source, busy, onConfirm, onCancel }) {
               className={form.priority === '' ? 'sel' : ''}
               onClick={() => setForm((f) => ({ ...f, priority: '' }))}
             >
+              <PriorityMark variant="mark" />
               无
             </button>
             {PRIORITY_ORDER.map((p) => (
@@ -108,6 +110,7 @@ function CreateForm({ source, busy, onConfirm, onCancel }) {
                 className={form.priority === p ? 'sel' : ''}
                 onClick={() => setForm((f) => ({ ...f, priority: p }))}
               >
+                <PriorityMark priority={p} variant="mark" />
                 {PRIORITY_LABELS[p] || p} ({p})
               </button>
             ))}
@@ -165,7 +168,7 @@ function DiffView({ proposal, busy, onConfirm, onCancel }) {
         <div className="drawer-header">
           <h3>{isEdit ? '按建议修改' : '批量修改'}</h3>
           <button className="icon-btn" onClick={onCancel} title="关闭（Esc）">
-            <Icon name="x" size={15} />
+            <Icon name="x" size={16} />
           </button>
         </div>
 

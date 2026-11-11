@@ -45,8 +45,14 @@ export default function TopBar({
   sidebarCollapsed = false,
   onToggleSidebar,
   chrome = false,
+  listMode = 'list',
+  effectiveMode,
+  onPickListMode,
 }) {
   const isList = tab === 'list' && !settingsOpen;
+  // 面包屑 / 排序按钮说的是「此刻画面」，所以读有效布局；
+  // 下面 mode-switch 的按下态说的是「用户选的」，仍读持久化偏好 listMode。
+  const isCalendar = isList && (effectiveMode || listMode) === 'calendar';
 
   // 当前视图是某个列表（+项目）时，面包屑带上它的颜色 ——
   // 否则"列表"这个概念只在侧栏成立，进了主区就退回成一串灰字。
@@ -60,7 +66,16 @@ export default function TopBar({
       ? { title: '对话', sub: '自然语言操作' }
       : tab === 'tools'
         ? { title: '工具', sub: '只读投影' }
-        : { title: viewTitle(store.view), sub: viewSubtitle(store.view) };
+        : {
+            title: viewTitle(store.view),
+            // 日历是列表的第二种显示模式：面包屑第一段仍是侧栏选中的视图，
+            // 第二段说明"现在按什么日期口径摊开"。
+            sub: isCalendar
+              ? store.view === 'done'
+                ? '日历 · 完成日期 · 只读'
+                : '日历 · 截止日期'
+              : viewSubtitle(store.view),
+          };
 
   const toggleSort = () => store.setSortMode(store.sortMode === 'manual' ? 'auto' : 'manual');
 
@@ -78,7 +93,7 @@ export default function TopBar({
           aria-label="折叠侧栏"
           aria-pressed={sidebarCollapsed}
         >
-          <Icon name="panel-fold" size={13} />
+          <Icon name="panel-fold" size={16} />
         </button>
       )}
 
@@ -92,12 +107,37 @@ export default function TopBar({
         {isList && count != null && <span className="n">{count} 项</span>}
       </div>
 
+      {isList && onPickListMode && (
+        <div className="mode-switch" role="group" aria-label="列表显示模式">
+          <button
+            type="button"
+            className={'mode-btn' + (listMode === 'list' ? ' active' : '')}
+            aria-pressed={listMode === 'list'}
+            onClick={() => onPickListMode('list')}
+            title="按行看清单"
+          >
+            <Icon name="list" size={14} />
+            <span>列表</span>
+          </button>
+          <button
+            type="button"
+            className={'mode-btn' + (listMode === 'calendar' ? ' active' : '')}
+            aria-pressed={listMode === 'calendar'}
+            onClick={() => onPickListMode('calendar')}
+            title="按日期摊开（双击日期新建 · 拖任务改期）"
+          >
+            <Icon name="calendar" size={14} />
+            <span>日历</span>
+          </button>
+        </div>
+      )}
+
       <span className="spacer" data-tauri-drag-region={chrome ? 'true' : undefined} />
 
       {isList && (
         <>
           <div className="search">
-            <Icon name="search" size={13} />
+            <Icon name="search" size={16} />
             <input
               ref={store.searchRef}
               value={store.search}
@@ -114,14 +154,18 @@ export default function TopBar({
             )}
           </div>
 
-          <button
-            type="button"
-            className="ctx-btn"
-            onClick={toggleSort}
-            title="点击切换：手动 = 文件行序（可拖拽）／自动 = 优先级 · 日期"
-          >
-            排序 · {store.sortMode === 'manual' ? '手动' : '自动'}
-          </button>
+          {/* 日历里每一天内部恒按优先级·日期聚拢（compareAuto），
+              手动排序没有作用对象 —— 整个按钮收掉，不留一个按了没反应的控件。 */}
+          {!isCalendar && (
+            <button
+              type="button"
+              className="ctx-btn"
+              onClick={toggleSort}
+              title="点击切换：手动 = 文件行序（可拖拽）／自动 = 优先级 · 日期"
+            >
+              排序 · {store.sortMode === 'manual' ? '手动' : '自动'}
+            </button>
+          )}
         </>
       )}
     </header>

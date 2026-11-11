@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>字体排版优化 · 方案与实施记录</title>
+<style>
+  :root {
+    --bg: #f4f4f5;
+    --surface: #ffffff;
+    --surface-2: #f8f8f9;
+    --line: #dcdce0;
+    --line-soft: #e8e8eb;
+    --text: #1c1e22;
+    --text-2: #4c515a;
+    --muted: #747a84;
+    --accent: #147d94;
+    --danger: #b4443c;
+    --mono: "Cascadia Mono", Consolas, "SF Mono", "DejaVu Sans Mono", monospace;
+    --ui: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.75 var(--ui); -webkit-font-smoothing: antialiased; }
+  main { max-width: 1120px; margin: 0 auto; padding: 48px 28px 96px; }
+  .sheet { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  header { padding: 38px 44px 30px; border-bottom: 1px solid var(--line); }
+  .kicker { font: 12px/1.5 var(--mono); color: var(--muted); }
+  h1 { margin: 10px 0 12px; font-size: 30px; line-height: 1.3; font-weight: 600; }
+  .lede { margin: 0; max-width: 800px; color: var(--text-2); font-size: 15px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 6px 30px; margin: 26px 0 0; padding: 0; }
+  .facts div { display: flex; gap: 8px; align-items: baseline; }
+  .facts dt { font: 11px/1.6 var(--mono); color: var(--muted); }
+  .facts dd { margin: 0; font: 12px/1.6 var(--mono); color: var(--text-2); font-variant-numeric: tabular-nums; }
+
+  section.row { display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 22px; padding: 28px 44px; border-bottom: 1px solid var(--line-soft); }
+  section.row:last-child { border-bottom: 0; }
+  .row-label { font: 11px/1.9 var(--mono); color: var(--muted); }
+  .row-body { min-width: 0; }
+  h2 { margin: 0 0 14px; font-size: 17px; font-weight: 600; }
+  h3 { margin: 22px 0 8px; font-size: 14px; font-weight: 600; }
+  p { margin: 0 0 12px; }
+  p:last-child { margin-bottom: 0; }
+  .note { color: var(--text-2); }
+  .muted { color: var(--muted); }
+  .tag { display: inline-block; font: 11px/1.6 var(--mono); border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; color: var(--text-2); background: var(--surface-2); }
+  code { font: 12px/1.6 var(--mono); background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 4px; padding: 1px 5px; color: var(--text-2); }
+  pre { margin: 12px 0 0; padding: 14px 16px; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 8px; overflow-x: auto; font: 12px/1.8 var(--mono); color: var(--text-2); }
+  ul { margin: 0 0 12px; padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th { font: 11px/1.6 var(--mono); color: var(--muted); font-weight: 400; }
+  td:first-child { width: 150px; font: 12px/1.7 var(--mono); color: var(--text-2); }
+  tr:last-child td { border-bottom: 0; }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .callout { border-left: 3px solid var(--accent); background: var(--surface-2); padding: 12px 16px; border-radius: 0 6px 6px 0; color: var(--text-2); }
+  .warn { border-left-color: var(--danger); }
+  .pick { border: 1px solid var(--accent); }
+  .specimens { display: grid; gap: 10px; margin-top: 10px; }
+  .spec { border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; background: var(--surface-2); }
+  .spec .lbl { font: 11px/1.6 var(--mono); color: var(--muted); margin-bottom: 8px; }
+  .spec .head { color: var(--text); }
+  .spec .line { display: flex; align-items: baseline; gap: 10px; margin-top: 6px; }
+  .spec .title { font-weight: 500; }
+  .spec .read { margin-left: auto; font: 11px/1.6 var(--mono); color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .spec .raw { margin-top: 6px; font: 11px/1.6 var(--mono); color: var(--muted); }
+  .figures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 8px; }
+  figure { margin: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface-2); }
+  figure img { display: block; width: 100%; height: auto; }
+  figcaption { padding: 8px 12px; font: 11px/1.6 var(--mono); color: var(--muted); border-top: 1px solid var(--line); background: var(--surface); }
+  footer { padding: 20px 44px 26px; color: var(--muted); font: 11px/1.8 var(--mono); }
+  @media (max-width: 760px) {
+    main { padding: 20px 12px 56px; }
+    header, section.row, footer { padding-left: 20px; padding-right: 20px; }
+    section.row { grid-template-columns: 1fr; gap: 8px; }
+    .figures { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+<div class="sheet">
+
+<header>
+  <div class="kicker">Worktodolist · UI / 2026-11-10 · 方案 + 实施记录</div>
+  <h1>字体排版优化方案</h1>
+  <p class="lede">用户反馈「字体设计感不足」。诊断结论：主要不是字体不好看，而是<strong>层级落差不够、口径三处打架、比例字与等宽字混排</strong>。本文保留完整的诊断与三方向对比，并记录按裁决 <strong>A + B 组合</strong> 落地后的实际改动、偏差、门禁结果与界面截图（07 / 08 节）。</p>
+  <dl class="facts">
+    <div><dt>状态</dt><dd>已实施 · 全套门禁全绿</dd></div>
+    <div><dt>裁决</dt><dd>A + B 组合 · 分组名 11px mono</dd></div>
+    <div><dt>用例</dt><dd>39 文件 / 726 条</dd></div>
+    <div><dt>排版门禁</dt><dd>19 条（新增）</dd></div>
+  </dl>
+</header>
+
+<section class="row">
+  <div class="row-label">01 / 诊断</div>
+  <div class="row-body">
+    <h2>「设计感不足」具体来自哪几处</h2>
+    <p>以下全部是可核对的代码事实，不是观感推测。行号指向当前工作树。</p>
+    <table>
+      <tr><th>问题</th><th>事实</th><th>位置</th></tr>
+      <tr><td>三族令牌是空壳</td><td><code>--font-display</code> / <code>--font-body</code> 都等于 <code>--font-ui</code>；前者在产品 CSS 里 <strong>0 引用</strong>，后者仅 1 处。但文件头说「display 指向 mono」、样式指南说「宋体展示字」—— 注释、指南、代码三套口径互相矛盾。</td><td><code>index.css:9, 135-142</code>；<code>styleguide.jsx:659, 671-679</code></td></tr>
+      <tr><td>字阶挤在底部</td><td>192 处 <code>font-size</code> 里 11px(75) + 12px(64) + 13px(28) = <strong>167 处 ≈ 87%</strong>；≥16px 仅 14 处。常规页面最大标题 16px，20px 以上只出现在引导页 / 工具墙 / 指标值。</td><td><code>index.css:92-100</code>（字阶）；分布见 §4 表</td></tr>
+      <tr><td>层级只靠字重和颜色</td><td>任务行标题 14px/500 与正文 14px/400 同字号同族；设置页分组标题 14px/600 与正文同字号；侧栏组名 <strong>12px 反而小于</strong>条目 13px（注释自称「组名 600 &gt; 条目 400」，代码是 500 vs 400）。</td><td><code>index.css:1874-1883, 1400-1424, 3829-3834, 1397-1399</code></td></tr>
+      <tr><td>装饰清空但替代没建起来</td><td><code>text-transform</code> 0、<code>italic</code> 0、<code>font-feature-settings</code> 0、<code>letter-spacing</code> 仅 4 处。且清得不彻底：<code>font-weight: 600</code> 仍有 <strong>26 处</strong>（约 10 处是标题）；日历月标题还同时留着 mono + 600 + 0.02em。</td><td><code>index.css:2240-2249, 3099, 3166</code></td></tr>
+      <tr><td>系统性混族</td><td>组合选择器 <code>462-470</code> 只给 <code>tabular-nums</code> 不给字族，使状态栏、工具耗时、分组名成为「比例字 + 仅数字等宽」；同一 28px 状态栏里 ui 的 <code>.statusbar</code> 与 mono 的 <code>.statusbar-lines</code> 混排；同一任务行里 ui 标题 + mono 日期混排。</td><td><code>index.css:462-470, 1176, 1203, 1215, 1605-1622</code></td></tr>
+      <tr><td>画布脱离治理</td><td>RTI 图表的字体族读令牌，但字号硬编码 11 / 12 / 15px，并用 <code>bold</code> 而非 400/500/600；改 <code>--fs-*</code> 时刻度不跟随，<code>qa-css-check</code> 只扫 CSS 覆盖不到。</td><td><code>lib/rti/chart.js:85-86, 126, 168, 262, 295, 900</code></td></tr>
+      <tr><td>样式指南不是基准</td><td><code>TokensDoc</code> 把 <code>--fs-xl</code> 写成 19px（实际 20px，且是硬编码文案不读令牌），并宣称「宋体 / 三套字体」—— 按文档去调字体的人会先撞上不一致。</td><td><code>styleguide.jsx:612-621, 657-680</code></td></tr>
+      <tr><td>门禁最薄的一层</td><td>字族、字阶值、字重<strong>全仓无断言</strong>，仅两条例外：优先级徽章 600/500/400（<code>qa-settings.mjs:358-360</code>）与小屏 <code>--fs-2xl = 21px</code>（<code>qa-responsive.mjs:514</code>）。既缺一致口径，又最容易被反复改乱。</td><td><code>scripts/qa-*.mjs</code></td></tr>
+    </table>
+    <div class="callout">11-06 日志已经把「13px 88 次、11px 84 次、层级只靠字重」标成「排版系统冻结，要动得单开一轮」；11-07 全量重做明确「令牌值一个没动」，把这个问题原样留了下来。<strong>现在就是那一轮。</strong></div>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">02 / 方向</div>
+  <div class="row-body">
+    <h2>三个可裁决方向</h2>
+    <div class="specimens">
+      <div class="spec">
+        <div class="lbl">现状 · 页头 13 / 任务 13 / 读数 11</div>
+        <div class="head" style="font-size:13px;">今天 · 到期与逾期 9 项</div>
+        <div class="line" style="font-size:13px;"><span class="title">季报复核</span><span class="read">逾期 9月25日</span></div>
+        <div class="raw">07 │ (A) 交周报 @工作 +回测 due:2026-11-10</div>
+      </div>
+      <div class="spec pick">
+        <div class="lbl">A · 字阶重排（推荐）— 页头 22 / 任务 14 / 读数 11</div>
+        <div class="head" style="font-size:22px;font-weight:500;line-height:1.25;">今天 · 到期与逾期 9 项</div>
+        <div class="line" style="font-size:14px;"><span class="title">季报复核</span><span class="read">逾期 9月25日</span></div>
+        <div class="raw">07 │ (A) 交周报 @工作 +回测 due:2026-11-10</div>
+      </div>
+      <div class="spec">
+        <div class="lbl">B · 双族边界 — 字号不变，读数严格成列</div>
+        <div class="head" style="font-size:16px;font-weight:500;">今天 · 到期与逾期 <span class="num">9</span> 项</div>
+        <div class="line" style="font-size:14px;"><span class="title">季报复核</span><span class="read">逾期 09-25</span></div>
+        <div class="raw">07 │ (A) 交周报 @工作 +回测 due:2026-11-10</div>
+      </div>
+      <div class="spec">
+        <div class="lbl">C · 本地字体包 / 系统衬线展示族 — 真正换字形</div>
+        <div class="head" style="font-family:Georgia,'Songti SC','SimSun',serif;font-size:21px;">今天 · 到期与逾期 9 项</div>
+        <div class="line" style="font-size:14px;"><span class="title">季报复核</span><span class="read">逾期 9月25日</span></div>
+        <div class="raw">07 │ (A) 交周报 @工作 +回测 due:2026-11-10</div>
+      </div>
+    </div>
+    <table style="margin-top:18px;">
+      <tr><th>方向</th><th>做什么</th><th>改动面</th><th>风险 / 代价</th><th>门禁影响</th></tr>
+      <tr><td>A 字阶重排<br><span class="tag">推荐</span></td><td>新增页面标题档，拉开「标题 / 正文 / 读数」三级落差；修 12px 组名 &lt; 13px 条目的倒挂；收敛 26 处 600；清理 mono+600+0.02em 残留；用行高建立节奏。<strong>不换字体族、不加装饰。</strong></td><td>令牌层 + 约 30 处选择器用法 + canvas + 样式指南 + 新门禁脚本</td><td>中。字号变大可能挤窄屏与 44px 命中区，须全档回归。零依赖、跨平台一致，且正好兑现 11-06 说的「单开一轮」。</td><td>不动 <code>--fs-2xl@small = 21px</code>、不动 <code>.prio-badge</code> 字重，两条硬断言不受影响</td></tr>
+      <tr><td>B 双族边界</td><td>删掉 <code>--font-display</code> / <code>--font-body</code> 空壳；所有计数 / 日期 / 耗时 / 行号严格 mono + tabular；正文与标题全 ui；状态栏、任务行、工具表格不再混族；body 统一 tabular-nums。</td><td>约 20 处选择器 + canvas + 样式指南</td><td>低。视觉变化最内敛，「设计感」提升有限；更像一致性整理而非风格升级。<strong>适合作为 A 的附带收尾。</strong></td><td>几乎为零</td></tr>
+      <tr><td>C 换字形</td><td>两条路：① 显式指定系统衬线展示族（Georgia / Songti SC / SimSun）；② 打包一份 OFL 开源中文字体到 Tauri 资源，用本地 <code>@font-face</code> 加载，换取跨平台字形一致。</td><td>字体栈 / 资源打包 / Tauri 配置 / 体积</td><td><strong>高</strong>。① 宋体在 Windows 小字号 hinting 差、与「仪器面板」气质冲突，且属于 11-06 被否的装饰性手法；② 违背文件头「完全离线，字体取自系统栈里的显式选择」，需先裁决是否放宽，并评估中文子集体积（约 1–3 MB）与 OFL 授权附带义务。</td><td>门禁不拦（字族无断言），只能靠明暗截图人工验收</td></tr>
+    </table>
+    <div class="callout warn"><strong>明确不建议</strong>：把 <code>--font-display</code> 改回 mono 给标题用、给标题加 uppercase / 宽字距 / 斜体、用字重重新编码优先级 —— 这些是 11-06 被整轮作废的同一批手法（<code>MEMORY.md:93, 101</code>）。也不建议只改列表页：11-06 正因「只改列表页」被判成 polish 而推翻。</div>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">03 / 推荐</div>
+  <div class="row-body">
+    <h2>A 方案的分层实施清单</h2>
+    <p class="note">裁决结果：<strong>A + B 组合</strong>（字阶重排 + 双族边界），分组名采用 <strong>11px mono 刻度标签</strong>。以下按改动层列出，全部落在既有令牌体系内。</p>
+
+    <h3>第 1 层 · 令牌（index.css §1，令牌层内裸值豁免）</h3>
+    <pre>新增  --fs-display: 22px        /* 页面标题专用，不动既有 8 档 */
+新增  --lh-display: 1.25         /* 或复用 --lh-tight */
+新增  --fw-body / --fw-emph / --fw-title: 400 / 500 / 600   /* 字重语义化 */
+保留  --fs-2xl = 24px、@media(max-width:480) = 21px        /* qa-responsive 硬断言 */
+删除  --font-display / --font-body 两个空壳（或保留别名并改注释为「= ui」）
+统一  body { font-variant-numeric: tabular-nums; }</pre>
+    <p class="note">刻意<strong>不改</strong>现有 8 档字阶的数值：它们是「冻结：排版系统非调性」，动数值会波及 192 处用法与 38 档响应式；新增一档比整体重标定更可控。</p>
+
+    <h3>第 2 层 · 用法（层级落差）</h3>
+    <ul>
+      <li>列表 / 日历 / 设置 / 对话 / 工具的<strong>页面标题</strong>统一 <code>--fs-display</code> + <code>--fw-title</code> + <code>--lh-display</code>；面包屑保持 13px，形成「页标题 ≫ 面包屑」的落差。</li>
+      <li>修倒挂（已裁决）：侧栏 / 列表分组名降为 <code>--fs-2xs</code>(11px) + <code>--font-mono</code> 的「刻度标签」，与新增 22px 页面标题形成强落差。<strong>两条必须一起做的对策</strong>：① 字色用 <code>--text-2</code>、字重 500，<strong>不许用 <code>--muted</code> + 11px</strong> —— 11-07 已验证这个组合会让中文几乎看不见；② 现有 <code>--font-mono</code> 栈（Cascadia Mono / Consolas / SF Mono / DejaVu Sans Mono / monospace）<strong>不含中文字体</strong>，中文标签会回退到系统黑体、并不真的等宽。实施时要么新增 <code>--font-mono-cjk</code> 令牌补中文回退，要么只让编号 / 计数走 mono、中文标签保持 ui —— 具体取哪一种在落地时用明暗截图定，但必须在 <code>qa-typography</code> 里断言「分组名不使用 <code>--muted</code>」。</li>
+      <li>收敛 26 处 600：只保留页面标题、弹窗标题、强调数字；正文里的 600 降为 500。四档优先级徽章的 600/500/400 <strong>一个都不动</strong>（<code>qa-settings.mjs:358-360</code> 锁死）。</li>
+      <li>清残留：<code>.cal-month</code>(2240-2249) 的 mono + 600 + 0.02em、<code>.cmd-hint-title</code>(3099) / <code>.snapshot-head</code>(3166) 的 0.06em，统一进新标题系统。不引入新的字距 / uppercase / 斜体。</li>
+      <li>日历月标题、设置页标题、抽屉标题的现有 16px 用法按新规则归位，避免同一层级两种尺寸。</li>
+    </ul>
+
+    <h3>第 3 层 · 数字与字族边界（B 的收尾）</h3>
+    <ul>
+      <li><code>index.css:462-470</code> 的组合选择器拆成两类：明确是读数的补 <code>font-family: var(--font-mono)</code>；明确是文字的保持 ui 并继承 body 的 tabular-nums。</li>
+      <li>状态栏（1176 / 1203 / 1215）、任务行（1605-1622）、工具表格（4777 / 4797）里同一行的字族统一；不再出现「同一 28px 条里两种字宽体系」。</li>
+      <li><code>lib/rti/chart.js</code> 的 11 / 12 / 15px 改从 <code>token('--fs-*')</code> 读；<code>bold</code> 换成 <code>--fw-emph / --fw-title</code>。<strong>canvas 必须一起改</strong>，否则令牌改了画布不跟随。</li>
+    </ul>
+
+    <h3>第 4 层 · 样式指南与口径</h3>
+    <ul>
+      <li><code>styleguide.jsx:612-621</code> 的字阶表改成从令牌读值（不再硬编码 px），修 <code>--fs-xl 19px → 20px</code>。</li>
+      <li><code>657-680</code> 删掉「宋体 / 三套字体」的说法，改成真实的「一族正文 + 一族读数」；把「宋体展示字」样张换成新页面标题档。</li>
+      <li>新增「页面标题 / 正文 / 读数」三档对照区，作为以后截图回归的基准。<code>styleguide.html</code> 外壳的 uppercase / 0.08em 是开发外壳、不进产品，可保留但标注清楚。</li>
+      <li>清掉 <code>index.css:9, 135-137</code> 里「display 指向 mono」的旧注释，让注释、令牌、指南三处口径一致。</li>
+    </ul>
+
+    <h3>第 5 层 · 补门禁（这一层目前最薄）</h3>
+    <pre>新增 scripts/qa-typography.mjs，并入 npm run test:ui：
+  · --font-ui / --font-mono / --font-display / --font-body 的值与引用数（空壳令牌不许存在）
+  · --fs-display / --fs-* 8 档 / --fw-* 语义令牌存在且明暗一致
+  · 页面标题 computed font-size === 22px、body 有 tabular-nums
+  · font-weight: 600 只出现在白名单选择器（源码静态扫描）
+  · text-transform / font-style:italic / letter-spacing 仍为 0（防止装饰手法回流）
+  · chart.js 不残留硬编码 px 字号（读令牌）
+同步 styleguide 的 #sg-metrics 探针，让浏览器门禁能读到新令牌。</pre>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">04 / 验证</div>
+  <div class="row-body">
+    <h2>改完要跑的东西</h2>
+    <table>
+      <tr><th>门禁</th><th>为什么必须</th></tr>
+      <tr><td><code>npm test</code> / <code>test:guard</code></td><td>当前 39 文件 / 726 用例；新增排版纯函数若有的话要补渲染测试</td></tr>
+      <tr><td><code>test:ui</code></td><td>css-check（令牌层外不许裸 px 字号）+ 110 组对比度 + 新 <code>qa-typography</code> + Hook 规则</td></tr>
+      <tr><td><code>test:settings</code> 29 条</td><td>字重 600/500/400 断言、1280 / 390 无横向溢出、四档徽章形状</td></tr>
+      <tr><td><code>test:responsive</code> 38 档 539 项</td><td><strong>最关键</strong>：字号变大最容易挤爆窄屏与 44px 触屏命中区；<code>--fs-2xl@small = 21px</code> 是硬断言</td></tr>
+      <tr><td><code>test:tools</code> 74 / <code>test:nl</code> 44 / <code>build</code></td><td>工具表格与引导页是字号 ≥16px 最集中的地方，必须回归</td></tr>
+      <tr><td>明暗 × 列表 / 日历 / 设置 / 对话 / 引导 截图</td><td>字体层没有自动断言的地方，靠真实浏览器截图人工验收；<code>test:settings:shots</code> 可复用</td></tr>
+    </table>
+    <p class="note" style="margin-top:12px">macOS 上跑浏览器门禁仍需 <code>EDGE=/tmp/unslop/chrome-qa SG_BASE=http://localhost:15181</code> 并去掉代理变量（<code>MEMORY.md</code> 既有约定）。</p>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">05 / 红线</div>
+  <div class="row-body">
+    <h2>明确不做</h2>
+    <ul>
+      <li><strong>不联网、不引入 CDN webfont、不用 <code>system-ui</code></strong>——文件头 <code>index.css:28-29</code>。C 方案若要打包本地字体，必须先由你裁决是否放宽「字体取自系统栈」这条。</li>
+      <li><strong>不把字体偏好写进 todo.txt</strong>；纯文本是唯一数据源，外观只进 CSS 令牌 / configStore。</li>
+      <li><strong>不动优先级四档字阶徽章</strong>的形状、字重与中性墨（11-10 刚定稿，<code>qa-settings.mjs</code> 锁死）。</li>
+      <li><strong>不动 <code>--control-line</code></strong>（WCAG 1.4.11 契约）、不动设置页六节分组顺序、不动 8 档字阶数值与小屏 21px 覆盖。</li>
+      <li><strong>不重蹈 11-06</strong>：不把 mono 扩权到标题、不加 uppercase / 宽字距 / 斜体、不只改列表页。</li>
+    </ul>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">06 / 裁决</div>
+  <div class="row-body">
+    <h2>裁决与两处落地的处理</h2>
+    <table>
+      <tr><th>裁决项</th><th>结果</th></tr>
+      <tr><td>方向</td><td><strong>A + B 组合</strong>：字阶重排为主体，双族边界与数字对齐作同一轮收尾；不引入 webfont、不改 8 档字阶数值。</td></tr>
+      <tr><td>分组名层级</td><td><strong>11px mono 刻度标签</strong>（用户选了更安静、更「登记簿」的一档，而非推荐的可读性优先档）。</td></tr>
+      <tr><td>字体来源</td><td>不放宽 —— C 方案不采用，仍遵守「字体取自系统栈的显式选择」。</td></tr>
+    </table>
+    <h3>两个小点实际怎么定的</h3>
+    <ol>
+      <li><strong>中文 mono 回退</strong>：采用新增 <code>--font-mono-cjk</code> 令牌（西文数字保持等宽、中文显式回退到 PingFang SC / Microsoft YaHei UI），而不是把中文标签退回 ui。中文在 mono 栈里本就不会真等宽，这一族至少保证字形稳定、基线不乱跳。</li>
+      <li><strong>11px 可读性兜底</strong>：分组名固定 <code>--text-2</code> + 字重 500；<code>qa-typography</code> 静态断言规则块里不许出现 <code>--muted</code>，<code>qa-settings</code> 读 computed 断言 11px / 500 / mono 栈含中文回退。明暗截图确认清晰，未退到 12px。</li>
+    </ol>
+    <p class="note">方向已于当日实施，完整改动与验证见 07 节。</p>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">07 / 实施</div>
+  <div class="row-body">
+    <h2>实际改了什么</h2>
+    <table>
+      <tr><th>层</th><th>文件</th><th>改动</th></tr>
+      <tr><td>令牌</td><td><code>src/index.css</code> §1</td><td>新增 <code>--fs-display: 22px</code>、<code>--fw-body/emph/title = 400/500/600</code>、<code>--font-mono-cjk</code>；删掉 <code>--font-display</code> / <code>--font-body</code> 两个空壳；<code>body</code> 统一 <code>tabular-nums</code>；清掉文件头与字体段里「display 指向 mono」的旧注释。<strong>8 档基础字阶数值一个没动</strong>。</td></tr>
+      <tr><td>层级</td><td><code>index.css</code></td><td>独立页头（设置 / 工具墙 / 对话空态）统一 22px / 600 / 紧行高；36px 上下文条主段提到 16px；侧栏与列表分组名降为 11px mono 刻度标签（<code>--text-2</code> + 500）；日历月标题清掉 mono + 0.02em；<code>.cmd-hint-title</code> / <code>.snapshot-head</code> 的 0.06em 清掉；<strong>600 从 26 处收敛到 15 处白名单</strong>（页头 / 弹窗标题 / 状态强调 / 读数 / 四档徽章），其余降 500。</td></tr>
+      <tr><td>字族</td><td><code>index.css</code></td><td>拆分旧的 <code>462-470</code> 组合选择器：读数（计数 / 日期 / 工具耗时 / 顶栏完成数）补 <code>--font-mono</code>，纯文字容器只继承 body 的 tabular-nums，不再出现「比例字 + 仅数字等宽」的半吊子状态。</td></tr>
+      <tr><td>画布</td><td><code>lib/rti/chart.js</code></td><td><code>fnt()</code> 改从 <code>palette()</code> 取字号与字重，硬编码 11 / 12 / 15px 改读 <code>--fs-2xs</code> / <code>--fs-xs</code> / <code>--fs-md</code>，<code>'bold'</code> 换成 <code>--fw-title</code>；<code>FALLBACK</code> 同步补令牌。改字阶时图表刻度现在会跟着变。</td></tr>
+      <tr><td>样式指南</td><td><code>styleguide.jsx</code> / <code>styleguide.html</code></td><td>字阶表改成从令牌读值（修掉硬编码 19px），加 <code>display</code> 档；删「宋体 / 三套字体」的旧说法，改成真实的「两族 + 三层落差」陈列；外壳 h2 的 <code>--font-display</code> 换成 <code>--font-ui</code>，h3 的 uppercase / 宽字距标注为开发外壳专用。</td></tr>
+      <tr><td>门禁</td><td><code>scripts/qa-typography.mjs</code>（新增）</td><td>19 条静态断言并入 <code>test:ui</code>：字体令牌值与引用数、空壳别名已删、8 档冻结、<code>--fs-display</code>、分组名不用 <code>--muted</code>、装饰手法不回流、600 白名单、chart.js 无硬编码 px / bold、样式指南不写死 19px。另在 <code>qa-settings.mjs</code> 补 4 条浏览器 computed 断言（22px 页头 / 16px 面包屑 / 11px mono 分组名 / body tabular-nums）。</td></tr>
+    </table>
+
+    <h3>与方案的三处偏差（如实记录）</h3>
+    <ol>
+      <li><strong>22px 没进常规页头</strong>：样张写的是「页头 22 / 正文 14 / 读数 11」，实际落地为「独立页头 22 / 36px 上下文条主段 16 / 正文 14 / 读数 11」。原因：<code>.topbar</code> 固定 <code>--ctxbar-h: 36px</code>，22px 会把它撑破并牵动 38 档响应式；列表 / 日历 / 对话页没有独立页头元素，硬塞要改 JSX 布局。落差仍然拉开了（13 → 16px），且设置 / 工具 / 空态是真的 22px。</li>
+      <li><strong>canvas 的 15px 变成 14px</strong>：字阶里没有 15px 这一档，就近归到 <code>--fs-md</code>(14px)；不为此新增第十档。</li>
+      <li><strong>600 是收敛不是清零</strong>：保留 15 处有明确语义的（含四档徽章高档，<code>qa-settings</code> 硬断言不许动），把 12 处小标签 / 选中态 / 内联强调降到 500。</li>
+    </ol>
+
+    <h3>验证结果</h3>
+    <table>
+      <tr><th>门禁</th><th>结果</th></tr>
+      <tr><td><code>npm test</code> / <code>test:guard</code></td><td class="num">39 文件 / 726 用例，39/39 全部跑到</td></tr>
+      <tr><td><code>test:ui</code></td><td class="num">css-check 裸值 0 · 110 组对比度全过 · <strong>typography 19/19</strong> · Hook 42 文件</td></tr>
+      <tr><td><code>test:settings</code></td><td class="num">33/33（原 29 + 新增 4 条排版断言）</td></tr>
+      <tr><td><code>test:tools</code> / <code>test:nl</code></td><td class="num">74/74 · 44/44 + 174 词表</td></tr>
+      <tr><td><code>test:responsive</code></td><td class="num">38 档 / 539 项，失败 0（字号变大后窄屏与 44px 命中区未被挤坏）</td></tr>
+      <tr><td><code>npm run build</code></td><td class="num">333.62 kB JS，构建通过</td></tr>
+    </table>
+    <div class="callout"><strong>门禁负向验证</strong>：临时把 <code>--fs-display</code> 改成 20px，<code>qa-typography</code> 确实 <code>exit 1</code> 并精确报出该项；恢复后 19/19 全绿。不是永远绿的摆设。<br>另外过程中发现 <code>letter-spacing: 0</code>（重置声明）会被负向前瞻正则因回溯误判成「非零字距」，已改成逐条取值的判断方式。</div>
+  </div>
+</section>
+
+<section class="row">
+  <div class="row-label">08 / 界面</div>
+  <div class="row-body">
+    <h2>实施后的真实界面</h2>
+    <p class="note">由 <code>npm run test:settings:shots</code> 生成，已抹掉样式指南外壳。</p>
+    <div class="figures">
+      <figure>
+        <img src="assets/2026-11-10/typography-list-1280.png" alt="列表页字体排版实施后效果">
+        <figcaption>列表：16px 面包屑主段 · 11px mono 分组刻度 · 14px 正文 · 四档徽章</figcaption>
+      </figure>
+      <figure>
+        <img src="assets/2026-11-10/typography-settings-1280.png" alt="设置页 22px 页头">
+        <figcaption>设置页：22px / 600 独立页头，与 14px 分组标题拉开落差</figcaption>
+      </figure>
+      <figure>
+        <img src="assets/2026-11-10/typography-tokens-1280.png" alt="样式指南字阶表与三层落差">
+        <figcaption>字阶表（读令牌）与「三层落差 + 两族」陈列，--fs-display = 22px</figcaption>
+      </figure>
+      <figure>
+        <img src="assets/2026-11-10/typography-tokens-dark-1280.png" alt="暗色字阶表">
+        <figcaption>暗色同一套字阶与字族，明暗字形一致</figcaption>
+      </figure>
+    </div>
+    <p class="note" style="margin-top:12px"><strong>状态</strong>：本次改动连同 11-10 优先级四档、日历补齐、11-07 UI 重做全部仍在工作树里，未提交、未发版；CHANGELOG 最新仍是 v1.3.0。</p>
+  </div>
+</section>
+
+<footer>Worktodolist · 2026-11-10 · 字体排版优化（方案 + 实施记录 · A + B 组合）· docs/design/2026-11-10-字体排版优化方案.html</footer>
+
+</div>
+</main>
+</body>
+</html>

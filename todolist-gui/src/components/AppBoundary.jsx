@@ -48,7 +48,7 @@ export default class AppBoundary extends Component {
         <div className="app-crash-card">
           <div className="app-crash-main">
             <span className="app-crash-icon">
-              <Icon name="alert-triangle" size={20} />
+              <Icon name="alert-triangle" size={24} />
             </span>
             <div>
               <p className="app-crash-title">界面刚刚出错了</p>

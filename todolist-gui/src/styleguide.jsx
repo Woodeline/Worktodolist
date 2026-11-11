@@ -11,12 +11,14 @@
 // 运行：npm run dev → http://localhost:<端口>/styleguide.html?view=list
 //       （端口见项目根 .todolist-server.port，默认 15180）
 // 视图：?view=tokens|icons|list|list-all|chat|chatempty|settings|welcome|reauth|unsupported|empty|drawer|toast|modal
+//       ?view=calendar             日历模式（清单的第二种显示模式，演示数据相对今天生成）
+//       ?view=calendar-done        日历 · 已完成（按完成日期锚定，只读）
 //       ?view=tools                工具集（默认选中清单里第一个工具）
 //       ?view=tools-<工具id>       工具集并直达某个工具，例如 tools-rti / tools-stats
 //                                  <工具id> 直接来自 registry —— 新增工具自动多出一个视图，
 //                                  这里不需要跟着改（见 Root() 里的前缀分支）。
 import dayjs from 'dayjs';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 
@@ -39,6 +41,13 @@ import EditDrawer from './components/EditDrawer.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
 import SettingsPage from './components/SettingsPage.jsx';
 import ToolsPage from './components/tools/ToolsPage.jsx';
+import CalendarView from './components/CalendarView.jsx';
+import PriorityMark from './components/PriorityMark.jsx';
+import LayoutNotice from './components/LayoutNotice.jsx';
+import { useLayoutMode } from './hooks/useLayoutMode.js';
+import { noticeState } from './lib/layoutMode.js';
+import { monthKey, projectionForMonth } from './lib/calendar.js';
+import { parseQuickInput } from './lib/todoParser';
 import { visibleTools } from './components/tools/registry.js';
 import ToolCallCard from './components/ToolCallCard.jsx';
 import Icon, { ICON_NAMES } from './components/Icon.jsx';
@@ -111,6 +120,27 @@ const DONE_ENTRIES = [
     projects: ['量化'],
     dueDate: '2026-10-08',
   }),
+];
+
+// 日历演示数据：日期相对今天生成，保证无论何时打开样式指南，
+// 月网格上都有 chip、有逾期、有今天到期、有无日期托盘 —— 不会一片空白。
+const rel = (days) => dayjs().add(days, 'day').format('YYYY-MM-DD');
+const CAL_TODO = [
+  T('c1', '交周报', { priority: 'A', dueDate: rel(0), contexts: ['工作'], projects: ['回测'] }),
+  T('c2', '写第 10 周回测报告', { priority: 'B', dueDate: rel(0), contexts: ['投资'] }),
+  T('c3', '核对军信股份的周线信号', { priority: 'C', dueDate: rel(0), projects: ['回测'] }),
+  T('c4', '整理 QuantDinger 的策略清单', { dueDate: rel(0), projects: ['量化'] }),
+  T('c5', '周线复盘：人民网', { priority: 'B', dueDate: rel(-2), contexts: ['投资'], projects: ['复盘'] }),
+  T('c6', '画主力吸筹指标的多周期对比图', { dueDate: rel(3), contexts: ['投资'], projects: ['回测'] }),
+  T('c7', '给移动硬盘做一次性能测试', { priority: 'A', dueDate: rel(6), contexts: ['硬件'] }),
+  T('c8', '读一篇关于 B85 平台显卡升级的文章', { dueDate: rel(10), contexts: ['硬件'] }),
+  T('c9', '买网线', { priority: 'C', contexts: ['硬件'] }),
+  T('c10', '备份 todo.txt 到移动硬盘', { starValue: '1' }),
+];
+const CAL_DONE = [
+  T('cd1', '安装 topydo 并跑通三种 UI', { completed: true, completedAt: rel(0), priority: 'A' }),
+  T('cd2', '编写 topydo 安装配置指南', { completed: true, completedAt: rel(-1), contexts: ['文档'] }),
+  T('cd3', '把 todo.txt 接进网页界面', { completed: true, completedAt: rel(-3), contexts: ['工作'], projects: ['量化'] }),
 ];
 
 // ------------------------------------------------- 假目录句柄（供对话页回放）
@@ -253,6 +283,9 @@ const VIEWS = [
   'list',
   'list-all',
   'list-panel',
+  'calendar',
+  'calendar-done',
+  'calendar-autonarrow',
   'chat',
   'chatempty',
   'settings',
@@ -287,6 +320,15 @@ const PROBES = {
   msg: '.msg:not(.msg-tool)',
   toolcard: '.tool-card',
   editwin: '.edit-window',
+  // 日历（清单的第二种显示模式）：网格 / 格子 / 右侧日详情 / 无日期托盘 / 模式开关
+  calGrid: '.cal-grid',
+  calCell: '.cal-cell',
+  calChip: '.cal-chip',
+  calSide: '.cal-side',
+  calDay: '.cal-day',
+  calTray: '.cal-tray',
+  calHead: '.cal-head',
+  modeSwitch: '.mode-switch',
 };
 
 // 用 useLayoutEffect 同步写，不用 requestAnimationFrame ——
@@ -355,13 +397,52 @@ function useThemeStage() {
   return { themeMode: mode, themeEffective: effective, onToggleTheme: toggle, onPickTheme: pick };
 }
 
-function AppShell({ store, tab, listView, overviewOpen = false }) {
+function AppShell({
+  store,
+  tab,
+  listView,
+  overviewOpen = false,
+  listMode = 'list',
+  query = '',
+  onPickListMode,
+  seed = null,
+  onCreateDay,
+  autoNarrowFallback = false,
+}) {
   const themeStage = useThemeStage();
   const s = listView ? makeStore({ ...store, view: listView }) : store;
   const isList = tab === 'list';
-  const count = isList
-    ? (s.view === 'done' ? s.doneEntries : s.todoEntries).filter((e) => e.kind === 'task').length
+  // 舞台默认强制日历（qa-responsive 的 8 个日历档靠它回归窄屏降级本身）。
+  // 只有 calendar-autonarrow 视图打开自动降级，用来在浏览器里验证新行为与截图。
+  const [mainEl, setMainEl] = useState(null);
+  const {
+    effective: narrowEffective, narrow, override, setOverride,
+  } = useLayoutMode({ preferred: listMode, mainEl: autoNarrowFallback ? mainEl : null });
+  const effectiveMode = autoNarrowFallback ? narrowEffective : listMode;
+  const isCalendar = isList && effectiveMode === 'calendar';
+  const stageNotice = autoNarrowFallback
+    ? noticeState({ preferred: listMode, narrow, override, effective: effectiveMode })
     : null;
+
+  // 日历舞台也走真实状态：选中日 / 翻月 / 回今天都能点，投影现算。
+  // 这些 Hook 无条件调用（listMode 只决定渲染分支），不违反 Hooks 规则。
+  const [calDay, setCalDay] = useState(TODAY);
+  const calMonth = monthKey(calDay);
+  const projection = useMemo(
+    () =>
+      isCalendar
+        ? projectionForMonth(s.todoEntries, s.doneEntries, s.view, query, TODAY, calMonth)
+        : null,
+    [isCalendar, s.todoEntries, s.doneEntries, s.view, query, calMonth]
+  );
+  const navMonth = (delta) =>
+    setCalDay((d) => dayjs(d).add(delta, 'month').format('YYYY-MM-DD'));
+
+  const count = isCalendar
+    ? projection.tasks.length
+    : isList
+      ? (s.view === 'done' ? s.doneEntries : s.todoEntries).filter((e) => e.kind === 'task').length
+      : null;
   return (
     <div className="app">
       <Tabs tab={tab} onChange={() => {}} store={s} onOpenSettings={() => {}} {...themeStage} />
@@ -375,6 +456,9 @@ function AppShell({ store, tab, listView, overviewOpen = false }) {
           count={count}
           sidebarCollapsed={false}
           onToggleSidebar={() => {}}
+          listMode={listMode}
+          effectiveMode={effectiveMode}
+          onPickListMode={isList ? onPickListMode || (() => {}) : undefined}
         />
         <div className={'content' + (isList ? ' layout' : '')}>
           {tab === 'chat' ? (
@@ -382,11 +466,33 @@ function AppShell({ store, tab, listView, overviewOpen = false }) {
           ) : (
             <>
               <Sidebar store={s} />
-              <main className="main">
+              <main
+                ref={autoNarrowFallback ? setMainEl : undefined}
+                className={'main' + (isCalendar ? ' main-calendar' : '')}
+              >
                 <div className="quick-add-bar">
-                  <QuickAdd store={s} inputRef={s.quickAddRef} />
+                  <QuickAdd store={s} inputRef={s.quickAddRef} seed={seed} />
                 </div>
-                <MainList store={s} query="" />
+                <LayoutNotice
+                  state={stageNotice}
+                  onUseCalendar={() => setOverride('calendar')}
+                  onRestoreAuto={() => setOverride(null)}
+                />
+                {isCalendar ? (
+                  <CalendarView
+                    store={s}
+                    query={query}
+                    projection={projection}
+                    day={calDay}
+                    month={calMonth}
+                    onPickDay={setCalDay}
+                    onNavMonth={navMonth}
+                    onToday={() => setCalDay(TODAY)}
+                    onCreate={onCreateDay || (() => {})}
+                  />
+                ) : (
+                  <MainList store={s} query={query} />
+                )}
               </main>
             </>
           )}
@@ -398,6 +504,112 @@ function AppShell({ store, tab, listView, overviewOpen = false }) {
       <Toast toast={s.toast} onClose={s.dismissToast} />
       {s.conflict && <ConflictModal store={s} />}
     </div>
+  );
+}
+
+// ------------------------------------------------------------------ 日历交互舞台
+// 日历页要能"真点"：拖任务改期 / 双击日期新建 / 勾完成 / 搜索过滤 都落在这里的
+// useState 上（不写任何文件），这样浏览器交互 QA 才能走完整回路。
+// 响应式 QA 只量首屏几何，与这个舞台无关但共用同一份 DOM 骨架。
+function CalendarStage({ done = false, autoNarrow = false }) {
+  const [todo, setTodo] = useState(CAL_TODO);
+  const [doneEntries, setDoneEntries] = useState(CAL_DONE);
+  const [view, setView] = useState(done ? 'done' : 'today');
+  const [listMode, setListMode] = useState('calendar');
+  const [search, setSearch] = useState('');
+  const [seed, setSeed] = useState(null);
+  const [editingTask, setEditingTask] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [focusedId, setFocusedId] = useState(null);
+  const seq = useRef(0);
+  const quickAddRef = useRef(null);
+  const searchRef = useRef(null);
+
+  const allTasks = useMemo(() => [...todo, ...doneEntries], [todo, doneEntries]);
+  const findTask = (id) => allTasks.find((t) => t.id === id);
+
+  // 舞台桩：动作真实改内存，但不写 todo.txt —— 样式指南永远不该碰数据文件。
+  const store = makeStore({
+    todoEntries: todo,
+    doneEntries,
+    view,
+    sortMode: 'auto',
+    search,
+    searchRef,
+    quickAddRef,
+    focusedId,
+    editingTask,
+    toast,
+    selectView: setView,
+    setSearch,
+    setFocusedId,
+    dismissToast: () => setToast(null),
+    openEditor: (id) => setEditingTask(findTask(id) || null),
+    closeEditor: () => setEditingTask(null),
+    updateTask: (id, patch) => {
+      setTodo((list) => list.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+      setDoneEntries((list) => list.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+      setEditingTask((cur) => (cur && cur.id === id ? { ...cur, ...patch } : cur));
+    },
+    addTask: (text) => {
+      const p = parseQuickInput(text);
+      if (!p || !p.title) return;
+      seq.current += 1;
+      setTodo((list) => [
+        ...list,
+        {
+          id: `new-${seq.current}`,
+          kind: 'task',
+          raw: text,
+          completed: false,
+          completedAt: null,
+          createdAt: TODAY,
+          priority: p.priority,
+          title: p.title,
+          contexts: p.contexts,
+          projects: p.projects,
+          dueDate: p.dueDate,
+          thresholdDate: p.thresholdDate,
+          starValue: p.starValue,
+          extraTags: p.extraTags,
+        },
+      ]);
+    },
+    deleteTask: (task) => {
+      const drop = (list) => list.filter((t) => t.id !== task.id);
+      if (task.completed) setDoneEntries(drop);
+      else setTodo(drop);
+      setToast({ message: `已删除「${task.title}」· 舞台不写回文件`, actionLabel: '知道了' });
+    },
+    toggleComplete: (task) => {
+      if (task.completed) {
+        setDoneEntries((list) => list.filter((t) => t.id !== task.id));
+        setTodo((list) => [...list, { ...task, completed: false, completedAt: null }]);
+        return;
+      }
+      setTodo((list) => list.filter((t) => t.id !== task.id));
+      setDoneEntries((list) => [...list, { ...task, completed: true, completedAt: TODAY }]);
+    },
+    undo: () => setToast(null),
+  });
+
+  const createOnDay = (date) => {
+    seq.current += 1;
+    setSeed({ text: `due:${date} `, seq: seq.current });
+  };
+
+  return (
+    <AppShell
+      store={store}
+      tab="list"
+      listView={view}
+      listMode={listMode}
+      query={search}
+      onPickListMode={setListMode}
+      seed={seed}
+      onCreateDay={createOnDay}
+      autoNarrowFallback={autoNarrow}
+    />
   );
 }
 
@@ -422,15 +634,17 @@ function TokensDoc() {
   const surfaces = ['bg', 'surface', 'surface-2', 'surface-3', 'border', 'border-strong', 'control-line'];
   const texts = ['text', 'text-2', 'muted', 'accent', 'accent-soft', 'accent-line', 'accent-fg'];
   const semantic = ['danger', 'danger-soft', 'warn', 'warn-soft', 'ok', 'ok-soft'];
+  // 11-10：px 一律从令牌读，不再硬编码（旧表把 --fs-xl 写成 19px，实际 20px）。
   const typeScale = [
-    ['3xl', '32px', '引导页大标题'],
-    ['2xl', '24px', '次级标题'],
-    ['xl', '19px', '标题'],
-    ['lg', '16px', '强调 / 按钮大'],
-    ['md', '14px', '正文'],
-    ['sm', '13px', '次级 UI'],
-    ['xs', '12px', '元信息'],
-    ['2xs', '11px', '等宽标签 / 计数'],
+    ['3xl', '引导页 Hero'],
+    ['2xl', '次级标题'],
+    ['display', '页面主标题（独立页头）'],
+    ['xl', '标题'],
+    ['lg', '强调 / 36px 上下文条主段'],
+    ['md', '正文'],
+    ['sm', '次级 UI'],
+    ['xs', '元信息'],
+    ['2xs', '等宽标签 / 计数 / 分组刻度'],
   ];
   const spaces = ['sp-1', 'sp-2', 'sp-3', 'sp-4', 'sp-5', 'sp-6', 'sp-7', 'sp-8'];
   const radii = ['r-xs', 'r-sm', 'r-md', 'r-lg', 'r-xl', 'r-pill'];
@@ -469,26 +683,32 @@ function TokensDoc() {
       <section>
         <h2>字阶</h2>
         <p className="sg-note">
-          三套字体分工：<b>宋体</b>只做"说话的标题"，<b>等宽</b>承担全部数据/度量，<b>黑体</b>才是正文。
-          不使用 system-ui —— 那是默认值，不是选择。
+          <b>两族分工</b>：ui 承担全部文字（正文 / 标题 / 按钮 / 分组名），mono 只归读数
+          （计数 / 日期 / 行号 / 键位 / 写入行）。不使用 system-ui —— 那是默认值，不是选择；
+          也不加载 webfont，字体取自系统栈里的显式选择。
+          11-10 起页面主标题用 <code>--fs-display</code> 拉开落差，分组名是 11px mono 刻度标签；
+          8 档基础字阶数值仍冻结。
         </p>
-        {typeScale.map(([name, px, note]) => (
+        {typeScale.map(([name, note]) => (
           <div className="sg-type-row" key={name}>
-            <code>--fs-{name} = {px}</code>
+            <code>--fs-{name} = {v(`fs-${name}`)}</code>
             <span style={{ fontSize: `var(--fs-${name})` }}>主力吸筹 · 周线回测 Aa 123</span>
             <span className="sg-note" style={{ margin: 0 }}>{note}</span>
           </div>
         ))}
-        <h3>字体族</h3>
+        <h3>三层落差与两个字体族</h3>
         <div className="sg-box">
-          <p style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-2xl)', margin: 0 }}>
-            宋体展示字 —— 待办清单
+          <p style={{ fontSize: 'var(--fs-display)', fontWeight: 'var(--fw-title)', lineHeight: 'var(--lh-tight)', margin: 0 }}>
+            页面主标题 —— 今天 · 到期与逾期 9 项
           </p>
-          <p style={{ fontFamily: 'var(--font-mono)', margin: '10px 0 0' }}>
-            等宽数据字 —— todo.add · seq 128 · 12 ms · due:2026-10-08
+          <p style={{ fontSize: 'var(--fs-md)', fontWeight: 'var(--fw-emph)', margin: '10px 0 0' }}>
+            正文（ui 族）—— 季报复核 · 交周报 · 买网线
           </p>
-          <p style={{ fontFamily: 'var(--font-body)', margin: '10px 0 0', color: 'var(--text-2)' }}>
-            黑体正文字 —— 用大白话打字，它就去改你电脑上的 todo.txt 文件。
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-2xs)', margin: '10px 0 0', color: 'var(--text-2)' }}>
+            读数（mono）—— 07 │ (A) 交周报 @工作 +回测 due:2026-11-10
+          </p>
+          <p style={{ fontFamily: 'var(--font-mono-cjk)', fontSize: 'var(--fs-2xs)', margin: '10px 0 0', color: 'var(--text-2)' }}>
+            分组刻度（mono-cjk）—— 工作 / 回测 03：中文走显式回退，西文数字等宽
           </p>
         </div>
       </section>
@@ -548,7 +768,7 @@ function IconsDoc() {
         <div className="sg-icons">
           {ICON_NAMES.map((n) => (
             <div className="sg-icon-cell" key={n}>
-              <Icon name={n} size={22} />
+              <Icon name={n} size={24} />
               {n}
             </div>
           ))}
@@ -650,10 +870,10 @@ function ChatFlowStage() {
                   <textarea
                     rows={1}
                     defaultValue=""
-                    placeholder="说一句待办就行，例如：明天交周报（Enter 发送）"
+                    placeholder="用一句话描述改动（Enter 发送）"
                   />
                   <button className="send" type="submit" title="发送（Enter）" aria-label="发送">
-                    <Icon name="upload" size={13} />
+                    <Icon name="upload" size={16} />
                   </button>
                 </form>
               </div>
@@ -665,9 +885,7 @@ function ChatFlowStage() {
                 .map((t, i) => (
                   <div className="snapshot-item" key={t.id}>
                     <span className="snapshot-num">{i + 1}</span>
-                    <span className={`snapshot-prio${t.priority ? '' : ' snapshot-prio-none'}`}>
-                      {t.priority || '中'}
-                    </span>
+                    <PriorityMark priority={t.priority} className="snapshot-prio" />
                     <span className="snapshot-title">{t.title}</span>
                     {t.dueDate && (
                       <span className={`snapshot-due${t.dueDate < TODAY ? ' overdue' : ''}`}>
@@ -766,6 +984,16 @@ function Root() {
     case 'list-panel':
       // 今日概览展开态：新组件，需要一个能对照的固定视图
       return stage(<AppShell store={makeStore()} tab="list" listView="today" overviewOpen />);
+    case 'calendar':
+      // 日历模式：交互舞台（拖改期 / 双击新建 / 勾完成 / 搜索都真实生效）
+      return stage(<CalendarStage />);
+    case 'calendar-done':
+      // 日历 · 已完成：按完成日期锚定，整体只读（无托盘 / 无新建 / 不可拖）
+      return stage(<CalendarStage done />);
+    case 'calendar-autonarrow':
+      // 窄边自动降级：偏好仍是日历，主区可用宽度不足时临时按列表排。
+      // 与产品 App 走同一套 useLayoutMode / LayoutNotice，可截图、可被 QA 量。
+      return stage(<CalendarStage autoNarrow />);
     case 'chat':
       // 真实回放：dirReady=true + 假目录句柄 → useChatAgent 还原出真实消息
       return stage(<AppShell store={makeStore({ dirReady: true })} tab="chat" />);

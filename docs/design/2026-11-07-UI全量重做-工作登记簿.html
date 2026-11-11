@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UI 全量重做 · 工作登记簿</title>
+<style>
+  :root {
+    --bg: #f4f4f5;
+    --surface: #ffffff;
+    --surface-2: #f8f8f9;
+    --line: #dcdce0;
+    --line-soft: #e8e8eb;
+    --text: #1c1e22;
+    --text-2: #4c515a;
+    --muted: #747a84;
+    --accent: #147d94;
+    --mono: "Cascadia Mono", Consolas, "SF Mono", "DejaVu Sans Mono", monospace;
+    --ui: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.7 var(--ui);
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 1180px; margin: 0 auto; padding: 56px 32px 96px; }
+  .sheet { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  header { padding: 40px 48px 32px; border-bottom: 1px solid var(--line); }
+  .kicker { font: 12px/1.4 var(--mono); color: var(--muted); letter-spacing: .02em; }
+  h1 { margin: 12px 0 12px; font-size: 32px; line-height: 1.25; font-weight: 500; }
+  .lede { margin: 0; max-width: 760px; color: var(--text-2); font-size: 15px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 28px 0 0; padding: 0; }
+  .facts div { display: flex; gap: 8px; align-items: baseline; }
+  .facts dt { font: 11px/1.6 var(--mono); color: var(--muted); }
+  .facts dd { margin: 0; font: 12px/1.6 var(--mono); color: var(--text-2); font-variant-numeric: tabular-nums; }
+
+  section.row { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 24px; padding: 32px 48px; border-bottom: 1px solid var(--line-soft); }
+  section.row:last-child { border-bottom: 0; }
+  .row-label { font: 11px/1.8 var(--mono); color: var(--muted); white-space: nowrap; }
+  .row-body { min-width: 0; }
+  h2 { margin: 0 0 16px; font-size: 17px; font-weight: 500; }
+  p { margin: 0 0 12px; }
+  p:last-child { margin-bottom: 0; }
+  .muted { color: var(--muted); }
+  .note { color: var(--text-2); }
+
+  .direction { margin: 0; display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px 20px; }
+  .direction dt { font: 12px/1.8 var(--mono); color: var(--muted); }
+  .direction dd { margin: 0; line-height: 1.8; }
+  code { font: 12px/1.6 var(--mono); background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 4px; padding: 1px 5px; color: var(--text-2); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th { font: 11px/1.6 var(--mono); color: var(--muted); font-weight: 400; }
+  td:first-child { width: 108px; font: 12px/1.7 var(--mono); color: var(--text-2); white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  .verdict { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; padding: 0; list-style: none; }
+  .verdict li { border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font: 12px/1.6 var(--mono); color: var(--text-2); background: var(--surface-2); }
+
+  .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+  figure { margin: 0; min-width: 0; }
+  figure a { display: block; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface-2); }
+  figure img { display: block; width: 100%; height: auto; }
+  figcaption { margin-top: 8px; font-size: 12px; color: var(--muted); line-height: 1.6; }
+  figcaption b { font-weight: 500; color: var(--text-2); }
+  .shots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 20px; }
+  .pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .pair h3 { grid-column: 1 / -1; margin: 0; font-size: 13px; font-weight: 500; color: var(--text-2); }
+
+  ul.changes { margin: 0; padding-left: 20px; }
+  ul.changes li { margin-bottom: 10px; }
+  ul.changes li:last-child { margin-bottom: 0; }
+  .tag { font: 11px/1.6 var(--mono); color: var(--accent); }
+
+  footer { padding: 20px 48px 28px; border-top: 1px solid var(--line); color: var(--muted); font: 11px/1.8 var(--mono); }
+
+  @media (max-width: 900px) {
+    main { padding: 24px 12px 64px; }
+    header, section.row, footer { padding-left: 20px; padding-right: 20px; }
+    section.row { grid-template-columns: 1fr; gap: 12px; }
+    .row-label { white-space: normal; }
+    .grid-3, .grid-2, .shots { grid-template-columns: 1fr; }
+    .direction { grid-template-columns: 80px minmax(0, 1fr); }
+  }
+</style>
+</head>
+<body>
+<main>
+<div class="sheet">
+  <header>
+    <div class="kicker">交付说明 / 2026-11-07 / unslop 全量重做</div>
+    <h1>UI 全量重做：工作登记簿</h1>
+    <p class="lede">从 v1.3.0 干净基线重新做完的一版。不是局部打磨：全部界面、明暗两套主题、工具子页与窄屏一起改，最后用项目自己的八道门禁和真实浏览器渲染逐项核对。</p>
+    <dl class="facts">
+      <div><dt>基线</dt><dd>v1.3.0</dd></div>
+      <div><dt>范围</dt><dd>14 视图 × 明暗 + 5 工具子页 + 30 档响应式</dd></div>
+      <div><dt>验证</dt><dd>651 用例 / 94 组对比度 / 358 项几何断言</dd></div>
+      <div><dt>结论</dt><dd>全绿，可直接构建使用</dd></div>
+    </dl>
+  </header>
+
+  <section class="row">
+    <div class="row-label">01 / 判定</div>
+    <div class="row-body">
+      <h2>中重度 slop，不是 polish</h2>
+      <p>重看全部界面后的结论：问题散布在颜色、字型、图标、文案、布局与动效六层，不能靠"修几处"了结。上一轮把范围收在列表页，这一轮从干净基线重跑完整九遍 pass。</p>
+      <ul class="verdict">
+        <li>彩色药丸编码优先级</li>
+        <li>无优先级画成「中」</li>
+        <li>uppercase + 宽字距小标签</li>
+        <li>图标 11 / 13 / 15 / 17 / 26 混用</li>
+        <li>卡片彩色左缘 + 悬浮位移</li>
+        <li>引导页居中堆叠、没有产品预览</li>
+        <li>height / width 过渡与弹跳缩放</li>
+      </ul>
+      <p class="note">三条红线未动：纯文本 todo.txt 仍是唯一数据源；外部编辑器只检测不上锁；外观偏好留在 configStore、不写进数据文件。被门禁锁死的颜色值与侧栏宽度也不硬改，而是重排它们的用法。</p>
+    </div>
+  </section>
+
+  <section class="row">
+    <div class="row-label">02 / 方向</div>
+    <div class="row-body">
+      <h2>五句定调，改完不再换方向</h2>
+      <dl class="direction">
+        <dt>Product</dt><dd>把任务写进本机纯文本 todo.txt 的桌面清单，给用 grep / git / 编辑器管自己文件的人。</dd>
+        <dt>Character</dt><dd>可核对、安静、有刻度。</dd>
+        <dt>World</dt><dd>摊开的工作登记簿 —— 一行一条、右列对齐的读数、页脚合计、冷灰纸面，青墨是唯一标记色。</dd>
+        <dt>Moments</dt><dd>任务表这一页；以及一句话落成「文件里的一行」那条带行号的源文本行。</dd>
+        <dt>Signature</dt><dd><code>07 │ (A) 交周报 @工作 +回测 due:…</code> —— 行号 + 源文本行，每条任务都能回溯到文件里的一行。抄录文件原文只发生在「写入行 / 纸页 / 语法提示」；界面读数用中文分级，见 <a href="#fix">09</a>。</dd>
+      </dl>
+    </div>
+  </section>
+
+  <section class="row">
+    <div class="row-label">03 / 九遍</div>
+    <div class="row-body">
+      <h2>每一遍都走完全部界面</h2>
+      <table>
+        <thead><tr><th>Pass</th><th>改动</th></tr></thead>
+        <tbody>
+          <tr><td>1 Spacing</td><td>4px 网格；导航行 32、任务行 44、控件 28 / 32；侧栏组名贴近自己的条目；卡片内距统一 16；概览与状态栏同为 28。</td></tr>
+          <tr><td>2 Color</td><td>一套中性阶梯 + 三档文字角色；accent 只表选中 / 今天到期 / 焦点，逾期是整行唯一强色；优先级、分类、日期的彩色药丸与卡片彩色左缘全部撤掉。</td></tr>
+          <tr><td>3 Icons</td><td>全仓尺寸收敛到 12 / 16 / 24，描边统一 1.5；删掉预留卡的「＋」、标签里的「★」；图标不再自带颜色，星标靠实心/空心区分。</td></tr>
+          <tr><td>4 Copy</td><td>引导页从「3 步 + 点下面的蓝色按钮」改成事实陈述；空态「今天没有待办」；对话占位文字缩短；「预留模块，登记后自动出现」改「还有位置留给新工具」；无感叹号、无不可验证的说法。</td></tr>
+          <tr><td>5 Type</td><td>正文回到 14 / 16 / 20 / 32，display 族回正文；去掉 uppercase、宽字距、斜体；标题与卡名 600 → 500；读数统一 tabular-nums。</td></tr>
+          <tr><td>6 Layout</td><td>引导页居中堆叠改非对称分栏，右半是一整页 todo.txt；工具卡去掉 translateY 与阴影；概览与侧栏不再动画布局属性。</td></tr>
+          <tr><td>7 Details</td><td>优先级界面读「高 / 中 / 低」三档、悬停可核对 <code>(A)/(B)/(C)</code>，无优先级留空；快捷键做成键帽；指标卡去卡框只留一根发丝线；圆角 4 / 6 / 8 / 12 / 16 五档嵌套。</td></tr>
+          <tr><td>8 Visuals</td><td>唯一有材质的一屏：引导页右侧 8 行源文本、行号槽、发丝线、一行青墨高亮；没有插图、渐变、发光或玻璃拟态。</td></tr>
+          <tr><td>9 Motion</td><td>一条缓动曲线、三档时长；删除 height / width 过渡、0.82 弹跳缩放改为 0.97，去掉无限呼吸与彩色动效。</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="row">
+    <div class="row-label">04 / 签名</div>
+    <div class="row-body">
+      <h2>「行号 + 源文本行」落在五个地方</h2>
+      <table>
+        <thead><tr><th>位置</th><th>落点</th></tr></thead>
+        <tbody>
+          <tr><td>引导页</td><td>右侧摊开一页 todo.txt，8 行原文与行号，高亮行对应界面里的一条任务。</td></tr>
+          <tr><td>快速添加</td><td><code>data-line</code> 按现有行数算出下一行行号，chips 里的标签用 <code>due:</code> / <code>t:</code> / <code>star:</code> 原文写法。</td></tr>
+          <tr><td>编辑抽屉</td><td>底部「写入行」改成行号槽 + 竖线 + <code>serializeTask()</code> 的原文，保存前就能核对会写进文件什么。</td></tr>
+          <tr><td>状态栏</td><td>页脚合计 <code>N 行 · todo.txt</code>，等宽读数，与文件行数同一把尺子。</td></tr>
+          <tr><td>对话页</td><td>任务快照保留行号，优先级与列表行一样读中文急慢分级，字重分三档。</td></tr>
+        </tbody>
+      </table>
+      <p style="margin-top:16px"><a href="assets/2026-11-07/final-quickadd-line.png" target="_blank">快速添加写入行（放大）</a> · <a href="assets/2026-11-07/final-drawer-bottom.png" target="_blank">编辑抽屉写入行（放大）</a></p>
+    </div>
+  </section>
+
+  <section class="row">
+    <div class="row-label">05 / 三版</div>
+    <div class="row-body">
+      <h2>同一个列表页：基线 / 被否定的上一版 / 最终版</h2>
+      <div class="grid-3">
+        <figure><a href="assets/2026-11-07/baseline-list.png" target="_blank"><img src="assets/2026-11-07/baseline-list.png" alt="v1.3.0 基线列表页"></a><figcaption><b>基线 v1.3.0</b> · 彩色药丸包着中文「高/中/低」，元信息各带底色、无优先级也画成「中」。</figcaption></figure>
+        <figure><a href="assets/2026-11-07/rejected-list.png" target="_blank"><img src="assets/2026-11-07/rejected-list.png" alt="被否定的上一版"></a><figcaption><b>被否定的上一版</b> · 只改列表页的局部打磨，方向为「纸与终端 / 等宽读数」，A/B/C 字母 + 字重编码。</figcaption></figure>
+        <figure><a href="assets/2026-11-07/final-list.png" target="_blank"><img src="assets/2026-11-07/final-list.png" alt="最终版列表页"></a><figcaption><b>最终版</b> · 优先级读「高 / 中 / 低」、字重分三档，无优先级留空，逾期是唯一强色，页脚有行数合计。</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="row">
+    <div class="row-label">06 / 全范围</div>
+    <div class="row-body">
+      <h2>基线 → 最终版：其余视图逐张对照</h2>
+      <div class="shots">
+        <div class="pair"><h3>引导页 · 居中堆叠 → 分栏 + 真实文件预览</h3>
+          <figure><a href="assets/2026-11-07/baseline-welcome.png" target="_blank"><img src="assets/2026-11-07/baseline-welcome.png" alt="基线引导页"></a><figcaption>基线</figcaption></figure>
+          <figure><a href="assets/2026-11-07/final-welcome.png" target="_blank"><img src="assets/2026-11-07/final-welcome.png" alt="最终引导页"></a><figcaption>最终版</figcaption></figure>
+        </div>
+        <div class="pair"><h3>设置页 · 等宽键名 → 键帽</h3>
+          <figure><a href="assets/2026-11-07/baseline-settings.png" target="_blank"><img src="assets/2026-11-07/baseline-settings.png" alt="基线设置页"></a><figcaption>基线</figcaption></figure>
+          <figure><a href="assets/2026-11-07/final-settings.png" target="_blank"><img src="assets/2026-11-07/final-settings.png" alt="最终设置页"></a><figcaption>最终版</figcaption></figure>
+        </div>
+        <div class="pair"><h3>工具墙 · 彩色左缘与虚线占位 → 中性卡</h3>
+          <figure><a href="assets/2026-11-07/baseline-tools.png" target="_blank"><img src="assets/2026-11-07/baseline-tools.png" alt="基线工具墙"></a><figcaption>基线</figcaption></figure>
+          <figure><a href="assets/2026-11-07/final-tools.png" target="_blank"><img src="assets/2026-11-07/final-tools.png" alt="最终工具墙"></a><figcaption>最终版</figcaption></figure>
+        </div>
+        <div class="pair"><h3>对话页 · 彩色优先级徽标 → 行号 + 中文分级</h3>
+          <figure><a href="assets/2026-11-07/baseline-chat.png" target="_blank"><img src="assets/2026-11-07/baseline-chat.png" alt="基线对话页"></a><figcaption>基线</figcaption></figure>
+          <figure><a href="assets/2026-11-07/final-chat.png" target="_blank"><img src="assets/2026-11-07/final-chat.png" alt="最终对话页"></a><figcaption>最终版</figcaption></figure>
+        </div>
+        <div class="pair"><h3>暗色列表 · 同一套语义令牌跟随换主题</h3>
+          <figure><a href="assets/2026-11-07/baseline-list-dark.png" target="_blank"><img src="assets/2026-11-07/baseline-list-dark.png" alt="基线暗色列表"></a><figcaption>基线</figcaption></figure>
+          <figure><a href="assets/2026-11-07/final-list-dark.png" target="_blank"><img src="assets/2026-11-07/final-list-dark.png" alt="最终暗色列表"></a><figcaption>最终版</figcaption></figure>
+        </div>
+        <div class="pair"><h3>暗色引导页 · 纸页在暗底仍是纸页</h3>
+          <figure><a href="assets/2026-11-07/baseline-welcome-dark.png" target="_blank"><img src="assets/2026-11-07/baseline-welcome-dark.png" alt="基线暗色引导页"></a><figcaption>基线</figcaption></figure>
+          <figure><a href="assets/2026-11-07/final-welcome-dark.png" target="_blank"><img src="assets/2026-11-07/final-welcome-dark.png" alt="最终暗色引导页"></a><figcaption>最终版</figcaption></figure>
+        </div>
+      </div>
+      <p class="note" style="margin-top:20px">另有重授权页、不支持页、空状态、编辑抽屉、toast、冲突弹窗、工具子页与 390px 窄屏，同样在明暗两套下逐张渲染复查；截图见 <code>/tmp/unslop/final5/</code> 与本目录 assets。</p>
+    </div>
+  </section>
+
+  <section class="row">
+    <div class="row-label">07 / 验证</div>
+    <div class="row-body">
+      <h2>八道门禁，全绿</h2>
+      <table>
+        <thead><tr><th>命令</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>npm test</td><td><span class="num">34 / 34</span> 测试文件、<span class="num">655 / 655</span> 用例通过</td></tr>
+          <tr><td>test:ui</td><td>类名契约无缺失、无裸色值 / 裸字号；<span class="num">94</span> 组 WCAG 对比度全过；<span class="num">40</span> 文件 Hook 规则通过</td></tr>
+          <tr><td>test:guard</td><td>磁盘上 <span class="num">34</span> 个测试文件全部真的跑到</td></tr>
+          <tr><td>test:nl</td><td>中文指令覆盖 <span class="num">44 / 44</span>；<span class="num">174</span> 条触发词无漂移</td></tr>
+          <tr><td>test:settings</td><td><span class="num">15 / 15</span> 通过</td></tr>
+          <tr><td>test:tools</td><td><span class="num">74 / 74</span> 通过</td></tr>
+          <tr><td>test:responsive</td><td><span class="num">30</span> 档 / <span class="num">358</span> 项几何断言，失败 <span class="num">0</span></td></tr>
+          <tr><td>npm run build</td><td>vite build 通过，产物 <span class="num">321.13 kB</span> JS / <span class="num">80.78 kB</span> CSS</td></tr>
+        </tbody>
+      </table>
+      <p class="note" style="margin-top:14px">顺带补了两处落后于功能的断言：设置页新增「列表外观」分组后，<code>qa-settings.mjs</code> 的分组清单与「只读」页头说明一并校准；<code>QuickAdd.test.jsx</code> 同步到 <code>due:</code> / <code>star:</code> 的原文标签。优先级口径定稿后又补了 4 条用例：<code>TaskRow.test.jsx</code> 的渲染契约（中文分级 / 不出现 <code>(A)</code> 显示文本 / 空槽），以及 <code>QuickAdd.test.jsx</code> 的三档映射。</p>
+    </div>
+  </section>
+
+  <section class="row">
+    <div class="row-label">08 / 差异</div>
+    <div class="row-body">
+      <h2>相较被否定的上一版，主要调整点</h2>
+      <ul class="changes">
+        <li><span class="tag">方向</span> 从「纸与终端 / 等宽只归读数」的局部打磨，换成「工作登记簿 / 行号 + 源文本行」的完整重做；上一版的结论与内容一概不沿用。</li>
+        <li><span class="tag">范围</span> 上一版只动列表页与几个组件；这一版覆盖 14 个视图、明暗两套、5 个工具子页、引导/重授权/不支持页、浮层与窄屏。</li>
+        <li><span class="tag">判定</span> 上一版判为「light slop → polish」；这一版重判「中重度 slop」，跑完整九遍 pass，而不是挑几处修。</li>
+        <li><span class="tag">基线</span> 上一版的 src 改动整体 stash 封存、说明页与截图移出仓库，回到 v1.3.0 干净基线从头做。</li>
+        <li><span class="tag">签名</span> 新增引导页 todo.txt 纸页、快速添加行号、编辑抽屉写入行、状态栏行数、设置页键帽；签名出现在五处而不是只贴在某个标签上。</li>
+        <li><span class="tag">记号</span> 上一版用 A/B/C 字母配字重编码；这一版按语境分家：界面读数用中文急慢分级，文件原文只留在写入行 / 纸页 / 语法提示，无优先级留空，星标 chip 写 <code>star:1</code>（详见 <a href="#fix">09</a>）。</li>
+        <li><span class="tag">引导页</span> 上一版仍是居中堆叠；这一版改成非对称分栏，右半是 8 行真实语法的 todo.txt 预览，并在 390px 下按阅读顺序堆叠。</li>
+        <li><span class="tag">门禁</span> 跑通全部八道验证，并修正两条早于本轮、但一直没跟上的断言与一条单测。</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="row" id="fix">
+    <div class="row-label">09 / 口径修正</div>
+    <div class="row-body">
+      <h2>优先级：界面读得懂，文件对得上</h2>
+      <p>初版把任务行的优先级直接抄成 <code>(A)/(B)/(C)</code>。用户反馈：括号字母看不出急慢，「高 / 中 / 低」才读得懂。据此把两类语境拆开，而不是二选一。</p>
+      <table>
+        <thead><tr><th>语境</th><th>显示</th><th>理由</th></tr></thead>
+        <tbody>
+          <tr><td>任务行 / 对话快照</td><td><b>高 / 中 / 低</b>，字重 600 / 500 / 400，中性色</td><td>扫视时要一眼分出急慢；颜色仍只编码状态，逾期保留唯一强色</td></tr>
+          <tr><td>快速添加 chip</td><td><code>高 (A)</code></td><td>既说明输入被解析成什么，又能和文件记号对上；与编辑抽屉的优先级选择器同口径</td></tr>
+          <tr><td>编辑抽屉「写入行」/ 引导页纸页 / 输入语法提示</td><td><code>(A) 交周报 …</code></td><td>这里展示的是真正会写进 todo.txt 的文本，改成中文会误导</td></tr>
+          <tr><td>悬停 title / 选择器 / 右键菜单</td><td><code>优先级：高 · todo.txt 写作 (A)</code></td><td>把两套记号接起来，随时能核对</td></tr>
+          <tr><td>无优先级</td><td>留空槽</td><td>没填不是「中」，不该被画成一个值</td></tr>
+        </tbody>
+      </table>
+      <p class="note" style="margin-top:14px">引导页纸页下方新增一行对照 <code>(A) 高　(B) 中　(C) 低</code>，右注「左为文件写法 · 右为急慢分级」；390px 窄屏下说明单独换行。另外把分级文字从 <code>--muted</code> + 11px 提到 <code>--text-2</code> + 12 / 13px —— 淡到看不见的分级等于没有分级。全部截图已按定稿重渲染。</p>
+    </div>
+  </section>
+
+  <footer>Worktodolist · UI 全量重做 · 2026-11-07 · 截图由本机 Chrome headless 渲染 styleguide.html 真实组件生成</footer>
+</div>
+</main>
+</body>
+</html>

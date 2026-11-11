@@ -81,6 +81,7 @@ const PAIRS = [
   ['text-2', 'surface', 4.5, '次级正文 / 卡片'],
   ['text-2', 'bg', 4.5, '次级正文 / 页面底'],
   ['text-2', 'surface-2', 4.5, '次级正文 / 次级填充'],
+  ['text', 'surface-2', 4.5, 'chip 文字 / 次级填充'],
   ['muted', 'surface', 4.5, '弱化文字 / 卡片'],
   ['muted', 'bg', 4.5, '弱化文字 / 页面底'],
   ['muted', 'surface-2', 4.5, '弱化文字 / 次级填充'],
@@ -117,6 +118,17 @@ const PAIRS = [
   ['chart-6', 'surface', 3, '系列 6 / 画布'],
   ['chart-7', 'surface', 3, '系列 7 / 画布'],
   ['chart-8', 'surface', 3, '系列 8 / 画布'],
+  // 日历视图（2026-11-10 补齐）：格子底与 chip 底不是普通的 surface，
+  // 选中框 / 跨月格 / 今天格这些新搭配得单独锁，不能只靠通用组间接覆盖。
+  ['text', 'accent-soft', 4.5, '今天格日期 / 强调浅底'],
+  ['text-2', 'surface-3', 4.5, '日历 chip 文字 / 跨月格底'],
+  ['muted', 'surface-3', 4.5, '跨月格日期 / 跨月格底（刚过线，最容易被压淡）'],
+  ['accent', 'surface-2', 3, '选中格内框 / 次级填充（图形边界）'],
+  // 优先级四档字阶徽章（2026-11-10）：高档是唯一「反白」的搭配，明暗两套
+  // 底色与前景都反过来，必须各自过 4.5；中档描边落在日历 chip 的 surface-2 上。
+  ['prio-strong-fg', 'prio-strong-bg', 4.5, '高优先级反白字 / 实心徽章底'],
+  ['prio-strong-bg', 'surface', 3, '高优先级实心徽章 / 卡片（图形边界）'],
+  ['control-line', 'surface-2', 3, '中优先级徽章描边 / 日历 chip 底'],
 ];
 
 // 装饰性发丝线：只划区域、不承担"控件是否存在"的信息，WCAG 无硬性要求。
@@ -127,6 +139,15 @@ const REFERENCE = [
   ['border-strong', 'surface', '次级发丝线 / 卡片'],
   ['border-strong', 'bg', '次级发丝线 / 页面底'],
   ['chart-grid', 'surface', '图表网格线 / 画布（纯装饰，须远弱于数据）'],
+  // 逾期 chip 的描边是装饰：逾期语义由 danger 文字 + danger-soft 底共同承担，
+  // 不靠这条线表达，所以按 WCAG 不要求 3:1，但仍打印数值防止它被改成全透明。
+  ['danger-line', 'surface', '逾期 chip 描边 / 卡片'],
+  ['danger-line', 'bg', '逾期 chip 描边 / 页面底'],
+  // 「无」档虚线空框：它表达的是「没填」，是装饰性占位而非承载等级的图形，
+  // 信息由「空」本身 + aria-hidden 承担，所以只留参考值防止被改成全透明。
+  ['prio-empty-line', 'surface', '无优先级虚线空框 / 卡片'],
+  ['prio-empty-line', 'surface-2', '无优先级虚线空框 / 日历 chip 底'],
+  ['prio-empty-line', 'bg', '无优先级虚线空框 / 页面底'],
 ];
 
 let failures = 0;

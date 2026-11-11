@@ -4,6 +4,7 @@ import dayjs from 'dayjs';
 import { useChatAgent } from '../hooks/useChatAgent';
 import { COMMAND_HINTS } from '../lib/nlRules';
 import { visibleTools } from './tools/registry.js';
+import PriorityMark from './PriorityMark.jsx';
 import Icon from './Icon.jsx';
 import ToolCallCard from './ToolCallCard.jsx';
 import ProposalModal from './ProposalModal.jsx';
@@ -198,7 +199,7 @@ export default function ChatPanel({ store, onOpenList, onOpenTool }) {
             onClick={onOpenList}
             title="打开列表页查看详情"
           >
-            <Icon name={overdueCount > 0 ? 'alert-triangle' : 'check-circle'} size={13} />
+            <Icon name={overdueCount > 0 ? 'alert-triangle' : 'check-circle'} size={16} />
             <span>
               {overdueCount > 0
                 ? `逾期 ${overdueCount} 条 · 今日到期 ${dueTodayCount} 条`
@@ -371,10 +372,10 @@ export default function ChatPanel({ store, onOpenList, onOpenTool }) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKeyDown}
-              placeholder="说一句待办就行，例如：明天交周报（Enter 发送）"
+              placeholder="用一句话描述改动（Enter 发送）"
             />
             <button className="send" type="submit" disabled={agent.busy || !input.trim()} title="发送（Enter）" aria-label="发送">
-              <Icon name="upload" size={13} />
+              <Icon name="upload" size={16} />
             </button>
           </form>
         </div>
@@ -389,12 +390,7 @@ export default function ChatPanel({ store, onOpenList, onOpenTool }) {
           return (
             <div key={t.id} className="snapshot-item">
               <span className="snapshot-num">{i + 1}</span>
-              <span
-                className={`snapshot-prio${t.priority ? '' : ' snapshot-prio-none'}`}
-                title={t.priority ? `优先级 ${t.priority}` : '无优先级（默认显示为中）'}
-              >
-                {t.priority || '中'}
-              </span>
+              <PriorityMark priority={t.priority} className="snapshot-prio" />
               <span className="snapshot-title" title={t.title}>
                 {t.title}
               </span>

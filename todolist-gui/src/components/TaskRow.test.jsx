@@ -157,6 +157,55 @@ describe('TaskRow 拖拽落点与快捷按钮', () => {
     const t = parseSingleLine('x 2026-10-01 交周报');
     expect(render(t, { readonly: true })).not.toContain('row-quick');
   });
+
+  it('dragDisabled 关掉行级拖拽 —— 日历日详情借这行展示，改期由日历自己接管', () => {
+    const t = parseSingleLine('交周报');
+    expect(render(t)).toContain('draggable="true"');
+    expect(render(t, { dragDisabled: true })).toContain('draggable="false"');
+  });
+});
+
+describe('TaskRow 优先级的界面口径', () => {
+  // 界面读数要一眼看出急慢；(A)/(B)/(C) 只是 todo.txt 里的写法，
+  // 只留在 title 与编辑抽屉的「写入行」里。这条契约防止两种静默回退：
+  // 改回纯字母（看不懂）或改回彩色药丸（把真正逾期的那条淹掉）。
+  it('三档显示中文分级，原文记号保留在悬停里', () => {
+    const high = render(parseSingleLine('(A) 交周报'));
+    expect(high).toContain('>高</span>');
+    expect(high).toContain('todo.txt 写作 (A)');
+    expect(render(parseSingleLine('(B) 写周报'))).toContain('>中</span>');
+    expect(render(parseSingleLine('(C) 买网线'))).toContain('>低</span>');
+  });
+
+  it('任务行不把文件记号当显示文本', () => {
+    const markup = render(parseSingleLine('(A) 交周报'));
+    expect(markup).not.toContain('>(A)</span>');
+    expect(markup).not.toContain('>(B)</span>');
+  });
+
+  it('没填优先级时留空槽，不画成「中」', () => {
+    const markup = render(parseSingleLine('交周报'));
+    expect(markup).toContain('prio-badge prio-none');
+    expect(markup).not.toContain('>中</span>');
+  });
+
+  it('元信息簇里没有裸文本：JSX 里的注释必须写成 {/* */}', () => {
+    // 真事：把 `// 注释` 写在 JSX 子元素位置，React 会当成文本节点画进任务行。
+    // 页面不报错，只是行里凭空多两行中文、把布局撑到触屏命中区失效。
+    const markup = render(parseSingleLine('(A) 交周报'));
+    expect(markup).not.toContain('字阶徽章');
+    expect(markup).not.toContain('//');
+    expect(markup.match(/class="task-meta"[^>]*>([^<]*)</)?.[1]).toBe('');
+  });
+
+  it('四档各有独立档位类：高／中／低／无没有谁被并进默认态', () => {
+    expect(render(parseSingleLine('(A) 甲'))).toContain('prio-badge prio-high');
+    expect(render(parseSingleLine('(B) 乙'))).toContain('prio-badge prio-mid');
+    expect(render(parseSingleLine('(C) 丙'))).toContain('prio-badge prio-low');
+    expect(render(parseSingleLine('丁'))).toContain('prio-badge prio-none');
+    // D~Z 允许写进 todo.txt，界面得有第五档兜底，不能假装它不存在
+    expect(render(parseSingleLine('(D) 戊'))).toContain('prio-badge prio-other');
+  });
 });
 
 describe('Highlight 搜索高亮', () => {

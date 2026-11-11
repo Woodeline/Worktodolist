@@ -108,8 +108,10 @@ function MenuList({ items, onClose, onBack }) {
               onClick={() => run(it, i)}
             >
               <span className="ctx-menu-check">
-                {it.checked ? <Icon name="check" size={13} /> : null}
+                {it.checked ? <Icon name="check" size={16} /> : null}
               </span>
+              {/* 优先级子菜单用同一套档位形状：对勾表「当前选中」，记号表「这一档有多急」 */}
+              {it.mark}
               <span className="ctx-menu-label">{it.label}</span>
               {it.accel && <span className="ctx-menu-accel">{it.accel}</span>}
               {it.type === 'sub' && (

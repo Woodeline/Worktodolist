@@ -4,6 +4,7 @@ import { PRIORITY_LABELS, sidebarStats } from '../lib/sortFilter';
 import { serializeTask } from '../lib/todoParser';
 import { buildNesting, childrenOf } from '../lib/subtasks.js';
 import { nextInTrap, pickRestoreTarget, queryFocusable } from '../lib/focusTrap.js';
+import PriorityMark from './PriorityMark.jsx';
 import Icon from './Icon.jsx';
 
 // 子任务区块。
@@ -143,7 +144,7 @@ function TagField({ label, prefix, placeholder, value, onChange, options, emptyH
           title="从已保存的项中选择"
           onClick={() => (open ? setOpen(false) : openMenu())}
         >
-          <Icon name="chevron-down" size={14} />
+          <Icon name="chevron-down" size={16} />
         </button>
       </div>
       {open && (
@@ -163,7 +164,7 @@ function TagField({ label, prefix, placeholder, value, onChange, options, emptyH
                   onClick={() => toggle(name)}
                 >
                   <span className="tag-option-check">
-                    {on ? <Icon name="check" size={13} /> : null}
+                    {on ? <Icon name="check" size={16} /> : null}
                   </span>
                   <span className="tag-option-name">
                     {prefix}
@@ -348,7 +349,7 @@ function EditForm({ task, store }) {
         <div className="drawer-header">
           <h3>编辑任务</h3>
           <button className="icon-btn" onClick={store.closeEditor} title="关闭（Esc）">
-            <Icon name="x" size={15} />
+            <Icon name="x" size={16} />
           </button>
         </div>
 
@@ -364,6 +365,7 @@ function EditForm({ task, store }) {
               className={form.priority === '' ? 'sel' : ''}
               onClick={() => setForm((f) => ({ ...f, priority: '' }))}
             >
+              <PriorityMark variant="mark" />
               无
             </button>
             {priorities.map((p) => (
@@ -372,6 +374,7 @@ function EditForm({ task, store }) {
                 className={form.priority === p ? 'sel' : ''}
                 onClick={() => setForm((f) => ({ ...f, priority: p }))}
               >
+                <PriorityMark priority={p} variant="mark" />
                 {PRIORITY_LABELS[p] || p} ({p})
               </button>
             ))}
@@ -435,7 +438,7 @@ function EditForm({ task, store }) {
             checked={form.starred}
             onChange={(e) => setForm((f) => ({ ...f, starred: e.target.checked }))}
           />
-          <span>星标 ★</span>
+          <span>星标</span>
         </label>
         <label className="field">
           <span>备注（存数据目录的 notes.md，不进 todo.txt）</span>
@@ -460,7 +463,11 @@ function EditForm({ task, store }) {
           </div>
         )}
 
-        <div className="drawer-preview">写入行：{preview}</div>
+        <div className="drawer-preview">
+          <span className="ledger-no">{String(Math.max(1, store.todoEntries.findIndex((e) => e.id === task.id) + 1)).padStart(2, '0')}</span>
+          <span className="ledger-sep">│</span>
+          <span className="drawer-preview-text">{preview}</span>
+        </div>
 
         <div className="drawer-actions">
           <button className="btn btn-primary" onClick={save}>

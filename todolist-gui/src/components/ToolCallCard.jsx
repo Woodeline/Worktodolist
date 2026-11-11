@@ -22,10 +22,10 @@ export default function ToolCallCard({ message }) {
     <div className={`tool-card tool-${tool.status || 'running'}`}>
       <div className="tool-card-head">
         <span className={`status-dot ${st.cls}`} title={st.label}>
-          <Icon name={st.icon} size={13} />
+          <Icon name={st.icon} size={16} />
         </span>
         <span className="tool-name">
-          <Icon name="chevron-right" size={11} />
+          <Icon name="chevron-right" size={12} />
           {tool.name || 'agent.noop'}
         </span>
         <div className="tool-params">
@@ -39,7 +39,7 @@ export default function ToolCallCard({ message }) {
         {tool.durationMs != null && <span className="tool-duration">{tool.durationMs} ms</span>}
       </div>
       <button className="event-toggle" onClick={() => setOpen((o) => !o)}>
-        <Icon name={open ? 'chevron-down' : 'chevron-right'} size={11} />
+        <Icon name={open ? 'chevron-down' : 'chevron-right'} size={12} />
         {open ? '收起原始事件' : '展开原始事件'}
       </button>
       {open && (
