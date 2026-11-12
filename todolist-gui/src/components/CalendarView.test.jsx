@@ -24,7 +24,7 @@ const TODO = [
 ];
 const DONE = [parseSingleLine(`x ${TODAY} 已完成壬`)];
 
-function render(view = 'all', storeOverride = {}) {
+function render(view = 'all', storeOverride = {}, todoList = TODO) {
   const store = {
     noteIds: new Set(),
     fadingIds: [],
@@ -45,7 +45,7 @@ function render(view = 'all', storeOverride = {}) {
     reorder: () => {},
     ...storeOverride,
   };
-  const projection = projectionForMonth(TODO, DONE, view, '', TODAY, MONTH);
+  const projection = projectionForMonth(todoList, DONE, view, '', TODAY, MONTH);
   return renderToStaticMarkup(
     <ContextMenuProvider>
       <CalendarView
@@ -187,5 +187,38 @@ describe('CalendarView 只读态（已完成视图）', () => {
     expect(markup).not.toContain('draggable="true"');
     expect(markup).toContain('cal-done');
     expect(markup).toContain('只读');
+  });
+});
+
+describe('CalendarView 区间展示（t: → due:）', () => {
+  const ranged = [
+    parseSingleLine(`(A) 跨天区间 t:${shiftDate(TODAY, -2)} due:${TODAY}`),
+    parseSingleLine(`(B) 普通任务 due:${TODAY}`),
+    parseSingleLine(`(C) 无效区间 t:${shiftDate(TODAY, 2)} due:${TODAY}`),
+  ];
+
+  it('跨天区间在格子上画出起 / 中 / 止三段', () => {
+    const markup = render('all', {}, ranged);
+    expect(markup).toContain('cal-range-track');
+    expect(markup).toContain('cal-range-seg is-start');
+    expect(markup).toContain('cal-range-seg is-mid');
+    expect(markup).toContain('cal-range-seg is-end');
+  });
+
+  it('普通任务不产生区间读数，无效区间明确提示', () => {
+    const markup = render('all', {}, ranged);
+    expect(markup.match(/cal-range-note/g)).toHaveLength(2);
+    expect(markup).toContain('区间无效：开始晚于截止');
+    expect(markup).toContain('is-invalid');
+  });
+
+  it('格子的 aria-label 报出区间覆盖数', () => {
+    expect(render('all', {}, ranged)).toContain('个区间覆盖');
+  });
+
+  it('只读态不渲染任何区间展示（按完成日期锚定，区间无意义）', () => {
+    const markup = render('done', {}, ranged);
+    expect(markup).not.toContain('cal-range-track');
+    expect(markup).not.toContain('cal-range-note');
   });
 });

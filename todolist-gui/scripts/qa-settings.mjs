@@ -284,6 +284,8 @@ async function main() {
       prioMarks: document.querySelectorAll('.cal-chip .prio-mark, .cal-tray-item .prio-mark').length,
       prioTones: ['prio-high', 'prio-mid', 'prio-low', 'prio-none']
         .map((t) => document.querySelectorAll('.cal-chip .prio-mark.' + t + ', .cal-tray-item .prio-mark.' + t).length),
+      rangeSegs: document.querySelectorAll('.cal-range-seg').length,
+      rangeNotes: document.querySelectorAll('.cal-range-note').length,
       modeBtns: modes.length,
       calendarPressed: modes.some((b) => b.getAttribute('aria-pressed') === 'true' && /日历/.test(b.textContent)),
       overflow: document.documentElement.scrollWidth - window.innerWidth,
@@ -296,6 +298,28 @@ async function main() {
     && cal.prioTones[0] > 0 && cal.prioTones[1] > 0 && cal.prioTones[3] > 0,
     JSON.stringify({ marks: cal.prioMarks, tones: cal.prioTones }));
   check('日历在 1280 宽下无横向溢出', cal.overflow <= 0, `overflow=${cal.overflow}`);
+  check('跨天区间在 42 格上画出中性跨度段', cal.rangeSegs > 0, JSON.stringify({ segs: cal.rangeSegs }));
+  check('选中日的日详情给出区间读数', cal.rangeNotes > 0, JSON.stringify({ notes: cal.rangeNotes }));
+
+  await evalJs(`(() => {
+    const chip = document.querySelector('.cal-chip');
+    if (!chip) return false;
+    chip.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true, cancelable: true, clientX: 24, clientY: 24,
+    }));
+    return true;
+  })()`);
+  await sleep(180);
+  const calMenu = await evalJs(`(() => {
+    const menu = document.querySelector('.ctx-menu');
+    const text = menu ? (menu.textContent || '') : '';
+    return {
+      hasStart: text.includes('起点设为选中日'),
+      hasClear: text.includes('清除开始日'),
+    };
+  })()`);
+  check('chip 右键菜单挂上了区间起点调整入口', calMenu.hasStart && calMenu.hasClear, JSON.stringify(calMenu));
+
   if (WANT_SHOTS) {
     await shot('calendar-1280.png');
     await goto('calendar', 390, 844);

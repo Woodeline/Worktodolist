@@ -136,6 +136,12 @@ const CAL_TODO = [
   T('c8', '读一篇关于 B85 平台显卡升级的文章', { dueDate: rel(10), contexts: ['硬件'] }),
   T('c9', '买网线', { priority: 'C', contexts: ['硬件'] }),
   T('c10', '备份 todo.txt 到移动硬盘', { starValue: '1' }),
+  T('c11', '区间演示：回测报告复核', {
+    priority: 'C',
+    thresholdDate: rel(-2),
+    dueDate: rel(0),
+    projects: ['回测'],
+  }),
 ];
 const CAL_DONE = [
   T('cd1', '安装 topydo 并跑通三种 UI', { completed: true, completedAt: rel(0), priority: 'A' }),

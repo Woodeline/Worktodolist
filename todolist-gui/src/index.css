@@ -2563,6 +2563,58 @@ mark {
   color: var(--accent);
 }
 
+/* --- 区间跨度（t: → due:）：中性描边，不编码类型 ---
+   任务仍只按 dueDate 占一格；这里只把跨度摊成端点段，
+   accent 继续只表选中 / 今天 / 焦点，逾期仍是唯一强色。 */
+.cal-range-track {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+  width: 100%;
+  margin-top: auto;
+  pointer-events: none;
+}
+
+.cal-range-seg {
+  display: block;
+  height: 3px;
+  background: var(--control-line);
+  border-radius: 0;
+}
+
+.cal-range-seg.is-start {
+  border-radius: var(--r-xs) 0 0 var(--r-xs);
+}
+
+.cal-range-seg.is-mid {
+  border-radius: 0;
+}
+
+.cal-range-seg.is-end {
+  border-radius: 0 var(--r-xs) var(--r-xs) 0;
+}
+
+.cal-range-seg.is-single {
+  border-radius: var(--r-xs);
+}
+
+/* 日详情里的读数：中文走 mono 的中文回退，不越字阶 / 字重白名单 */
+.cal-range-note {
+  padding: 0 var(--sp-2) var(--sp-1);
+  font-family: var(--font-mono-cjk);
+  font-size: var(--fs-2xs);
+  line-height: 16px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cal-range-note.is-invalid {
+  color: var(--danger);
+}
+
 /* --- 右侧：日详情（上）+ 无日期托盘（下） --- */
 .cal-side {
   width: var(--cal-panel-w);
@@ -6413,6 +6465,11 @@ mark {
     flex-direction: row;
     flex-wrap: wrap;
     gap: 2px;
+  }
+
+  /* 窄屏格子只剩 8px 色点的余量，跨度段让位给日详情的读数行 */
+  .cal-range-track {
+    display: none;
   }
 
   /* 窄屏把 chip 压成 8px 色块，形状装不下 —— 改用同一条中性明度梯度表达四档。

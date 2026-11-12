@@ -6,8 +6,10 @@
 //   · 单击日期 = 选中（右侧日详情跟着走）；双击空白日期 / Enter = 在该天新建（预填 due:）
 //   · 方向键 ←→ ±1 天、↑↓ ±1 周（全局快捷键）、PageUp/Down ±1 月、Home 回今天
 //   · 拖任务 chip 到别的日期 = 改期；拖进「无日期」托盘 = 清除日期（都走 store.updateTask）
-//   · 已完成视图按完成日期锚定，整体只读：不能拖、不能建、没有托盘
-import { useEffect, useMemo, useRef, useState } from 'react';
+//   · 任务同时有 t:（起点）与 due:（截止）时，格子叠一层中性跨度段、日详情给一行读数；
+//     chip 右键可把起点设为选中日 / 清除起点（区间语义全在 lib/taskRange.js）
+//   · 已完成视图按完成日期锚定，整体只读：不能拖、不能建、没有托盘，也不显示区间
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import {
   WEEKDAY_LABELS,
@@ -17,6 +19,7 @@ import {
   calendarKeyAction,
   dropReschedule,
 } from '../lib/calendar.js';
+import { rangeOf, rangeOverlay, rangeReadout, setRangeStart } from '../lib/taskRange.js';
 import { colorHex, resolveColorId, useListStyle } from '../lib/listStyle.js';
 import { copyMenu, useContextMenu } from '../hooks/useContextMenu.jsx';
 import TaskRow from './TaskRow.jsx';
@@ -25,6 +28,7 @@ import { priorityClass } from '../lib/priority.js';
 import Icon from './Icon.jsx';
 
 const MAX_CHIPS = 3;
+const MAX_RANGE_SEGS = 2;
 const DRAG_MIME = 'application/x-worktodolist-task';
 
 // 任务所属项目的颜色点：与侧栏 / 面包屑同一套色板，日历里也认得出"这是哪个列表的事"。
@@ -62,6 +66,13 @@ export default function CalendarView({
 
   const { byDate, undated, readonly, stats } = projection;
   const dayTasks = byDate.get(day) || [];
+
+  // 区间只是叠在 42 格上的一层中性跨度：任务仍按 dueDate 落在唯一那一天，
+  // byDate 的单 key 聚合一个字没改。已完成视图按完成日期锚定，区间没有意义。
+  const rangeByDate = useMemo(
+    () => (readonly ? new Map() : rangeOverlay(projection.tasks, cells.map((c) => c.date))),
+    [readonly, projection.tasks, cells]
+  );
 
   // 焦点跟着选中日期走：键盘移动后 DOM 焦点必须落到新的格子上，
   // 否则下一次按键还从旧格子起算。鼠标点在导航按钮上时不抢焦点。
@@ -153,6 +164,12 @@ export default function CalendarView({
     return '';
   };
 
+  // 起点的写盘补丁走纯函数：无变化 / 非法目标一律不写盘（与拖放改期同一口径）。
+  const applyRangeStart = (task, date) => {
+    const patch = setRangeStart(task, date);
+    if (patch) store.updateTask(task.id, patch);
+  };
+
   const chipMenu = (e, task) => {
     e.stopPropagation();
     if (readonly) {
@@ -167,6 +184,13 @@ export default function CalendarView({
         label: '清除日期',
         disabled: !task.dueDate,
         onClick: () => store.updateTask(task.id, { dueDate: null }),
+      },
+      { type: 'item', label: '起点设为选中日', onClick: () => applyRangeStart(task, day) },
+      {
+        type: 'item',
+        label: '清除开始日',
+        disabled: !task.thresholdDate,
+        onClick: () => applyRangeStart(task, null),
       },
       { type: 'sep' },
       ...copyMenu(task.raw || task.title),
@@ -259,6 +283,7 @@ export default function CalendarView({
           <div className="cal-grid" ref={gridRef} aria-label={`${monthTitle(month)}任务日历`}>
             {cells.map((cell) => {
               const list = byDate.get(cell.date) || [];
+              const spans = rangeByDate.get(cell.date) || [];
               const shown = list.slice(0, MAX_CHIPS);
               const extra = list.length - shown.length;
               const cls = [
@@ -280,7 +305,7 @@ export default function CalendarView({
                   tabIndex={cell.date === day ? 0 : -1}
                   aria-pressed={cell.date === day}
                   aria-current={cell.date === today ? 'date' : undefined}
-                  aria-label={`${dayTitle(cell.date, today)}，${list.length ? `${list.length} 项任务` : '无任务'}`}
+                  aria-label={`${dayTitle(cell.date, today)}，${list.length ? `${list.length} 项任务` : '无任务'}${spans.length ? `，${spans.length} 个区间覆盖` : ''}`}
                   onClick={() => pickDay(cell.date)}
                   onDoubleClick={() => {
                     if (!readonly) onCreate(cell.date);
@@ -310,6 +335,13 @@ export default function CalendarView({
                       </span>
                     )}
                   </span>
+                  {spans.length > 0 && (
+                    <span className="cal-range-track" aria-hidden="true">
+                      {spans.slice(0, MAX_RANGE_SEGS).map((s) => (
+                        <i key={s.id} className={`cal-range-seg is-${s.role}`} />
+                      ))}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -345,16 +377,27 @@ export default function CalendarView({
                   {readonly ? '这一天没有完成记录' : '这一天没有任务 · 双击日期新建'}
                 </div>
               ) : (
-                dayTasks.map((t) => (
-                  <TaskRow
-                    key={t.id}
-                    task={t}
-                    store={store}
-                    query={query}
-                    readonly={readonly}
-                    dragDisabled
-                  />
-                ))
+                dayTasks.map((t) => {
+                  const r = rangeOf(t);
+                  // 只有设了起点的任务才有区间读数：普通任务不刷屏。
+                  const note = !readonly && r.start ? rangeReadout(r) : '';
+                  return (
+                    <Fragment key={t.id}>
+                      <TaskRow
+                        task={t}
+                        store={store}
+                        query={query}
+                        readonly={readonly}
+                        dragDisabled
+                      />
+                      {note && (
+                        <div className={'cal-range-note' + (r.kind === 'invalid' ? ' is-invalid' : '')}>
+                          {note}
+                        </div>
+                      )}
+                    </Fragment>
+                  );
+                })
               )}
             </div>
           </section>

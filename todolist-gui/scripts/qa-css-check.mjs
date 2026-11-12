@@ -86,6 +86,9 @@ const RUNTIME_VALUES = [
   // 日历 chip 状态：chipState() 返回 ' cal-done' / ' overdue' / ' now'
   // 三个都要列，否则删掉 .cal-chip.overdue / .cal-chip.now 的规则门禁也不会红。
   'cal-done', 'overdue', 'now',
+  // 区间跨度：role 与无效态由模板 / 三元拼出，静态扫描看不见
+  'cal-range-track', 'cal-range-seg', 'cal-range-note',
+  'is-start', 'is-mid', 'is-end', 'is-single', 'is-invalid',
 ];
 const runtimeMissing = RUNTIME_VALUES.filter((c) => !cssClasses.has(c));
 console.log('\n运行时拼接值缺失:', runtimeMissing.join(', ') || '无');
