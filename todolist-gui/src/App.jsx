@@ -285,12 +285,20 @@ export function MainList({ store, query }) {
     () => buildNesting([...store.todoEntries, ...store.doneEntries]),
     [store.todoEntries, store.doneEntries]
   );
+  // 行号 gutter：todo.txt 里的物理位置（含 raw / 注释行计数，与编辑浮窗预览栏
+  // 的 ledger-no 同一口径）。今天视图按紧急度重排后号会跳序 —— 那正是「文件第几行」。
+  const lineNos = useMemo(() => {
+    const m = new Map();
+    store.todoEntries.forEach((e, i) => m.set(e.id, i + 1));
+    return m;
+  }, [store.todoEntries]);
   const rowProps = useCallback(
     (t) => ({
       depth: store.view === 'today' ? 0 : depthOf(nesting, t),
       kids: childProgress(nesting, t.stableId),
+      lineNo: lineNos.get(t.id) ?? null,
     }),
-    [nesting, store.view]
+    [nesting, store.view, lineNos]
   );
 
   const rawSection = (store.view === 'all' || store.view === 'inbox') && rawEntries.length > 0;
@@ -1071,33 +1079,50 @@ export default function App() {
                 className={'main' + (isCalendar ? ' main-calendar' : '')}
                 onContextMenu={handleMainContextMenu}
               >
-                <div className="quick-add-bar">
-                  <QuickAdd
-                    store={store}
-                    inputRef={store.quickAddRef}
-                    seed={quickSeed}
-                    resetKey={quickResetKey}
-                  />
-                </div>
-                <LayoutNotice
-                  state={layoutNotice}
-                  onUseCalendar={() => setOverride('calendar')}
-                  onRestoreAuto={() => setOverride(null)}
-                />
                 {isCalendar ? (
-                  <CalendarView
-                    store={store}
-                    query={query}
-                    projection={calProjection}
-                    day={calDay}
-                    month={calMonth}
-                    onPickDay={setCalDay}
-                    onNavMonth={navCalMonth}
-                    onToday={calToday}
-                    onCreate={createOnDay}
-                  />
+                  <>
+                    <div className="quick-add-bar">
+                      <QuickAdd
+                        store={store}
+                        inputRef={store.quickAddRef}
+                        seed={quickSeed}
+                        resetKey={quickResetKey}
+                      />
+                    </div>
+                    <LayoutNotice
+                      state={layoutNotice}
+                      onUseCalendar={() => setOverride('calendar')}
+                      onRestoreAuto={() => setOverride(null)}
+                    />
+                    <CalendarView
+                      store={store}
+                      query={query}
+                      projection={calProjection}
+                      day={calDay}
+                      month={calMonth}
+                      onPickDay={setCalDay}
+                      onNavMonth={navCalMonth}
+                      onToday={calToday}
+                      onCreate={createOnDay}
+                    />
+                  </>
                 ) : (
-                  <MainList store={store} query={query} />
+                  <div className="list-col">
+                    <div className="quick-add-bar">
+                      <QuickAdd
+                        store={store}
+                        inputRef={store.quickAddRef}
+                        seed={quickSeed}
+                        resetKey={quickResetKey}
+                      />
+                    </div>
+                    <LayoutNotice
+                      state={layoutNotice}
+                      onUseCalendar={() => setOverride('calendar')}
+                      onRestoreAuto={() => setOverride(null)}
+                    />
+                    <MainList store={store} query={query} />
+                  </div>
                 )}
               </main>
             </>

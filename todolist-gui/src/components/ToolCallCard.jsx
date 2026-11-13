@@ -20,27 +20,29 @@ export default function ToolCallCard({ message }) {
 
   return (
     <div className={`tool-card tool-${tool.status || 'running'}`}>
-      <div className="tool-card-head">
+      <button
+        type="button"
+        className="tool-card-head"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        title={open ? '收起原始事件' : '展开原始事件'}
+      >
         <span className={`status-dot ${st.cls}`} title={st.label}>
-          <Icon name={st.icon} size={16} />
+          <Icon name={st.icon} size={14} />
         </span>
-        <span className="tool-name">
-          <Icon name="chevron-right" size={12} />
-          {tool.name || 'agent.noop'}
-        </span>
-        <div className="tool-params">
+        <span className="tool-name">{tool.name || 'agent.noop'}</span>
+        <span className="tool-params">
           {entries.map(([k, v]) => (
             <span key={k} className="tool-param">
               <span className="tool-param-key">{k}:</span> {String(v)}
             </span>
           ))}
-        </div>
+        </span>
         <span className="spacer" />
         {tool.durationMs != null && <span className="tool-duration">{tool.durationMs} ms</span>}
-      </div>
-      <button className="event-toggle" onClick={() => setOpen((o) => !o)}>
-        <Icon name={open ? 'chevron-down' : 'chevron-right'} size={12} />
-        {open ? '收起原始事件' : '展开原始事件'}
+        <span className="tool-chev">
+          <Icon name={open ? 'chevron-down' : 'chevron-right'} size={12} />
+        </span>
       </button>
       {open && (
         <pre className="event-json">

@@ -79,8 +79,7 @@ const RUNTIME_VALUES = [
   'status-dot-running', 'status-dot-ok', 'status-dot-fail',
   'tool-ok', 'tool-fail', 'tool-running',
   'row-overdue', 'row-readonly',
-  // 对话头像：className={'msg-avatar msg-avatar-' + who}
-  'msg-avatar-agent', 'msg-avatar-user', 'msg-avatar-tool',
+  // 对话：AI 记号 .ai-mark 是静态类；用户/工具不再用字母头像
   // 日历格子：cls 数组 join(' ')，静态扫描看不见（in-month 走默认样式，无规则）
   'cal-cell', 'out-month', 'is-weekend', 'is-today', 'is-selected',
   // 日历 chip 状态：chipState() 返回 ' cal-done' / ' overdue' / ' now'
@@ -89,6 +88,9 @@ const RUNTIME_VALUES = [
   // 区间跨度：role 与无效态由模板 / 三元拼出，静态扫描看不见
   'cal-range-track', 'cal-range-seg', 'cal-range-note',
   'is-start', 'is-mid', 'is-end', 'is-single', 'is-invalid',
+  // 区间条：cls 数组 join(' ')，role / 续刻痕 / 拖拽态静态扫描看不见
+  'cal-bar', 'cont-left', 'cont-right', 'is-overlong', 'is-open',
+  'is-preview', 'is-dragging', 'is-readonly', 'is-resizing',
 ];
 const runtimeMissing = RUNTIME_VALUES.filter((c) => !cssClasses.has(c));
 console.log('\n运行时拼接值缺失:', runtimeMissing.join(', ') || '无');

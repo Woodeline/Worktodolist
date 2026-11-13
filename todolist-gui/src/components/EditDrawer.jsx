@@ -96,7 +96,7 @@ function toList(text, prefix) {
 
 // @分类 / +标签 字段：文本输入照旧可手打；右侧箭头展开**已保存**的候选清单，
 // 点候选即勾选/取消。候选与手输写回同一个逗号分隔的字符串，只有一份真相。
-function TagField({ label, prefix, placeholder, value, onChange, options, emptyHint }) {
+function TagField({ label, hint, prefix, placeholder, value, onChange, options, emptyHint }) {
   const [open, setOpen] = useState(false);
   const [dropUp, setDropUp] = useState(false);
   const boxRef = useRef(null);
@@ -133,7 +133,10 @@ function TagField({ label, prefix, placeholder, value, onChange, options, emptyH
 
   return (
     <div className="field field-tags" ref={boxRef}>
-      <span>{label}</span>
+      <span>
+        {label}
+        {hint ? <em className="field-hint">{hint}</em> : null}
+      </span>
       <div className="tag-input">
         <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
         <button
@@ -352,129 +355,139 @@ function EditForm({ task, store }) {
           </button>
         </div>
 
-        <label className="field">
-          <span>标题</span>
-          <input value={form.title} onChange={set('title')} placeholder="任务标题" autoFocus />
-        </label>
+        <div className="drawer-body">
+          <label className="field">
+            <span>标题</span>
+            <input value={form.title} onChange={set('title')} placeholder="任务标题" autoFocus />
+          </label>
 
-        <div className="field">
-          <span>优先级</span>
-          <div className="priority-picker">
-            <button
-              className={form.priority === '' ? 'sel' : ''}
-              onClick={() => setForm((f) => ({ ...f, priority: '' }))}
-            >
-              <PriorityMark variant="mark" />
-              无
-            </button>
-            {priorities.map((p) => (
-              <button
-                key={p}
-                className={form.priority === p ? 'sel' : ''}
-                onClick={() => setForm((f) => ({ ...f, priority: p }))}
-              >
-                <PriorityMark priority={p} variant="mark" />
-                {PRIORITY_LABELS[p] || p} ({p})
-              </button>
-            ))}
+          <div className="field-row">
+            <div className="field">
+              <span>优先级</span>
+              <div className="priority-picker">
+                <button
+                  className={form.priority === '' ? 'sel' : ''}
+                  onClick={() => setForm((f) => ({ ...f, priority: '' }))}
+                >
+                  <PriorityMark variant="mark" />
+                  无
+                </button>
+                {priorities.map((p) => (
+                  <button
+                    key={p}
+                    className={form.priority === p ? 'sel' : ''}
+                    onClick={() => setForm((f) => ({ ...f, priority: p }))}
+                  >
+                    <PriorityMark priority={p} variant="mark" />
+                    {PRIORITY_LABELS[p] || p}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <label className="field">
+              <span>截止日期</span>
+              <input type="date" value={form.dueDate} onChange={set('dueDate')} />
+            </label>
           </div>
-        </div>
 
-        <label className="field">
-          <span>截止日期</span>
-          <input type="date" value={form.dueDate} onChange={set('dueDate')} />
-        </label>
+          <div className="field-row">
+            <label className="field">
+              <span>提醒时刻<em className="field-hint">一次性</em></span>
+              <input
+                type="datetime-local"
+                value={form.remindAt}
+                onChange={set('remindAt')}
+                title="留空表示不提醒"
+              />
+            </label>
 
-        <label className="field">
-          <span>提醒时刻（到点弹系统通知，一次性）</span>
-          <input
-            type="datetime-local"
-            value={form.remindAt}
-            onChange={set('remindAt')}
-            title="留空表示不提醒"
-          />
-        </label>
-
-        <label className="field">
-          <span>重复（完成后自动生成下一次）</span>
-          <select value={form.recurrence} onChange={set('recurrence')}>
-            {recurrenceOptions.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <TagField
-          label="@分类（逗号分隔）"
-          prefix="@"
-          placeholder="工作, 生活"
-          value={form.contexts}
-          onChange={(v) => setForm((f) => ({ ...f, contexts: v }))}
-          options={contextOptions}
-          emptyHint="暂无已保存的分类"
-        />
-
-        <TagField
-          label="+标签（逗号分隔）"
-          prefix="+"
-          placeholder="回测, 量化"
-          value={form.projects}
-          onChange={(v) => setForm((f) => ({ ...f, projects: v }))}
-          options={projectOptions}
-          emptyHint="暂无已保存的标签"
-        />
-
-        <label className="field field-inline">
-          <input
-            type="checkbox"
-            checked={form.starred}
-            onChange={(e) => setForm((f) => ({ ...f, starred: e.target.checked }))}
-          />
-          <span>星标</span>
-        </label>
-        <label className="field">
-          <span>备注（存数据目录的 notes.md，不进 todo.txt）</span>
-          <textarea
-            className="note-input"
-            rows={4}
-            value={form.note}
-            onChange={set('note')}
-            placeholder="长文本、多行、Markdown 都行。它不在待办那一行上，所以不会挤压列表。"
-          />
-        </label>
-        <SubtaskField store={store} task={task} />
-
-        {task.extraTags.length > 0 && (
-          <div className="extra-tags">
-            <span>其他字段（只读）：</span>
-            {task.extraTags.map((t, i) => (
-              <span key={`${t.key}-${i}`} className="chip chip-star">
-                {t.key}:{t.value}
-              </span>
-            ))}
+            <label className="field">
+              <span>重复<em className="field-hint">完成后生成下一次</em></span>
+              <select value={form.recurrence} onChange={set('recurrence')}>
+                {recurrenceOptions.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
-        )}
 
-        <div className="drawer-preview">
-          <span className="ledger-no">{String(Math.max(1, store.todoEntries.findIndex((e) => e.id === task.id) + 1)).padStart(2, '0')}</span>
-          <span className="ledger-sep">│</span>
-          <span className="drawer-preview-text">{preview}</span>
+          <div className="field-row">
+            <TagField
+              label="@分类"
+              hint="逗号分隔"
+              prefix="@"
+              placeholder="工作, 生活"
+              value={form.contexts}
+              onChange={(v) => setForm((f) => ({ ...f, contexts: v }))}
+              options={contextOptions}
+              emptyHint="暂无已保存的分类"
+            />
+
+            <TagField
+              label="+标签"
+              hint="逗号分隔"
+              prefix="+"
+              placeholder="回测, 量化"
+              value={form.projects}
+              onChange={(v) => setForm((f) => ({ ...f, projects: v }))}
+              options={projectOptions}
+              emptyHint="暂无已保存的标签"
+            />
+          </div>
+
+          <label className="field field-inline">
+            <input
+              type="checkbox"
+              checked={form.starred}
+              onChange={(e) => setForm((f) => ({ ...f, starred: e.target.checked }))}
+            />
+            <span>星标</span>
+          </label>
+          <label className="field">
+            <span>备注<em className="field-hint">存 notes.md，不进 todo.txt</em></span>
+            <textarea
+              className="note-input"
+              rows={3}
+              value={form.note}
+              onChange={set('note')}
+              placeholder="支持多行与 Markdown"
+            />
+          </label>
+          <SubtaskField store={store} task={task} />
+
+          {task.extraTags.length > 0 && (
+            <div className="extra-tags">
+              <span>其他字段（只读）：</span>
+              {task.extraTags.map((t, i) => (
+                <span key={`${t.key}-${i}`} className="chip chip-star">
+                  {t.key}:{t.value}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="drawer-preview">
+            <span className="ledger-no">{String(Math.max(1, store.todoEntries.findIndex((e) => e.id === task.id) + 1)).padStart(2, '0')}</span>
+            <span className="ledger-sep">│</span>
+            <span className="drawer-preview-text">{preview}</span>
+          </div>
         </div>
 
         <div className="drawer-actions">
-          <button className="btn btn-primary" onClick={save}>
-            保存
-          </button>
-          <button className="btn" onClick={store.closeEditor}>
-            取消
-          </button>
           <button className="btn btn-danger" onClick={remove}>
             删除
           </button>
           <span className="spacer" />
           <span className="drawer-hint">回车保存 · Esc 取消</span>
+          <button className="btn" onClick={store.closeEditor}>
+            取消
+          </button>
+          <button className="btn btn-primary" onClick={save}>
+            保存
+          </button>
         </div>
       </div>
     </div>

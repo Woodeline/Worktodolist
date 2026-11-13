@@ -97,16 +97,16 @@ describe('CalendarView 月网格', () => {
 });
 
 describe('CalendarView 任务 chip', () => {
-  it('任务按 due 日期落格，优先级带档位类与紧凑记号', () => {
+  it('任务按 due 日期落格，优先级带档位类与左缘墨条', () => {
     const markup = render();
     expect(markup).toContain('cal-chip prio-high now');
-    expect(markup).toContain('prio-mark prio-high');
+    expect(markup).toContain('cal-chip-bar');
     expect(markup).toContain('今天甲');
   });
 
-  it('日历里四档都有形状，不再把「无」当成其他字母、把「中」落回默认', () => {
+  it('日历里四档都有档位类，墨条统一表达轻重，托盘仍用紧凑记号', () => {
     const markup = render();
-    expect(markup).toContain('prio-mark prio-mid');
+    expect(markup).toContain('cal-chip-bar');
     expect(markup).toContain('prio-mark prio-none');
     expect(markup).toContain('cal-chip prio-mid');
     expect(markup).toContain('cal-chip prio-none');
@@ -190,19 +190,27 @@ describe('CalendarView 只读态（已完成视图）', () => {
   });
 });
 
-describe('CalendarView 区间展示（t: → due:）', () => {
+describe('CalendarView 区间条（t: → due:，可拖拽）', () => {
   const ranged = [
     parseSingleLine(`(A) 跨天区间 t:${shiftDate(TODAY, -2)} due:${TODAY}`),
     parseSingleLine(`(B) 普通任务 due:${TODAY}`),
     parseSingleLine(`(C) 无效区间 t:${shiftDate(TODAY, 2)} due:${TODAY}`),
   ];
 
-  it('跨天区间在格子上画出起 / 中 / 止三段', () => {
+  it('区间任务渲染成连续条，取代旧的格底跨度细线', () => {
     const markup = render('all', {}, ranged);
-    expect(markup).toContain('cal-range-track');
-    expect(markup).toContain('cal-range-seg is-start');
-    expect(markup).toContain('cal-range-seg is-mid');
-    expect(markup).toContain('cal-range-seg is-end');
+    expect(markup).toContain('cal-bar-strip');
+    expect(markup).toContain('cal-bar');
+    expect(markup).toContain('data-role=');
+    expect(markup).not.toContain('cal-range-track');
+  });
+
+  it('区间条两端有拖动手柄，无效区间降级为虚线条', () => {
+    const markup = render('all', {}, ranged);
+    expect(markup).toContain('cal-bar-handle');
+    expect(markup).toContain('data-edge="start"');
+    expect(markup).toContain('data-edge="end"');
+    expect(markup).toContain('is-invalid');
   });
 
   it('普通任务不产生区间读数，无效区间明确提示', () => {
@@ -216,9 +224,29 @@ describe('CalendarView 区间展示（t: → due:）', () => {
     expect(render('all', {}, ranged)).toContain('个区间覆盖');
   });
 
-  it('只读态不渲染任何区间展示（按完成日期锚定，区间无意义）', () => {
+  it('单日任务也是 1 天条，两端手柄可拖出区间', () => {
+    const markup = render('all', {}, [parseSingleLine(`单日 due:${TODAY}`)]);
+    expect(markup).toContain('data-role="single"');
+    expect(markup).toContain('data-edge="start"');
+    expect(markup).toContain('data-edge="end"');
+  });
+
+  it('重叠区间分车道，超出上限进 +N 溢出', () => {
+    const many = [];
+    for (let i = 0; i < 5; i += 1) {
+      many.push(parseSingleLine(`重叠${i} t:${TODAY} due:${shiftDate(TODAY, 2)}`));
+    }
+    const markup = render('all', {}, many);
+    expect(markup).toContain('cal-bar-more');
+  });
+
+  it('chip 标记保留（窄屏 / 只读降级用，宽屏 CSS 隐藏）', () => {
+    expect(render()).toContain('cal-chip');
+  });
+
+  it('只读态不渲染任何区间条与读数（按完成日期锚定，区间无意义）', () => {
     const markup = render('done', {}, ranged);
-    expect(markup).not.toContain('cal-range-track');
+    expect(markup).not.toContain('cal-bar-strip');
     expect(markup).not.toContain('cal-range-note');
   });
 });

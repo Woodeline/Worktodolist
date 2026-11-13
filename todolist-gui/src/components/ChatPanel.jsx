@@ -40,14 +40,10 @@ function MessageText({ message }) {
   );
 }
 
-// 消息头像：22px 方角标签，用两个字母区分"谁在说"。
-// 它替代了原来那对方圆气泡 —— 对话记录更像终端日志，而不是即时通讯。
-function Avatar({ who, children }) {
-  return (
-    <span className={'msg-avatar msg-avatar-' + who} aria-hidden="true">
-      {children}
-    </span>
-  );
+// AI 记号：一枚墨绿小方点，替代原来的「AI」字母头像 —— 答案本身是主角，
+// 不需要一个标签反复声明「这是 AI 说的」。错误时换成红点（见 .msg-error）。
+function AiMark() {
+  return <span className="ai-mark" aria-hidden="true" />;
 }
 
 export default function ChatPanel({ store, onOpenList, onOpenTool }) {
@@ -238,7 +234,6 @@ export default function ChatPanel({ store, onOpenList, onOpenTool }) {
             if (m.role === 'user') {
               return (
                 <div key={m.id} className="msg msg-user">
-                  <Avatar who="user">我</Avatar>
                   <MessageText message={m} />
                 </div>
               );
@@ -246,16 +241,13 @@ export default function ChatPanel({ store, onOpenList, onOpenTool }) {
             if (m.role === 'tool') {
               return (
                 <div key={m.id} className="msg msg-tool">
-                  <Avatar who="tool">
-                    <Icon name="toolbox" size={12} />
-                  </Avatar>
                   <ToolCallCard message={m} />
                 </div>
               );
             }
             return (
               <div key={m.id} className={`msg msg-agent${m.kind === 'error' ? ' msg-error' : ''}`}>
-                <Avatar who="agent">AI</Avatar>
+                <AiMark />
                 <div className="msg-stack">
                   <MessageText message={m} />
                   {m.id === liveProposalMsgId && m.proposal && (
@@ -290,7 +282,7 @@ export default function ChatPanel({ store, onOpenList, onOpenTool }) {
 
           {agent.pending && (
             <div className="msg msg-agent pending-hint">
-              <Avatar who="agent">AI</Avatar>
+              <AiMark />
               <div className="msg-stack">
                 <div className="msg-body">
                   {PENDING_HINT[agent.pending.kind] || PENDING_HINT.clarify}

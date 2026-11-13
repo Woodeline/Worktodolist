@@ -58,9 +58,13 @@ export default function TaskRow({
   depth = 0,
   kids = null,
   dragDisabled = false,
+  lineNo = null,
+  hideDue = false,
 }) {
   const today = dayjs().format('YYYY-MM-DD');
   const isChild = depth > 0;
+  // 行号只在主列表的父任务行出现：子任务 / 只读（已完成）行不带号。
+  const showNo = lineNo != null && !isChild && !readonly;
   const overdue = isOverdue(task, today);
   const fading = store.fadingIds.includes(task.id);
   // 日历的日详情也复用这一行，但那里拖拽的语义是"改期"（由日历自己接管），
@@ -222,6 +226,7 @@ export default function TaskRow({
         selected ? 'selected' : '',
         readonly ? 'row-readonly' : '',
         isChild ? 'is-child' : '',
+        showNo ? 'has-no' : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -266,6 +271,7 @@ export default function TaskRow({
         store.setDropInfo(null);
       }}
     >
+      {showNo ? <span className="row-no" aria-hidden="true">{lineNo}</span> : null}
       <button
         className={`checkbox${checked ? ' checked' : ''}${readonly ? ' disabled' : ''}`}
         onClick={handleCheck}
@@ -313,7 +319,7 @@ export default function TaskRow({
             固定宽度让右侧日期列成一条直线；「无」不是「中」，所以它始终是空的。 */}
         <PriorityMark priority={task.priority} />
         {task.completedAt ? <span className="due">{task.completedAt} 完成</span> : null}
-        {task.dueDate ? (
+        {!hideDue && task.dueDate ? (
           // 今天到期 / 逾期各带一层浅底：这两种状态需要在扫视时"跳出来"，
           // 而一行里只允许一处强色，所以底色只给这两个状态。
           <span className="due">

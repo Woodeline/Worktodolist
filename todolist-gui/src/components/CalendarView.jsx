@@ -5,10 +5,11 @@
 // 交互契约：
 //   · 单击日期 = 选中（右侧日详情跟着走）；双击空白日期 / Enter = 在该天新建（预填 due:）
 //   · 方向键 ←→ ±1 天、↑↓ ±1 周（全局快捷键）、PageUp/Down ±1 月、Home 回今天
-//   · 拖任务 chip 到别的日期 = 改期；拖进「无日期」托盘 = 清除日期（都走 store.updateTask）
-//   · 任务同时有 t:（起点）与 due:（截止）时，格子叠一层中性跨度段、日详情给一行读数；
-//     chip 右键可把起点设为选中日 / 清除起点（区间语义全在 lib/taskRange.js）
-//   · 已完成视图按完成日期锚定，整体只读：不能拖、不能建、没有托盘，也不显示区间
+//   · 宽屏：有 due 的任务统一渲染成贯穿多日的「区间条」（单日任务是 1 天的条）。
+//     拖条两端 = 改时长（钳制不交叉）；拖条身 = 保时长平移；都走 store.updateTask。
+//     单日条拖边缘即长出区间（自动写 t:）。区间语义全在 lib/taskRange.js。
+//   · 窄屏（≤768）：条整体隐藏，退回格内 chip 色点；chip/托盘 HTML5 拖拽改期照旧。
+//   · 已完成视图按完成日期锚定，整体只读：不能拖、不能建、没有托盘，也不显示区间条。
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import {
@@ -17,9 +18,20 @@ import {
   monthTitle,
   dayTitle,
   calendarKeyAction,
-  dropReschedule,
 } from '../lib/calendar.js';
-import { rangeOf, rangeOverlay, rangeReadout, setRangeStart } from '../lib/taskRange.js';
+import {
+  rangeOf,
+  rangeOverlay,
+  rangeReadout,
+  setRangeStart,
+  resizeRange,
+  moveRange,
+  rescheduleWithRange,
+  rangeBars,
+  barSegments,
+  rangesCovering,
+  MAX_BAR_LANES,
+} from '../lib/taskRange.js';
 import { colorHex, resolveColorId, useListStyle } from '../lib/listStyle.js';
 import { copyMenu, useContextMenu } from '../hooks/useContextMenu.jsx';
 import TaskRow from './TaskRow.jsx';
@@ -28,8 +40,10 @@ import { priorityClass } from '../lib/priority.js';
 import Icon from './Icon.jsx';
 
 const MAX_CHIPS = 3;
-const MAX_RANGE_SEGS = 2;
 const DRAG_MIME = 'application/x-worktodolist-task';
+// 条车道区从日号下方起算（日号 line-height 16 + 上 padding 4 ≈ 20），每车道 16+2。
+const BAR_TOP = 22;
+const BAR_LANE_H = 18;
 
 // 任务所属项目的颜色点：与侧栏 / 面包屑同一套色板，日历里也认得出"这是哪个列表的事"。
 function useProjectDot() {
@@ -64,14 +78,30 @@ export default function CalendarView({
   const [dragId, setDragId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null); // 'YYYY-MM-DD' | 'tray' | null
 
+  // 区间条的 pointer 拖拽（与 HTML5 chip 拖拽并存）：同样组件私有，不进 store。
+  const [barDrag, setBarDrag] = useState(null); // {id,stableId,edge,grabDate,date,patch,clamped,x,y}
+  const barDragRef = useRef(null);
+  const didDragRef = useRef(false); // 拖动后抑制随之而来的 click
+  const [laneCap, setLaneCap] = useState(MAX_BAR_LANES);
+
   const { byDate, undated, readonly, stats } = projection;
   const dayTasks = byDate.get(day) || [];
 
-  // 区间只是叠在 42 格上的一层中性跨度：任务仍按 dueDate 落在唯一那一天，
+  // 区间只是叠在 42 格上的一层独立投影：任务仍按 dueDate 落在唯一那一天，
   // byDate 的单 key 聚合一个字没改。已完成视图按完成日期锚定，区间没有意义。
   const rangeByDate = useMemo(
     () => (readonly ? new Map() : rangeOverlay(projection.tasks, cells.map((c) => c.date))),
     [readonly, projection.tasks, cells]
+  );
+  // 全局车道分配（跨月稳定）+ 周行分段。readonly 不画条。
+  const bars = useMemo(
+    () => (readonly ? [] : rangeBars(projection.tasks)),
+    [readonly, projection.tasks]
+  );
+  const barLayout = useMemo(() => barSegments(bars, cells, laneCap), [bars, cells, laneCap]);
+  const covering = useMemo(
+    () => (readonly ? [] : rangesCovering(projection.tasks, day)),
+    [readonly, projection.tasks, day]
   );
 
   // 焦点跟着选中日期走：键盘移动后 DOM 焦点必须落到新的格子上，
@@ -86,6 +116,22 @@ export default function CalendarView({
       el.focus({ preventScroll: true });
     }
   }, [day]);
+
+  // 车道上限随行高自适应：矮窗 / 触屏 44px 行高自动降车道，溢出进「+N」，不硬塞不裁切。
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid || typeof ResizeObserver === 'undefined') return undefined;
+    const compute = () => {
+      const h = grid.getBoundingClientRect().height;
+      const rowH = (h - 2 - 5) / 6; // 减外边框与 5 条行格线
+      const cap = Math.floor((rowH - BAR_TOP - 4 + 2) / BAR_LANE_H);
+      setLaneCap(Math.max(1, Math.min(MAX_BAR_LANES, cap)));
+    };
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(grid);
+    return () => ro.disconnect();
+  }, []);
 
   const pickDay = (date) => onPickDay(date);
 
@@ -144,6 +190,7 @@ export default function CalendarView({
 
   // 落点以 drop 时读到的 MIME 为准（dragId 只驱动预览）——
   // 快速拖动可能丢 dragover 帧，预览可以旧，改期不能改错任务。
+  // rescheduleWithRange 在只改终点的基础上钳制起点，避免把区间拖成 invalid。
   const dropOn = (e, date) => {
     e.preventDefault();
     const id = e.dataTransfer.getData(DRAG_MIME) || dragId;
@@ -151,7 +198,7 @@ export default function CalendarView({
     setDropTarget(null);
     if (!id || readonly) return;
     const task = projection.tasks.find((t) => t.id === id);
-    const patch = dropReschedule(task, date);
+    const patch = rescheduleWithRange(task, date);
     if (!patch) return;
     store.updateTask(id, patch);
     if (date !== null) pickDay(date);
@@ -178,7 +225,7 @@ export default function CalendarView({
     }
     openMenu(e, [
       { type: 'item', label: '编辑…', accel: 'E', onClick: () => store.openEditor(task.id) },
-      { type: 'item', label: '设为今天', onClick: () => store.updateTask(task.id, { dueDate: today }) },
+      { type: 'item', label: '设为今天', onClick: () => store.updateTask(task.id, rescheduleWithRange(task, today) || { dueDate: today }) },
       {
         type: 'item',
         label: '清除日期',
@@ -220,7 +267,7 @@ export default function CalendarView({
         onContextMenu={(e) => chipMenu(e, task)}
         title={task.title}
       >
-        <PriorityMark priority={task.priority} variant="mark" />
+        <i className="cal-chip-bar" aria-hidden="true" />
         {dot && <i className="cal-chip-dot" style={{ background: dot }} aria-hidden="true" />}
         <span className="cal-chip-text">{task.title}</span>
       </span>
@@ -229,6 +276,231 @@ export default function CalendarView({
 
   const dayNumLabel = (cell) =>
     cell.day === 1 ? `${Number(cell.date.slice(5, 7))}月1日` : String(cell.day);
+
+  // 坐标 → 日期：elementsFromPoint（复数）穿透条 overlay 读到下层格子的 data-date；
+  // 命中托盘返回 'tray'；都落空时用网格矩形 7 列均分兜底；网格外返回 null（保留上次日期）。
+  const dateFromPoint = (x, y) => {
+    const els = document.elementsFromPoint(x, y);
+    for (const el of els) {
+      if (!el.closest) continue;
+      const cell = el.closest('[data-date]');
+      if (cell) return cell.getAttribute('data-date');
+      if (el.closest('.cal-tray')) return 'tray';
+    }
+    const grid = gridRef.current;
+    if (grid) {
+      const r = grid.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+        const col = Math.min(6, Math.max(0, Math.floor(((x - r.left) / r.width) * 7)));
+        const row = Math.min(5, Math.max(0, Math.floor(((y - r.top) / r.height) * 6)));
+        return cells[row * 7 + col].date;
+      }
+    }
+    return null;
+  };
+
+  const onBarPointerDown = (e, task, edge) => {
+    if (readonly) return;
+    if (e.button != null && e.button !== 0) return;
+    const kind = rangeOf(task).kind;
+    if (kind === 'invalid' || kind === 'open' || kind === 'none') return;
+    e.preventDefault();
+    e.stopPropagation();
+    didDragRef.current = false;
+    const grabDate = dateFromPoint(e.clientX, e.clientY) || task.dueDate;
+    const drag = {
+      id: task.id,
+      stableId: task.stableId || null,
+      edge,
+      grabDate,
+      date: grabDate,
+      patch: null,
+      clamped: false,
+      x: e.clientX,
+      y: e.clientY,
+    };
+    barDragRef.current = drag;
+    setBarDrag(drag);
+  };
+
+  // 拖动中：window 级 pointer 监听（不依赖捕获元素存活，预览重渲染也不丢事件）。
+  // 预览即所得 —— 钳制在 resizeRange/moveRange 纯函数内，预览与提交共用同一计算。
+  useEffect(() => {
+    if (!barDrag) return undefined;
+    const findTask = (d) =>
+      projection.tasks.find((t) => t.id === d.id) ||
+      (d.stableId ? projection.tasks.find((t) => t.stableId === d.stableId) : null);
+
+    const computePatch = (d, task, date) => {
+      if (d.edge === 'move') {
+        if (date === 'tray') return { patch: rescheduleWithRange(task, null), clamped: false };
+        const delta = dayjs(date).diff(dayjs(d.grabDate), 'day');
+        return { patch: moveRange(task, delta), clamped: false };
+      }
+      if (date === 'tray') return { patch: null, clamped: false };
+      const patch = resizeRange(task, d.edge, date);
+      let clamped = true;
+      if (patch) {
+        const val = d.edge === 'start' ? patch.thresholdDate : patch.dueDate;
+        clamped = val !== date;
+      }
+      return { patch, clamped };
+    };
+
+    const move = (e) => {
+      const d = barDragRef.current;
+      if (!d) return;
+      const task = findTask(d);
+      if (!task) return;
+      const date = dateFromPoint(e.clientX, e.clientY) || d.date;
+      const { patch, clamped } = computePatch(d, task, date);
+      const next = { ...d, date, patch, clamped, x: e.clientX, y: e.clientY };
+      barDragRef.current = next;
+      setBarDrag(next);
+      setDropTarget(date === 'tray' ? 'tray' : date);
+      didDragRef.current = true;
+    };
+
+    const finish = () => {
+      barDragRef.current = null;
+      setBarDrag(null);
+      setDropTarget(null);
+    };
+
+    const up = (e) => {
+      const d = barDragRef.current;
+      finish();
+      if (!d) return;
+      // 松手重取任务：外部重载会使运行时 id 全变，按 id→stableId 双重重取（同 dropOn 口径）。
+      const task = findTask(d);
+      if (!task) {
+        store.showToast?.('任务已变化，请重试');
+        return;
+      }
+      const date = dateFromPoint(e.clientX, e.clientY) || d.date;
+      const { patch } = computePatch(d, task, date);
+      if (!patch) return;
+      store.updateTask(task.id, patch);
+      if (patch.dueDate !== undefined && task.recurrence) {
+        store.showToast?.(
+          patch.dueDate === null
+            ? '重复任务：清除截止后将从今天推进'
+            : `重复任务：锚点已移到 ${patch.dueDate}`
+        );
+      }
+      const focusDate = d.edge === 'start' ? patch.thresholdDate || task.dueDate : patch.dueDate || task.dueDate;
+      if (focusDate) pickDay(focusDate);
+    };
+
+    const key = (e) => {
+      if (e.key === 'Escape') finish();
+    };
+
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', finish);
+    window.addEventListener('keydown', key);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', finish);
+      window.removeEventListener('keydown', key);
+    };
+  }, [barDrag?.id, projection.tasks, cells]);
+
+  // 拖动预览：把补丁套到任务上单独算段，沿用原车道（不扰动他人）；其余条冻结在已提交数据。
+  let previewWeeks = null;
+  if (barDrag && barDrag.patch) {
+    const task = projection.tasks.find((t) => t.id === barDrag.id);
+    const origBar = bars.find((b) => b.id === barDrag.id);
+    if (task && origBar) {
+      const pb = rangeBars([{ ...task, ...barDrag.patch }]);
+      if (pb[0]) {
+        pb[0].lane = origBar.lane;
+        previewWeeks = barSegments(pb, cells, MAX_BAR_LANES + 10).weeks;
+      }
+    }
+  }
+
+  const renderBar = (seg, isPreview) => {
+    const task = seg.task;
+    const dot = projectDot(task);
+    const r = rangeOf(task);
+    const interactive = !readonly && !isPreview && seg.kind !== 'invalid' && seg.kind !== 'open';
+    const role = seg.trueStart && seg.trueEnd ? 'single' : seg.trueStart ? 'start' : seg.trueEnd ? 'end' : 'mid';
+    const cls = [
+      'cal-bar',
+      priorityClass(task.priority),
+      chipState(task).trim(),
+      'is-' + role,
+      seg.contLeft ? 'cont-left' : '',
+      seg.contRight ? 'cont-right' : '',
+      seg.kind === 'invalid' ? 'is-invalid' : '',
+      seg.kind === 'overlong' ? 'is-overlong' : '',
+      seg.kind === 'open' ? 'is-open' : '',
+      isPreview ? 'is-preview' : '',
+      barDrag && barDrag.id === seg.id && !isPreview ? 'is-dragging' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    const anchor = task.dueDate || task.thresholdDate;
+    return (
+      <div
+        key={(isPreview ? 'p-' : 'b-') + seg.id}
+        className={cls}
+        style={{ gridColumn: `${seg.colStart + 1} / ${seg.colEnd + 2}`, gridRow: seg.lane + 1 }}
+        data-task-id={seg.id}
+        data-role={role}
+        role="button"
+        tabIndex={-1}
+        aria-label={`${task.title} · ${rangeReadout(r) || anchor || ''}`}
+        title={task.title}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (didDragRef.current) {
+            didDragRef.current = false;
+            return;
+          }
+          if (anchor) pickDay(anchor);
+          if (!readonly) store.setFocusedId(task.id);
+        }}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          if (!readonly) store.openEditor(task.id);
+        }}
+        onContextMenu={(e) => chipMenu(e, task)}
+        onPointerDown={interactive ? (e) => onBarPointerDown(e, task, 'move') : undefined}
+      >
+        {seg.trueStart && interactive && (
+          <span
+            className="cal-bar-handle"
+            data-edge="start"
+            aria-hidden="true"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              onBarPointerDown(e, task, 'start');
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        )}
+        <i className="cal-chip-bar" aria-hidden="true" />
+        {dot && <i className="cal-chip-dot" style={{ background: dot }} aria-hidden="true" />}
+        {seg.showTitle && <span className="cal-bar-text">{task.title}</span>}
+        {seg.trueEnd && interactive && (
+          <span
+            className="cal-bar-handle"
+            data-edge="end"
+            aria-hidden="true"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              onBarPointerDown(e, task, 'end');
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="calendar">
@@ -280,12 +552,17 @@ export default function CalendarView({
               </span>
             ))}
           </div>
-          <div className="cal-grid" ref={gridRef} aria-label={`${monthTitle(month)}任务日历`}>
-            {cells.map((cell) => {
+          <div
+            className={'cal-grid' + (readonly ? ' is-readonly' : '') + (barDrag ? ' is-resizing' : '')}
+            ref={gridRef}
+            aria-label={`${monthTitle(month)}任务日历`}
+          >
+            {cells.map((cell, i) => {
               const list = byDate.get(cell.date) || [];
               const spans = rangeByDate.get(cell.date) || [];
               const shown = list.slice(0, MAX_CHIPS);
               const extra = list.length - shown.length;
+              const hiddenCount = readonly ? 0 : barLayout.weeks[Math.floor(i / 7)].hidden.get(cell.date) || 0;
               const cls = [
                 'cal-cell',
                 cell.inMonth ? 'in-month' : 'out-month',
@@ -301,6 +578,7 @@ export default function CalendarView({
                   key={cell.date}
                   type="button"
                   className={cls}
+                  style={{ gridRow: Math.floor(i / 7) + 1, gridColumn: (i % 7) + 1 }}
                   data-date={cell.date}
                   tabIndex={cell.date === day ? 0 : -1}
                   aria-pressed={cell.date === day}
@@ -335,16 +613,28 @@ export default function CalendarView({
                       </span>
                     )}
                   </span>
-                  {spans.length > 0 && (
-                    <span className="cal-range-track" aria-hidden="true">
-                      {spans.slice(0, MAX_RANGE_SEGS).map((s) => (
-                        <i key={s.id} className={`cal-range-seg is-${s.role}`} />
-                      ))}
+                  {hiddenCount > 0 && (
+                    <span
+                      className="cal-bar-more"
+                      style={{ top: BAR_TOP + laneCap * BAR_LANE_H }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        pickDay(cell.date);
+                      }}
+                    >
+                      +{hiddenCount}
                     </span>
                   )}
                 </button>
               );
             })}
+            {!readonly &&
+              barLayout.weeks.map((w, wi) => (
+                <div className="cal-bar-strip" key={wi} style={{ gridRow: wi + 1 }}>
+                  {w.segments.map((seg) => renderBar(seg, false))}
+                  {previewWeeks && previewWeeks[wi].segments.map((seg) => renderBar(seg, true))}
+                </div>
+              ))}
           </div>
         </div>
 
@@ -372,32 +662,47 @@ export default function CalendarView({
               )}
             </header>
             <div className="cal-day-rows">
-              {dayTasks.length === 0 ? (
+              {dayTasks.length === 0 && covering.length === 0 ? (
                 <div className="cal-day-empty">
                   {readonly ? '这一天没有完成记录' : '这一天没有任务 · 双击日期新建'}
                 </div>
               ) : (
-                dayTasks.map((t) => {
-                  const r = rangeOf(t);
-                  // 只有设了起点的任务才有区间读数：普通任务不刷屏。
-                  const note = !readonly && r.start ? rangeReadout(r) : '';
-                  return (
-                    <Fragment key={t.id}>
-                      <TaskRow
-                        task={t}
-                        store={store}
-                        query={query}
-                        readonly={readonly}
-                        dragDisabled
-                      />
-                      {note && (
-                        <div className={'cal-range-note' + (r.kind === 'invalid' ? ' is-invalid' : '')}>
-                          {note}
-                        </div>
-                      )}
-                    </Fragment>
-                  );
-                })
+                <>
+                  {dayTasks.map((t) => {
+                    const r = rangeOf(t);
+                    // 只有设了起点的任务才有区间读数：普通任务不刷屏。
+                    const note = !readonly && r.start ? rangeReadout(r) : '';
+                    return (
+                      <Fragment key={t.id}>
+                        <TaskRow
+                          task={t}
+                          store={store}
+                          query={query}
+                          readonly={readonly}
+                          dragDisabled
+                          hideDue={!readonly}
+                        />
+                        {note && (
+                          <div className={'cal-range-note' + (r.kind === 'invalid' ? ' is-invalid' : '')}>
+                            {note}
+                          </div>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                  {covering.map((t) => (
+                    <button
+                      key={'cov-' + t.id}
+                      type="button"
+                      className="cal-covering"
+                      onClick={() => store.openEditor(t.id)}
+                      title={`${t.title} · ${rangeReadout(rangeOf(t))}`}
+                    >
+                      <span className="cal-covering-title">{t.title}</span>
+                      <span className="cal-covering-note">{rangeReadout(rangeOf(t))}</span>
+                    </button>
+                  ))}
+                </>
               )}
             </div>
           </section>
@@ -455,6 +760,13 @@ export default function CalendarView({
           )}
         </aside>
       </div>
+
+      {barDrag && barDrag.patch && (
+        <div className="cal-bar-tip" style={{ left: barDrag.x, top: barDrag.y }} aria-live="polite">
+          {rangeReadout(rangeOf({ ...projection.tasks.find((t) => t.id === barDrag.id), ...barDrag.patch }))}
+          {barDrag.clamped ? ' · 已达边界' : ''}
+        </div>
+      )}
     </div>
   );
 }

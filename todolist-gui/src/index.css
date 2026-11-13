@@ -1,23 +1,24 @@
 /* ============================================================================
    TodoList · 样式层
    ----------------------------------------------------------------------------
-   设计方向：工作登记簿（The ledger） · 2026-11-07 unslop 全量重做
-     · 2026-10-07 UI 重定调，推翻 2026-10-06 的「原生桌面工具」拍板；
-       裁决与推导链全文见 docs/design/2026-10-07-UI重定调设计方案.html。
-     · 冷灰面板分域：surface 亮于 bg 的「仪器底座」反转关系，面板浮出底座；
-     · 示波器青强调（light #0e7490 / dark #46c9ec，候选自动裁决产生）；
-     · 字体两族：ui 承担全部文字，mono 只归读数 / 键位 / 计数 —— 11-07 定稿
-       收回了「mono 扩权到标题」，11-10 删掉 display / body 两个空壳别名；
-       层级落差改由 --fs-display 页标题档承担，不靠字族也不靠字距。
+   设计方向：墨绿账簿（Ink Ledger） · 2026-11-12 视觉更新
+     · 承 2026-11-07「工作登记簿」的产品灵魂与外壳骨架，换掉色彩语言与密度：
+       冷灰仪器 → 暖纸面中性色；示波器青 → 墨绿强调。
+     · 暖纸面板分域：surface 亮于 bg，纸页浮在桌面上；
+     · 墨绿强调（light #1e6b4f / dark #6cc59c），只表「今天 / 选中 / 完成 / 焦点」；
+       红仍只属于逾期/危险，琥珀＝警告，绿＝成功，色相彼此拉开。
+     · 字体两族：ui 承担全部文字，mono 只归读数 / 键位 / 计数 / 行号；
+       层级落差由 --fs-display 页标题档承担，不靠字族也不靠字距。
      · 双线描边（--sh-2 含 0 0 0 1px 分量）、圆角收紧一档、动效更快（100/140ms）。
-     · 记忆点仍是「让纯文本随处可见」，视觉签名改由「仪器面板」承担。
+     · 记忆点仍是「让纯文本随处可见」：列表行号 gutter 呼应 todo.txt 的「一行一条」，
+       视觉签名由「账簿横线 + mono 读数」承担。
 
    两条必须保留的语义区分（改样式时不要合并）：
      · --control-line ≠ --border：前者是交互控件的边界（WCAG 1.4.11 要求 ≥3:1），
        后者是纯装饰性发丝线（无阈值）。
      · 视觉重量编码「优先级」，颜色只编码「状态」—— 两者不混用。
-       2026-11-10 起「视觉重量」落成四档字阶徽章：无＝虚线空框、低＝浅字、
-       中＝细描边、高＝实心底反白，全是中性墨；见 .prio-badge / .prio-mark。
+       四档字阶徽章：无＝留白（不画框）、低＝浅字、中＝细描边、高＝实心底反白，
+       全是中性墨；见 .prio-badge / .prio-mark。
 
    2026-10-17 外壳改版（按原型 Worktodolist-UI-原型-v2.html）：
      页签从「顶部横向条」移到「左侧 46px 活动栏」，顶部让给 36px 上下文条
@@ -38,58 +39,58 @@
 :root {
   color-scheme: light;
 
-  /* --- 中性表面：仪器底座 —— surface 亮于 bg，面板像嵌进底座的高台；
+  /* --- 中性表面：暖纸面 —— surface 亮于 bg，面板像纸页浮在桌面上；
          两端锚点按正文 4.5:1 反解，中间按 Oklch L 等感知明度排布 --- */
-  --bg: #ececee;
-  --surface: #f9f9fa;
-  --surface-2: #f1f1f3;
-  --surface-3: #e6e6e9;
-  --border: #dcdce0;
-  --border-strong: #b4b4bc;
-  --control-line: #767b83; /* 对 surface 3:1 反解（#767b83 = 4.05:1），WCAG 1.4.11 */
+  --bg: #edebe6;
+  --surface: #f7f6f2;
+  --surface-2: #efede8;
+  --surface-3: #e5e2db;
+  --border: #dcd9d1;
+  --border-strong: #b7b3a9;
+  --control-line: #837f75; /* 对 surface / bg ≥3:1，WCAG 1.4.11 */
 
-  /* --- 文字：锚点 #16181c 微冷墨，对 surface 16.9:1 --- */
-  --text: #16181c;
-  --text-2: #3d434c;
-  --muted: #5d636d;
+  /* --- 文字：锚点 #1d1c19 暖墨，对 surface ≈15:1 --- */
+  --text: #1d1c19;
+  --text-2: #45433d;
+  --muted: #63605a;
 
-  /* --- 优先级四档（字阶徽章）：只用中性墨的「实心底 / 描边 / 浅字 / 虚线空框」
+  /* --- 优先级四档（字阶徽章）：只用中性墨的「实心底 / 描边 / 浅字 / 留白」
          加字重做视觉重量梯度，不给优先级任何语义色 —— 颜色只编码状态。
-         高档反白底是一行里唯一的实心块，但它是墨色不是红色。 --- */
-  --prio-strong-bg: #16181c;
-  --prio-strong-fg: #f9f9fa;
-  --prio-empty-line: #b4b4bc;
+         高档反白底是一行里唯一的实心块，但它是墨色不是红色。
+         「无」档不再画虚线空框（留白即「没填」），见 .prio-badge.prio-none。 --- */
+  --prio-strong-bg: #1d1c19;
+  --prio-strong-fg: #f7f6f2;
+  --prio-empty-line: #b7b3a9;
 
-  /* --- 强调色：示波器青。候选自动裁决（对比度全项 + CVD vs danger/warn 闸门
-         全过）；浅色主题 accent vs ok 的 tritan 冲突已由用户裁决 A 接受
-         （双编码缓解），详见方案文档 §3.3 --- */
-  --accent: #0e7490;
-  --accent-hover: #0b5c73;
+  /* --- 强调色：墨绿。只表「今天 / 选中 / 完成 / 焦点」；
+         对 surface / bg / accent-soft 均 ≥4.5:1，与 danger 红、warn 琥珀拉开色相 --- */
+  --accent: #1e6b4f;
+  --accent-hover: #175640;
   --accent-fg: #ffffff;
-  --accent-soft: #e3f1f5;
-  --accent-line: #a8cdd8;
+  --accent-soft: #e2eee7;
+  --accent-line: #b9d4c6;
 
-  /* --- 语义色：只给状态，不做装饰（本轮全冻结，CVD 旧账见方案文档附录 B） --- */
+  /* --- 语义色：只给状态，不做装饰。红＝逾期/危险，琥珀＝警告，绿＝成功 --- */
   --danger: #b3261e;
-  --danger-soft: #fdecea;
+  --danger-soft: #fbe9e7;
   --danger-line: #f0c8c4;
   --warn: #8a5a00;
-  --warn-soft: #fdf3e0;
+  --warn-soft: #f7ecd8;
   --ok: #146b41;
   --ok-soft: #e6f4ec;
 
   /* --- 搜索高亮：正文里被命中的片段 --- */
-  --mark-bg: #fde68a;
+  --mark-bg: #f5e3a3;
   --mark-fg: #4a2c00;
 
   /* --- 阴影：窄、硬、贴边保留；sh-2 加入 0 0 0 1px 描边分量 ——
-         「分区仪表」的双线语言 --- */
-  --sh-1: 0 1px 1px rgba(10,14,20,.08);
-  --sh-2: 0 1px 2px rgba(10,14,20,.1), 0 0 0 1px rgba(10,14,20,.05);
-  --sh-3: 0 12px 28px rgba(10,14,20,.18), 0 2px 6px rgba(10,14,20,.1);
+         「账簿面板」的双线语言（暖墨底色） --- */
+  --sh-1: 0 1px 1px rgba(30,28,22,.07);
+  --sh-2: 0 1px 2px rgba(30,28,22,.09), 0 0 0 1px rgba(30,28,22,.05);
+  --sh-3: 0 12px 28px rgba(30,28,22,.18), 0 2px 6px rgba(30,28,22,.1);
 
   /* --- 遮罩：抽屉与模态背后压暗的那层。暗色下要更重，否则浮层与背景分不开 --- */
-  --overlay: rgba(10,14,20,.32);
+  --overlay: rgba(28,26,21,.34);
 
   /* --- 字阶：8 档数值冻结（排版系统非调性），禁止再手写裸数值。
          11-06 日志已记「13px 88 次、层级只靠字重」要单开一轮；11-10 兑现：
@@ -193,37 +194,37 @@
 
   /* --- 选中块：活动栏与导航共用的"浅一档"高亮。
          不用 accent-soft —— 那是"强调"，侧栏选中只是"你在这里"。 --- */
-  --sel: rgba(86, 99, 119, 0.09);
-  --sel-strong: rgba(86, 99, 119, 0.14);
+  --sel: rgba(70, 66, 56, 0.08);
+  --sel-strong: rgba(70, 66, 56, 0.13);
 
   /* --- 浮动提示（活动栏图标的文字说明） --- */
-  --tip-bg: #2c2c2a;
+  --tip-bg: #2e2c26;
   --tip-fg: #ffffff;
 
   /* 登记簿：从文件里抄下来的那一层（源文本行 / 行号 / 键位） */
-  --sheet-bg: #fdfdfd;
-  --sheet-line: #dcdce0;
-  --sheet-gutter: #f1f1f3;
-  --sheet-no: #5d636d;
-  --keycap-bg: #f1f1f3;
-  --keycap-line: #b4b4bc;
+  --sheet-bg: #fbfaf7;
+  --sheet-line: #dcd9d1;
+  --sheet-gutter: #efede8;
+  --sheet-no: #63605a;
+  --keycap-bg: #efede8;
+  --keycap-line: #b7b3a9;
 
   /* --- 在线点：状态栏那颗绿点 --- */
   --live: #2e9e6b;
 
   /* --- 色点描边：彩色圆点（列表圆点 / 色板色点）压在深一档的底色上会糊掉边界，
-         兜一圈极淡的描边。与 --sh-* 同族（ rgba(10,14,20,…) ），不引入新色相。 --- */
-  --dot-edge: rgba(10, 14, 20, 0.16);
+         兜一圈极淡的描边。与 --sh-* 同族（ rgba(30,28,22,…) ），不引入新色相。 --- */
+  --dot-edge: rgba(30, 28, 22, 0.16);
 
-  --ring: 0 0 0 2px rgba(14,116,144,.4); /* 焦点环跟随强调色换青 */
+  --ring: 0 0 0 2px rgba(30,107,79,.4); /* 焦点环跟随强调色换墨绿 */
 
   /* --- 图表：数据可视化有自己的配色需求（多系列要互相可辨、要能在深浅两种底上
          读出来），借 UI 语义色会立刻捉襟见肘，所以单开一组。
          全部写成具体色值而不是 var() 引用 —— 画布绘图通过 getComputedStyle 读它们，
          保持"一个令牌一个值"最不容易出错。 --- */
-  --chart-axis: #5d636d; /* 刻度文字、轴标题（对齐 muted，5.75:1） */
-  --chart-grid: #e4e4e7; /* 网格线（装饰，不设对比度阈值） */
-  --chart-frame: #6f747d; /* 坐标轴（图形边界，4.46:1 ≥3:1） */
+  --chart-axis: #63605a; /* 刻度文字、轴标题（对齐 muted） */
+  --chart-grid: #e4e1da; /* 网格线（装饰，不设对比度阈值） */
+  --chart-frame: #6f6b62; /* 坐标轴（图形边界，≥3:1） */
   --chart-thr: #b3261e; /* 阈值线：判断门限（=语义 danger，冻结） */
   --chart-thr-ink: #7f1811; /* 阈值线上的标记与标注 */
   --chart-warn: #8a5a00; /* 置信度较低的点（外推得来） */
@@ -238,14 +239,14 @@
 
   /* --- 顺序色阶（密度语义）：--chart-* 那 14 个是**分类色**（彼此可辨），
          表达不了"密度高低"的连续语义。热力图 / 完成度这类需要顺序色阶。
-         单色相 5 阶（青相，与强调色同血统），从近底到近墨；相邻步差 ΔE ≥ 10
+         单色相 5 阶（墨绿相，与强调色同血统），从近底到近墨；相邻步差 ΔE ≥ 10
          已由验证脚本重验。正式启用它的工具必须同时进 qa-contrast。
          注：发散色阶（涨跌对比）暂不引入 —— 目前没有任何工具需要。 --- */
-  --ramp-1: #eef7f9;
-  --ramp-2: #c8e3ec;
-  --ramp-3: #93c6d9;
-  --ramp-4: #5094b0; /* qa-contrast：对轨道 ramp-1 需 ≥3（3.11），较首版 #5297b3 压深一档 */
-  --ramp-5: #0c6480;
+  --ramp-1: #eef5f0;
+  --ramp-2: #cfe4d8;
+  --ramp-3: #a3cdb4;
+  --ramp-4: #4f8f6d; /* 对轨道 ramp-1 ≥3:1 */
+  --ramp-5: #1e6b4f;
 }
 
 /* 暗色：同一套语义令牌换值，组件代码一行不动。
@@ -257,32 +258,32 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  /* 暗色锚点 #131417 / #ecedef；中间表面 Oklch L 等感知镜像 */
-  --bg: #131417;
-  --surface: #1c1e22;
-  --surface-2: #24262b;
-  --surface-3: #2e3137;
-  --border: #2c2f35;
-  --border-strong: #4b5058;
-  --control-line: #8b919b;
+  /* 暗色锚点 #161511 / #eceae3（暖炭）；中间表面 Oklch L 等感知镜像 */
+  --bg: #161511;
+  --surface: #1e1d18;
+  --surface-2: #26251f;
+  --surface-3: #302e27;
+  --border: #31302a;
+  --border-strong: #525047;
+  --control-line: #8f8c81;
 
-  --text: #ecedef;
-  --text-2: #c3c7ce;
-  --muted: #949aa4;
+  --text: #eceae3;
+  --text-2: #c6c3b9;
+  --muted: #9d9a8f;
   /* 暗色里实心徽章反过来「提亮」，前景用深墨，明暗语义仍是「最重的一档」 */
-  --prio-strong-bg: #ecedef;
-  --prio-strong-fg: #1c1e22;
-  --prio-empty-line: #4b5058;
-  --accent: #46c9ec;
-  --accent-hover: #5bd3ea;
-  --accent-fg: #06161b;
-  --accent-soft: #12333e;
-  --accent-line: #2b5e6f;
-  --danger: #ff9c92;
-  --danger-soft: #3a201d;
+  --prio-strong-bg: #eceae3;
+  --prio-strong-fg: #1e1d18;
+  --prio-empty-line: #525047;
+  --accent: #6cc59c;
+  --accent-hover: #82d1ac;
+  --accent-fg: #0d1f17;
+  --accent-soft: #1b3229;
+  --accent-line: #2f5443;
+  --danger: #f0968d;
+  --danger-soft: #3a211d;
   --danger-line: #5f3430;
-  --warn: #e8bd63;
-  --warn-soft: #362c17;
+  --warn: #dfb567;
+  --warn-soft: #352b16;
   --ok: #7dd3a2;
   --ok-soft: #163024;
   --mark-bg: #6b4c0d;
@@ -294,19 +295,19 @@
 
   --overlay: rgba(0,0,0,.58);
 
-  --ring: 0 0 0 2px rgba(53,195,224,.4);
+  --ring: 0 0 0 2px rgba(108,197,156,.4);
 
   /* 选中块在暗底上要"提亮"而不是"压暗" */
   --sel: rgba(255, 255, 255, 0.06);
   --sel-strong: rgba(255, 255, 255, 0.1);
-  --tip-bg: #3a3d42;
-  --tip-fg: #f2f3f5;
-  --sheet-bg: #202227;
-  --sheet-line: #2c2f35;
-  --sheet-gutter: #24262b;
-  --sheet-no: #949aa4;
-  --keycap-bg: #24262b;
-  --keycap-line: #4b5058;
+  --tip-bg: #3a382f;
+  --tip-fg: #f2f1ea;
+  --sheet-bg: #201f1a;
+  --sheet-line: #31302a;
+  --sheet-gutter: #26251f;
+  --sheet-no: #9d9a8f;
+  --keycap-bg: #26251f;
+  --keycap-line: #525047;
   --live: #4ec08d;
 
   /* 窗控悬停/按下在暗底上提亮；关闭红沿用亮色的同一值 */
@@ -318,12 +319,12 @@
 
   /* 图表令牌同步换值：同一组语义、另一组明度。系列色一律提亮到
      能在暗底上满足 3:1，否则深色主题下细线会糊掉。 */
-  --chart-axis: #949aa4;
-  --chart-grid: #2c2f35;
-  --chart-frame: #7d828c;
-  --chart-thr: #ff9c92;
+  --chart-axis: #9d9a8f;
+  --chart-grid: #31302a;
+  --chart-frame: #8a867c;
+  --chart-thr: #f0968d;
   --chart-thr-ink: #ffc9c2;
-  --chart-warn: #e8bd63;
+  --chart-warn: #dfb567;
   --chart-1: #7fb2f5;
   --chart-2: #f0916a;
   --chart-3: #6fd2ab;
@@ -334,11 +335,11 @@
   --chart-8: #c3bdb0;
 
   /* 顺序色阶（暗色）：同一语义、另一组明度 —— 阶与阶之间仍要能看出差 */
-  --ramp-1: #141f26;
-  --ramp-2: #1d3b4b;
-  --ramp-3: #2b5b72;
-  --ramp-4: #4a8cae;
-  --ramp-5: #86cde8;
+  --ramp-1: #16211b;
+  --ramp-2: #1d3a2c;
+  --ramp-3: #2b5440;
+  --ramp-4: #4a8a68;
+  --ramp-5: #86cda8;
 }
 
 /* ============================================================================
@@ -1630,8 +1631,14 @@ code {
   padding: 2px 0 var(--sp-5);
 }
 
-/* 列表不再套阅读栏宽上限：任务行是"表格行"，超宽屏上让元信息靠右
-   比强行收窄成一条更符合桌面列表的预期。 */
+/* 列表内容收进一条居中栏：超宽屏上标题与右侧元信息不再隔空对望，
+   扫视时眼睛不用横跳整个屏幕。概览条 / 状态栏在 .main 之外，仍铺满全宽。
+   日历不走这条栏（.main-calendar 自己管宽度）。 */
+.list-col {
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+}
 
 /* --- 分组标题：与侧栏同款的 11px mono 刻度标签 + 左侧色条 + 右端计数 --- */
 .group-title {
@@ -1694,6 +1701,21 @@ code {
   overflow: hidden;
   transition: background var(--dur-1) var(--ease-out),
     border-color var(--dur-1) var(--ease-out);
+}
+
+/* 行号 gutter：抄录 todo.txt 的「一行一条」。只在主列表的父任务行出现
+   （has-no），子任务 / 已完成 / 日历日详情不带号，避免误读成文件行号。 */
+.task-row.has-no {
+  grid-template-columns: 24px 18px minmax(0, 1fr) auto;
+}
+
+.row-no {
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+  color: var(--muted);
+  text-align: right;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 悬停：只是"这一行可以被点"，所以只给一层极浅的底，不加左缘条。 */
@@ -2001,9 +2023,10 @@ code {
   font-weight: 400;
 }
 
-/* 无：虚线空框是「没填」这个记号，不是「中」这个值，也不画任何字。 */
+/* 无：留白即「没填」—— 不画框，只保留固定宽度让右缘仍是一条直线。
+   （紧凑记号 .prio-mark.prio-none 仍保留虚线方块，供选择器/菜单/托盘识别「无」档。） */
 .prio-badge.prio-none {
-  border: 1px dashed var(--prio-empty-line);
+  border-color: transparent;
   color: transparent;
 }
 
@@ -2210,10 +2233,9 @@ code {
   color: var(--accent);
 }
 
-/* 逾期：整行唯一的强色，语义色只表状态 */
+/* 逾期：红色文字即可，不再叠红底描边药丸 —— 分组头已经红过一次，
+   逐行再涂一层会把右缘染成一条红带。语义由 danger 文字单独承担。 */
 .due-chip.overdue {
-  background: var(--danger-soft);
-  border-color: var(--danger-line);
   color: var(--danger);
   font-weight: 500;
 }
@@ -2444,7 +2466,7 @@ mark {
   background: var(--surface-2);
 }
 
-/* 选中 = 青框 + 浅青底（accent 只表"选中 / 今天 / 焦点"） */
+/* 选中 = 墨绿框 + 浅绿底（accent 只表"选中 / 今天 / 焦点"） */
 .cal-cell.is-selected,
 .cal-cell.is-selected:hover {
   background: var(--accent-soft);
@@ -2474,7 +2496,7 @@ mark {
   white-space: nowrap;
 }
 
-/* 今天 = 实心青底日号：网格里唯一"跳出来"的日子 */
+/* 今天 = 实心墨绿底日号：网格里唯一"跳出来"的日子 */
 .cal-cell.is-today .cal-daynum {
   background: var(--accent);
   color: var(--accent-fg);
@@ -2496,7 +2518,7 @@ mark {
   gap: var(--sp-1);
   flex-shrink: 0;
   min-width: 0;
-  padding: 0 var(--sp-1);
+  padding: 0 var(--sp-1) 0 0;
   border: 1px solid transparent;
   border-radius: var(--r-xs);
   background: var(--surface-2);
@@ -2526,10 +2548,21 @@ mark {
   box-shadow: 0 0 0 1px var(--dot-edge);
 }
 
-/* 档位由 chip 里的 .prio-mark 表达，四档与列表同一套类名；
-   chip 自身不再按档位改字重 —— 11px 的中文再叠字重只会糊成一团，
-   过去这里只定义 p-A / p-C，「中」和「无」悄悄退化成默认态。
+/* 档位由 chip 左缘的墨条表达（高＝实墨 / 中＝灰 / 低＝浅 / 无＝透明），
+   四档与列表同一套 prio-* 类名。不再用 8px 方块 —— 格子里方块 + 色点 + 文字
+   挤在 11px 里会糊成一团；一条贴边竖线既省地方又一眼分出轻重。
    窄屏退化成纯色块时才会重新用档位类（见响应式段）。 */
+.cal-chip-bar {
+  width: 2.5px;
+  align-self: stretch;
+  border-radius: var(--r-xs);
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.cal-chip.prio-high .cal-chip-bar { background: var(--prio-strong-bg); }
+.cal-chip.prio-mid .cal-chip-bar { background: var(--control-line); }
+.cal-chip.prio-low .cal-chip-bar { background: var(--border-strong); }
 
 /* 状态色必须压过优先级色，所以放在后面 */
 .cal-chip.now {
@@ -2538,8 +2571,6 @@ mark {
 }
 
 .cal-chip.overdue {
-  background: var(--danger-soft);
-  border-color: var(--danger-line);
   color: var(--danger);
 }
 
@@ -2614,6 +2645,160 @@ mark {
 .cal-range-note.is-invalid {
   color: var(--danger);
 }
+
+/* --- 区间条：贯穿多日的可拖长条（宽屏可编辑视图取代格内 chip） ---
+   条容器是 .cal-grid 的显式放置 grid item（grid-row:N; grid-column:1/-1），
+   与该行 7 格重叠；内层再建 7 列同 gap 网格 → 列边界与格子像素级对齐，零几何数学。
+   容器 pointer-events:none、条 auto → 格子点击选日 / 双击新建 / 键盘导航照旧。 */
+.cal-bar-strip {
+  grid-column: 1 / -1;
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  column-gap: 1px;
+  row-gap: 2px;
+  grid-auto-rows: 16px;
+  padding-top: 22px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.cal-bar {
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  height: 16px;
+  min-width: 0;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  font-size: var(--fs-2xs);
+  line-height: 14px;
+  color: var(--text);
+  cursor: grab;
+  touch-action: none;
+  overflow: hidden;
+}
+
+/* 端点收口：真起点左圆角、真终点右圆角、中途直角；续段把相接一侧抹平。 */
+.cal-bar.is-start { border-radius: var(--r-xs) 0 0 var(--r-xs); }
+.cal-bar.is-end { border-radius: 0 var(--r-xs) var(--r-xs) 0; }
+.cal-bar.is-mid { border-radius: 0; }
+.cal-bar.is-single { border-radius: var(--r-xs); }
+.cal-bar.cont-left { border-left-color: transparent; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.cal-bar.cont-right { border-right-color: transparent; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+
+.cal-bar.now { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
+.cal-bar.overdue { color: var(--danger); border-color: var(--danger-line); }
+.cal-bar.is-invalid { color: var(--danger); background: var(--danger-soft); border-color: var(--danger-line); border-style: dashed; cursor: default; }
+.cal-bar.is-overlong { border-style: dashed; }
+.cal-bar.is-open { pointer-events: none; background: transparent; border-style: dashed; color: var(--muted); }
+.cal-bar.is-dragging { opacity: 0.4; }
+.cal-bar.is-preview { opacity: 0.95; box-shadow: var(--ring); cursor: grabbing; }
+
+.cal-bar-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 两端拖动手柄：ew-resize，hover 显形 grip；命中区贴满条高。 */
+.cal-bar-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.cal-bar-handle[data-edge="start"] { left: 0; }
+.cal-bar-handle[data-edge="end"] { right: 0; }
+.cal-bar-handle::after {
+  content: "";
+  width: 2px;
+  height: 8px;
+  border-radius: 1px;
+  background: var(--control-line);
+  opacity: 0;
+  transition: opacity var(--dur-1) var(--ease-out);
+}
+.cal-bar:hover .cal-bar-handle::after { opacity: 0.7; }
+
+/* 车道溢出「+N」：落在车道区下方，点击选日（日详情列出覆盖条）。 */
+.cal-bar-more {
+  position: absolute;
+  left: var(--sp-1);
+  right: var(--sp-1);
+  z-index: 3;
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+  color: var(--muted);
+  text-align: left;
+  cursor: pointer;
+}
+.cal-bar-more:hover { color: var(--accent); }
+
+/* 拖动读数浮标：跟随指针，aria-live 播报。 */
+.cal-bar-tip {
+  position: fixed;
+  z-index: 50;
+  pointer-events: none;
+  transform: translate(-50%, -140%);
+  padding: 2px var(--sp-2);
+  border-radius: var(--r-xs);
+  background: var(--tip-bg);
+  color: var(--tip-fg);
+  font-family: var(--font-mono-cjk);
+  font-size: var(--fs-2xs);
+  white-space: nowrap;
+}
+
+/* 日详情覆盖列表：区间中途日（due 不在选中日）覆盖当天的任务。 */
+.cal-covering {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: var(--sp-1) var(--sp-2);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+.cal-covering:hover { background: var(--sel); }
+.cal-covering-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.cal-covering-note {
+  flex-shrink: 0;
+  font-family: var(--font-mono-cjk);
+  font-size: var(--fs-2xs);
+  color: var(--muted);
+}
+
+/* 宽屏可编辑：格内 chip 让位给区间条（DOM 保留，窄屏 / 只读再恢复）。 */
+.cal-grid:not(.is-readonly) .cal-chips { display: none; }
+
+/* 拖动区间条进行中：整网格统一 grabbing 光标，压掉格子 hover 高亮免干扰。 */
+.cal-grid.is-resizing { cursor: grabbing; }
+.cal-grid.is-resizing .cal-cell:hover { background: transparent; }
 
 /* --- 右侧：日详情（上）+ 无日期托盘（下） --- */
 .cal-side {
@@ -2888,10 +3073,8 @@ mark {
   color: var(--text);
 }
 
-/* --- 消息：头像 + 文本，不做气泡 ---
-   原型把对话做成一列"日志"，而不是左右分栏的聊天气泡：
-   头像（22px 方角标签）说明是谁，正文直接铺在纸面上。
-   这样同一列里可以混排文本与等宽的工具记录，不必为两种气泡各写一套圆角。 --- */
+/* --- 消息：用户气泡靠右，AI 用一枚墨绿记号 + 正文，工具是一行等宽记录 ---
+   同一列里混排气泡 / 正文 / 工具记录三种形态，答案始终是视觉主角。 --- */
 .msg {
   display: flex;
   align-items: flex-start;
@@ -2910,58 +3093,42 @@ mark {
   min-width: 0;
 }
 
-/* 头像：等宽两个字母，颜色只区分"谁" */
-.msg-avatar {
-  display: grid;
-  place-items: center;
-  inline-size: 22px;
-  block-size: 22px;
+/* AI 记号：一枚墨绿小方点，与正文首行对齐。错误时换红（见 .msg-error）。 */
+.ai-mark {
+  inline-size: 8px;
+  block-size: 8px;
   flex-shrink: 0;
-  border-radius: var(--r-sm);
-  font-family: var(--font-mono);
-  font-size: var(--fs-2xs);
-  line-height: 1;
+  margin-top: 7px;
+  border-radius: 2px;
+  background: var(--accent);
 }
 
-.msg-avatar-agent {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.msg-avatar-user {
-  background: var(--surface-3);
-  color: var(--text-2);
-}
-
-.msg-avatar-tool {
-  background: var(--surface-3);
-  color: var(--muted);
-}
-
-/* 用户发言靠右，头像随之换到右侧 —— 位置本身就是"谁说的" */
+/* 用户发言：右对齐气泡 —— 位置 + 浅底圆角本身就是「我说的」，不再需要头像。 */
 .msg-user {
   align-self: flex-end;
-  flex-direction: row-reverse;
   max-width: 78%;
 }
 
 .msg-user .msg-body {
   color: var(--text);
-  text-align: right;
+  text-align: left;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg) var(--r-lg) var(--r-xs) var(--r-lg);
+  padding: var(--sp-2) var(--sp-3);
 }
 
 .msg-agent {
   align-self: flex-start;
 }
 
-/* 错误：只改文字与头像的颜色，不改底色 —— 一段红底会把整屏的重心拽过去 */
+/* 错误：只红记号，正文保持常色 —— 整句红字会把重心拽过去，红点已足够说明。 */
 .msg-error .msg-body {
-  color: var(--danger);
+  color: var(--text);
 }
 
-.msg-error .msg-avatar-agent {
-  background: var(--danger-soft);
-  color: var(--danger);
+.msg-error .ai-mark {
+  background: var(--danger);
 }
 
 /* 工具卡片：等宽记录块，与正文同列（宽度由内容决定，最长到 640） */
@@ -2990,8 +3157,8 @@ mark {
   font-size: var(--fs-xs);
   font-family: var(--font-mono);
   color: var(--muted);
-  /* 缩进 = 头像宽 22 + 间距 9，与消息正文同一条左基线 */
-  padding-left: 31px;
+  /* 缩进 = 记号宽 8 + 间距 9，与消息正文同一条左基线 */
+  padding-left: 17px;
 }
 
 /* 打字机光标 */
@@ -3013,57 +3180,72 @@ mark {
   }
 }
 
-/* --- 工具调用卡片：不是"卡片"，是会话里的一段等宽记录 --- */
+/* --- 工具调用卡片：会话里一行安静的等宽记录，点一下展开原始事件 --- */
 .tool-card {
-  border-left: 2px solid var(--border-strong);
-  border-radius: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
   background: var(--surface-2);
   overflow: hidden;
   font-family: var(--font-mono);
 }
 
 .tool-card.tool-ok {
-  border-left-color: var(--ok);
+  border-color: var(--border);
 }
 
 .tool-card.tool-running {
-  border-left-color: var(--warn);
+  border-color: var(--accent-line);
 }
 
 .tool-card.tool-fail {
-  border-left-color: var(--danger);
+  border-color: var(--danger-line);
 }
 
 .tool-card-head {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  padding: var(--sp-1) var(--sp-3);
-  flex-wrap: wrap;
+  width: 100%;
+  padding: var(--sp-1) var(--sp-2);
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--fs-2xs);
+  color: var(--text-2);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: background var(--dur-1) var(--ease-out);
+}
+
+.tool-card-head:hover {
+  background: var(--surface-3);
 }
 
 .tool-name {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-emph);
   color: var(--text);
+  flex-shrink: 0;
 }
 
 .tool-params {
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
+  display: inline-flex;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
 }
 
 .tool-param {
   font-size: var(--fs-2xs);
-  background: var(--surface);
-  color: var(--text-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  padding: 0 6px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.tool-param + .tool-param::before {
+  content: " · ";
+  color: var(--border-strong);
 }
 
 .tool-param-key {
@@ -3073,15 +3255,23 @@ mark {
 .tool-duration {
   font-size: var(--fs-2xs);
   color: var(--muted);
+  flex-shrink: 0;
 }
 
-/* 状态点：工具调用卡片左侧那一格，图形编码状态，不靠颜色单打独斗 */
+.tool-chev {
+  display: inline-flex;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+/* 状态点：图形编码状态，不靠颜色单打独斗 */
 .status-dot {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* 状态点 */
@@ -3099,27 +3289,6 @@ mark {
 .status-dot-fail {
   display: inline-flex;
   color: var(--danger);
-}
-
-.event-toggle {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  width: 100%;
-  text-align: left;
-  border: none;
-  border-top: 1px solid var(--border);
-  background: transparent;
-  padding: 3px var(--sp-3);
-  font-family: var(--font-mono);
-  font-size: var(--fs-2xs);
-  color: var(--muted);
-  transition: color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out);
-}
-
-.event-toggle:hover {
-  color: var(--accent);
-  background: var(--surface);
 }
 
 .event-json {
@@ -3368,17 +3537,21 @@ mark {
   animation: fade-in var(--dur-2) var(--ease-out) backwards;
 }
 
-/* --- 编辑任务浮窗：居中对话框（配套 .modal 遮罩），不再是右侧抽屉 --- */
+/* --- 编辑任务浮窗：居中对话框（配套 .modal 遮罩），不再是右侧抽屉 ---
+   三段式：固定头 / 可滚 body / 固定底栏 —— 保存按钮永远在首屏可见，
+   不随字段增多被挤出视口。 */
 .edit-window {
+  display: flex;
+  flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--r-lg);
   box-shadow: var(--sh-3);
-  width: 468px;
+  width: 560px;
   max-width: 100%;
   max-height: 86vh;
-  overflow-y: auto;
-  padding: var(--sp-4) var(--sp-4) var(--sp-5);
+  overflow: hidden;
+  padding: 0;
 }
 
 .drawer-header {
@@ -3386,7 +3559,32 @@ mark {
   justify-content: space-between;
   align-items: center;
   gap: var(--sp-3);
-  margin-bottom: var(--sp-1);
+  flex-shrink: 0;
+  padding: var(--sp-4) var(--sp-5) var(--sp-3);
+  margin-bottom: 0;
+}
+
+/* 可滚动的表单主体：头与底栏固定，只有这里滚。 */
+.drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--sp-5) var(--sp-2);
+}
+
+/* 双列字段行：优先级+截止日 / 提醒+重复 / 分类+标签，把 11 组字段收进一屏。 */
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-3);
+}
+
+/* 标签后的灰色小字提示：解释缩短，不再占满一行括号。 */
+.field-hint {
+  font-style: normal;
+  font-size: var(--fs-2xs);
+  color: var(--muted);
+  margin-left: var(--sp-1);
 }
 
 .drawer-header h3 {
@@ -3494,14 +3692,16 @@ mark {
 }
 
 .priority-picker button {
+  flex: 1;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--sp-1);
   border: 1px solid var(--control-line);
   background: var(--surface);
   border-radius: var(--r-sm);
-  height: var(--h-control);
-  padding: 0 var(--sp-3);
+  height: var(--h-control-lg);
+  padding: 0 var(--sp-2);
   font-size: var(--fs-sm);
   color: var(--text-2);
   transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out),
@@ -3667,8 +3867,13 @@ mark {
 
 .drawer-actions {
   display: flex;
+  align-items: center;
   gap: var(--sp-2);
-  margin-top: var(--sp-4);
+  flex-shrink: 0;
+  margin-top: 0;
+  padding: var(--sp-3) var(--sp-5);
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
 }
 
 /* 浮窗底部的快捷键提示（回车保存 / Esc 取消） */
@@ -6472,6 +6677,16 @@ mark {
     display: none;
   }
 
+  /* 窄屏区间条整体隐藏，退回格内 chip 色点（coarse 命中区探针不被 overlay 挡）。 */
+  .cal-bar-strip,
+  .cal-bar-more,
+  .cal-bar-tip {
+    display: none;
+  }
+  .cal-grid:not(.is-readonly) .cal-chips {
+    display: flex;
+  }
+
   /* 窄屏把 chip 压成 8px 色块，形状装不下 —— 改用同一条中性明度梯度表达四档。
      过去这里只认 p-A / p-C，B 和「无」一起落回默认灰，层次少了一半。 */
   .cal-chip {
@@ -6491,7 +6706,7 @@ mark {
   .cal-chip.prio-none { background: transparent; }
   .cal-chip.prio-other { background: var(--border-strong); box-shadow: none; }
 
-  .cal-chip .prio-mark,
+  .cal-chip-bar,
   .cal-chip-text,
   .cal-chip-dot {
     display: none;
@@ -6643,6 +6858,11 @@ mark {
   .edit-window {
     width: 100%;
     max-width: 100%;
+  }
+
+  .field-row {
+    grid-template-columns: 1fr;
+    gap: 0;
   }
 
   .statusbar {

@@ -756,6 +756,7 @@ export function useTodoStore() {
     setDropInfo,
     openEditor,
     closeEditor,
+    showToast,
     dismissToast,
     pickDirectory,
     reauthorize,

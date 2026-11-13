@@ -142,6 +142,11 @@ const CAL_TODO = [
     dueDate: rel(0),
     projects: ['回测'],
   }),
+  // 跨周长条（贯穿多日、断周续接）+ 重叠多条（车道分配 / +N 溢出演示）
+  T('c12', '跨周区间：策略回测冲刺', { priority: 'B', thresholdDate: rel(1), dueDate: rel(9), projects: ['回测'] }),
+  T('c13', '重叠区间：数据清洗', { priority: 'A', thresholdDate: rel(2), dueDate: rel(4), projects: ['量化'] }),
+  T('c14', '重叠区间：指标校验', { priority: 'C', thresholdDate: rel(2), dueDate: rel(5), projects: ['回测'] }),
+  T('c15', '重叠区间：报告撰写', { thresholdDate: rel(3), dueDate: rel(6), projects: ['复盘'] }),
 ];
 const CAL_DONE = [
   T('cd1', '安装 topydo 并跑通三种 UI', { completed: true, completedAt: rel(0), priority: 'A' }),
