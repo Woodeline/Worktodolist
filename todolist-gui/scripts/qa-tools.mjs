@@ -16,7 +16,7 @@
 //      放错页、画布没重画 —— 逻辑层全绿也照样能坏，只有这一层能抓到。
 //
 // 顺带核对工具集外壳的两条结构约定：
-//   ① 顶栏是三个页签（对话 / 列表 / 工具），「工具」为当前页；
+//   ① 顶栏是两个页签（列表 / 工具），「工具」为当前页；
 //   ② 外壳不认识任何具体工具 —— 墙由 registry 驱动，加工具不改外壳。
 //
 // 2026-10-17 卡片式改版后的口径变化：
@@ -290,7 +290,7 @@ async function main() {
   mkdirSync(OUT, { recursive: true });
 
   /* ═══════════════════════════════════════════════════════════════════
-     1. 外壳结构：三个页签 + registry 驱动的卡片墙
+     1. 外壳结构：两个页签 + registry 驱动的卡片墙
      ═══════════════════════════════════════════════════════════════════ */
   await goto('tools', 1280, 900);
   const shell = await evalJs(`(() => {
@@ -316,7 +316,7 @@ async function main() {
       overflow: document.documentElement.scrollWidth - window.innerWidth,
     };
   })()`);
-  check('顶栏是三个页签，且第三项是「工具」', shell.tabCount === 3 && shell.tabs[2] === '工具', JSON.stringify(shell.tabs));
+  check('顶栏是两个页签，且第二项是「工具」', shell.tabCount === 2 && shell.tabs[1] === '工具', JSON.stringify(shell.tabs));
   check('卡片墙结构到位（墙 / 网格 / 搜索，无旧左栏残留）', shell.wall && shell.cards && shell.search && !shell.navFoot, JSON.stringify({ wall: shell.wall, cards: shell.cards, search: shell.search, navFoot: shell.navFoot }));
   check('墙态不挂工作区（点卡片才进工具）', shell.pane === false, `pane=${shell.pane}`);
   check(
@@ -877,14 +877,7 @@ async function main() {
   check('390 宽下墙态仍不挂工作区', narrow.pane === false, `pane=${narrow.pane}`);
   if (WANT_SHOTS) await shot('tools-390.png');
 
-  /* ── 12. 老页面没被这次改动带坏（对话 / 列表仍正常） ───────────────── */
-  await goto('chat', 1280, 820);
-  const chatOk = await evalJs(`(() => ({
-    panel: !!window.__q('.chat-panel'),
-    toolsLeak: !!window.__q('.tools') || !!window.__q('.rti'),
-  }))()`);
-  check('对话页仍正常渲染，且没有工具集的残留 DOM', chatOk.panel === true && chatOk.toolsLeak === false, JSON.stringify(chatOk));
-
+  /* ── 12. 老页面没被这次改动带坏（列表仍正常） ───────────────────────── */
   await goto('list', 1280, 820);
   const listOk = await evalJs(`(() => ({
     rows: window.__qa('.task-row').length,

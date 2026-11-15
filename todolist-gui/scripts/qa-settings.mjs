@@ -5,7 +5,7 @@
 // 的页面结构正确、旧功能入口一个都不剩」这条链路 —— 类名写错、入口漏删，在逻辑层
 // 全绿的情况下照样能坏。这里用真实浏览器读页面上真实结构。
 //
-// 顺带核对「不再有任何配置类入口」：设置页只读、无输入控件，对话页状态行固定本地规则引擎。
+// 顺带核对「不再有任何配置类入口」：设置页只读、无输入控件。
 //
 // 用法：npm run test:settings   （需要先起 dev：npm run dev -- --port 15181 --strictPort）
 //      SG_BASE=http://localhost:15181 npm run test:settings
@@ -230,17 +230,38 @@ async function main() {
       modePressed: Array.from(document.querySelectorAll('.settings-group .mode-switch .mode-btn')).map((b) => b.getAttribute('aria-pressed')),
       keyText: Array.from(document.querySelectorAll('.settings-row')).map((r) => r.textContent).join(' '),
       oldNet: !!q('#set-net-hosts') || !!q('#set-net-timeout') || !!q('#set-net-maxbytes'),
-      gearOn: !!q('.tabs .tab.is-on'),
+      // 设置入口已收进应用菜单：活动栏不再单列齿轮，但菜单按钮必须在，
+      // 否则这个动作是真的丢了（单测只证明 appMenu.js 里有这一项）。
+      settingsBtn: Array.from(document.querySelectorAll('.tabs .tab'))
+        .filter((b) => (b.getAttribute('title') || '').startsWith('设置')).length,
+      appMenuBtn: !!q('.tabs .tab[aria-haspopup="menu"]'),
+      // 数据节：两颗以前挂在底栏上的按钮，必须真的在设置页里（不是被顺手删掉）
+      dataActions: document.querySelectorAll('.settings-actions').length,
+      dataBtns: Array.from(document.querySelectorAll('.settings-actions button')).map((b) => b.textContent.trim()),
+      // 阅读密度：四组三档按钮 + 实时预览；整页无输入控件由 hasInput 统一兜底
+      densitySegs: document.querySelectorAll('.density-seg').length,
+      densityOpts: document.querySelectorAll('.density-opt').length,
+      densityPressed: document.querySelectorAll('.density-opt[aria-pressed="true"]').length,
+      densityPreviewNav: document.querySelectorAll('.density-preview .dp-nav').length,
+      densityPreviewRows: document.querySelectorAll('.density-preview .dp-row').length,
+      densityReset: document.querySelectorAll('.density-reset').length,
+      // 主题只有一枚按钮，点一次轮换一档；按钮画的是当前档，不再有实心底。
+      themeBtns: document.querySelectorAll('.tabs .tab[data-mode]').length,
+      themeMode: (document.querySelector('.tabs .tab[data-mode]') || {}).dataset?.mode || '',
+      themeSolid: document.querySelectorAll('.tabs .tab[data-mode].is-solid').length,
       overflow: document.documentElement.scrollWidth - window.innerWidth,
     };
   })()`);
   check('设置页结构完整（页头 / 返回 / 分组 / 底栏）', shape.head && shape.back && shape.foot, JSON.stringify(shape));
   check('标题为「设置」', shape.title === '设置', `title=${shape.title}`);
-  // 2026-11-10 补齐日历后设置页共六节：两项本机偏好 + 四组快捷键速查。
+  // 2026-11-14 对话功能剥离后设置页共五节：两项本机偏好 + 三组快捷键速查。
   // 仍然是严格顺序比较：少一节、多一节、换顺序都会红。
-  const WANT_GROUPS = ['列表外观', '显示模式', '全局', '列表页', '日历', '对话页'];
+  // 2026-11-14 数据节加入（底栏删除后，「手动重载 / 切换目录」搬到这里）：
+  // 仍是严格顺序比较，少一节、多一节、换顺序都会红。
+  // 2026-11-14 阅读密度节加入（侧栏 / 列表的字号与行距，插在列表外观之后）：七节。
+  const WANT_GROUPS = ['列表外观', '阅读密度', '显示模式', '数据', '全局', '列表页', '日历'];
   check(
-    '分组为「列表外观 / 显示模式 / 全局 / 列表页 / 日历 / 对话页」',
+    '分组为「列表外观 / 阅读密度 / 显示模式 / 数据 / 全局 / 列表页 / 日历」',
     JSON.stringify(shape.groupTitles) === JSON.stringify(WANT_GROUPS),
     JSON.stringify(shape.groupTitles)
   );
@@ -251,74 +272,178 @@ async function main() {
   check('没有任何输入控件（只读页，不需要保存）', shape.hasInput === false);
   check('底栏没有按钮（旧「保存 / 清除」入口已移除）', shape.footButtons === 0, `buttons=${shape.footButtons}`);
   check('旧「联网工具」控件不存在（白名单 / 超时 / 响应上限）', shape.oldNet === false);
-  check('顶栏齿轮处于打开态（设置入口有归属）', shape.gearOn === true);
+  check(
+    '「手动重载 / 切换目录」在设置页数据节里（主界面不再有这两颗钮）',
+    shape.dataActions === 1 &&
+      JSON.stringify(shape.dataBtns) === JSON.stringify(['手动重载', '切换目录']),
+    JSON.stringify(shape.dataBtns)
+  );
+  check('设置入口只在应用菜单（活动栏无齿轮、菜单按钮仍在）',
+    shape.settingsBtn === 0 && shape.appMenuBtn === true,
+    `settingsBtn=${shape.settingsBtn} appMenuBtn=${shape.appMenuBtn}`);
+  check('主题只有一枚轮换按钮，且不套实心底',
+    shape.themeBtns === 1 && shape.themeSolid === 0 && ['auto', 'light', 'dark'].includes(shape.themeMode),
+    `themeBtns=${shape.themeBtns} themeSolid=${shape.themeSolid} mode=${shape.themeMode}`);
   check('1280 宽下无横向溢出', shape.overflow <= 0, `overflow=${shape.overflow}`);
+  check('阅读密度：4 组 × 3 档 = 12 颗按钮，每组恰好一档按下',
+    shape.densitySegs === 4 && shape.densityOpts === 12 && shape.densityPressed === 4,
+    JSON.stringify({ segs: shape.densitySegs, opts: shape.densityOpts, pressed: shape.densityPressed }));
+  check('阅读密度：实时预览渲染出目录三条 + 列表三行',
+    shape.densityPreviewNav === 3 && shape.densityPreviewRows === 3,
+    JSON.stringify({ nav: shape.densityPreviewNav, rows: shape.densityPreviewRows }));
+  check('阅读密度：默认档不出现「恢复默认」出口', shape.densityReset === 0, `reset=${shape.densityReset}`);
+
+  // 阅读密度交互链路：点「宽松」→ 按下档移动、预览行高真的变大、--pref-nav-h 落到 <html>；
+  // 点「恢复默认」→ 落盘清除（变量移除）、按下档回标准。只证明按钮画出来不够，
+  // 要证明「偏好 → 投影 → 真实几何」这条链在浏览器里是通的。
+  const densityPick = await evalJs(`(() => {
+    const seg = document.querySelectorAll('.density-seg')[1]; /* 侧栏行距 */
+    const before = getComputedStyle(document.querySelector('.density-preview .dp-nav')).height;
+    const target = Array.from(seg.querySelectorAll('.density-opt'))
+      .find((b) => b.getAttribute('aria-pressed') !== 'true' && b.textContent.includes('宽松'));
+    if (!target) return null;
+    target.click();
+    return new Promise((res) => setTimeout(() => {
+      res({
+        before,
+        after: getComputedStyle(document.querySelector('.density-preview .dp-nav')).height,
+        pressed: seg.querySelectorAll('.density-opt[aria-pressed="true"]').length,
+        pressedLabel: (seg.querySelector('.density-opt[aria-pressed="true"]') || {}).textContent || '',
+        hasReset: !!document.querySelector('.density-reset'),
+        rootVar: getComputedStyle(document.documentElement).getPropertyValue('--pref-nav-h').trim(),
+      });
+    }, 250));
+  })()`);
+  check('阅读密度：点「宽松」后按下档移动、预览行高变大、偏好变量落到 <html>',
+    densityPick && densityPick.pressed === 1 && densityPick.pressedLabel.includes('宽松')
+    && parseFloat(densityPick.after) > parseFloat(densityPick.before)
+    && densityPick.hasReset && densityPick.rootVar === '32px',
+    JSON.stringify(densityPick));
+
+  const densityReset = await evalJs(`(() => {
+    const btn = document.querySelector('.density-reset');
+    if (!btn) return null;
+    btn.click();
+    return new Promise((res) => setTimeout(() => {
+      const seg = document.querySelectorAll('.density-seg')[1];
+      res({
+        resetGone: !document.querySelector('.density-reset'),
+        pressedLabel: (seg.querySelector('.density-opt[aria-pressed="true"]') || {}).textContent || '',
+        rootVar: getComputedStyle(document.documentElement).getPropertyValue('--pref-nav-h').trim(),
+        navH: getComputedStyle(document.querySelector('.density-preview .dp-nav')).height,
+      });
+    }, 250));
+  })()`);
+  check('阅读密度：「恢复默认」清除落盘（变量移除、按下档回标准、预览回默认行高）',
+    densityReset && densityReset.resetGone && densityReset.pressedLabel.includes('标准')
+    && densityReset.rootVar === '' && densityReset.navH === '26px',
+    JSON.stringify(densityReset));
 
   if (WANT_SHOTS) await shot('settings-1280.png');
 
-  // ── 2. 对话页：诊断状态条已下线，只留本地规则引擎 ────────────────────────
-  await goto('chat', 1280, 820);
-  const chatStatus = await evalJs(`(() => {
-    const body = document.body.textContent || '';
-    return {
-      hasStatusBar: !!document.querySelector('.chat-status'),
-      mentionsEngine: /本地规则引擎|无网络请求/.test(body),
-    };
-  })()`);
-  check('对话页已移除诊断状态条（.chat-status 不存在）', chatStatus.hasStatusBar === false);
-  check('页面不再出现「本地规则引擎 / 无网络请求」提示词', chatStatus.mentionsEngine === false);
-
-  // ── 3. 日历视图：模式开关真的挂上了，网格 / 只读态真的渲染出来 ─────────
-  // 设置页门禁过去只访问 settings / chat，日历作为「列表的第二种模式」
-  // 完全不在视野里 —— 顶栏开关写错、网格塌成 0 格都不会红。这里补上。
+  // ── 3. 日历视图：只剩网格，点日期弹「当天任务」浮层 ──────────────────────
+  // 设置页门禁过去只访问 settings，日历作为「列表的第二种模式」
+  // 完全不在视野里 —— 网格塌成 0 格、浮层弹不出来都不会红。这里补上。
+  // 2026-11-15：快录框 / 右栏日详情 / 无日期托盘 / 跨日区间条全部删除，
+  // 断言改成"它们不在"+ "点格子弹浮层"这条真实回路。
   await goto('calendar', 1280, 820);
-  const cal = await evalJs(`(() => {
-    const q = (s) => document.querySelector(s);
-    const modes = Array.from(document.querySelectorAll('.mode-switch .mode-btn'));
-    return {
-      cells: document.querySelectorAll('.cal-grid .cal-cell').length,
-      selected: document.querySelectorAll('.cal-cell.is-selected').length,
-      head: !!q('.cal-head'),
-      side: !!q('.cal-side'),
-      tray: !!q('.cal-tray'),
-      prioMarks: document.querySelectorAll('.cal-chip .prio-mark, .cal-tray-item .prio-mark').length,
-      prioTones: ['prio-high', 'prio-mid', 'prio-low', 'prio-none']
-        .map((t) => document.querySelectorAll('.cal-chip .prio-mark.' + t + ', .cal-tray-item .prio-mark.' + t).length),
-      rangeSegs: document.querySelectorAll('.cal-range-seg').length,
-      rangeNotes: document.querySelectorAll('.cal-range-note').length,
-      modeBtns: modes.length,
-      calendarPressed: modes.some((b) => b.getAttribute('aria-pressed') === 'true' && /日历/.test(b.textContent)),
-      overflow: document.documentElement.scrollWidth - window.innerWidth,
-    };
-  })()`);
+  const cal = await evalJs(`(() => ({
+    cells: document.querySelectorAll('.cal-grid .cal-cell').length,
+    selected: document.querySelectorAll('.cal-cell.is-selected').length,
+    head: !!document.querySelector('.cal-head'),
+    quickAdd: !!document.querySelector('.quick-add'),
+    side: !!document.querySelector('.cal-side'),
+    tray: !!document.querySelector('.cal-tray'),
+    bars: document.querySelectorAll('.cal-bar, .cal-range-seg').length,
+    chips: document.querySelectorAll('.cal-chip').length,
+    highChips: document.querySelectorAll('.cal-chip.prio-high').length,
+    pop: !!document.querySelector('.cal-pop'),
+    overflow: document.documentElement.scrollWidth - window.innerWidth,
+  }))()`);
   check('日历是 42 格、恰好一天被选中', cal.cells === 42 && cal.selected === 1, JSON.stringify(cal));
-  check('月导航 / 日详情 / 无日期托盘都渲染出来', cal.head && cal.side && cal.tray, JSON.stringify(cal));
-  check('顶栏模式开关存在且「日历」处于按下态', cal.modeBtns === 2 && cal.calendarPressed, JSON.stringify(cal));
-  check('日历 chip / 托盘用同一套四档记号，不再缺「中」和「无」', cal.prioMarks > 0
-    && cal.prioTones[0] > 0 && cal.prioTones[1] > 0 && cal.prioTones[3] > 0,
-    JSON.stringify({ marks: cal.prioMarks, tones: cal.prioTones }));
+  check('日历页只剩网格：无快录框 / 右栏 / 托盘 / 区间条',
+    cal.head && !cal.quickAdd && !cal.side && !cal.tray && cal.bars === 0, JSON.stringify(cal));
+  check('任务以 chip 落在格里，四档墨条仍按优先级上色', cal.chips > 0 && cal.highChips > 0, JSON.stringify(cal));
+  check('首屏不弹浮层（点日期才弹）', !cal.pop, JSON.stringify({ pop: cal.pop }));
   check('日历在 1280 宽下无横向溢出', cal.overflow <= 0, `overflow=${cal.overflow}`);
-  check('跨天区间在 42 格上画出中性跨度段', cal.rangeSegs > 0, JSON.stringify({ segs: cal.rangeSegs }));
-  check('选中日的日详情给出区间读数', cal.rangeNotes > 0, JSON.stringify({ notes: cal.rangeNotes }));
 
-  await evalJs(`(() => {
-    const chip = document.querySelector('.cal-chip');
-    if (!chip) return false;
-    chip.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true, cancelable: true, clientX: 24, clientY: 24,
-    }));
-    return true;
+  // 点「有任务的一天」→ 列表 + 底部「添加任务」
+  const dayWithTasks = await evalJs(`(() => {
+    const cell = document.querySelector('.cal-cell .cal-chip')
+      && document.querySelector('.cal-cell .cal-chip').closest('.cal-cell');
+    if (!cell) return null;
+    cell.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    return cell.getAttribute('data-date');
   })()`);
-  await sleep(180);
-  const calMenu = await evalJs(`(() => {
-    const menu = document.querySelector('.ctx-menu');
-    const text = menu ? (menu.textContent || '') : '';
+  await sleep(160);
+  const popList = await evalJs(`(() => ({
+    open: !!document.querySelector('.cal-pop'),
+    rows: document.querySelectorAll('.cal-pop .task-row').length,
+    addBtn: !!document.querySelector('.cal-pop-addbtn'),
+    addInput: !!document.querySelector('.cal-pop-add-input'),
+    label: (document.querySelector('.cal-pop-title') || {}).textContent || '',
+  }))()`);
+  check('点有任务的日期：弹出当天任务列表 + 底部「添加任务」',
+    !!dayWithTasks && popList.open && popList.rows > 0 && popList.addBtn && !popList.addInput,
+    JSON.stringify({ day: dayWithTasks, ...popList }));
+
+  // 点「空的一天」→ 直接进添加态（输入框已就位）
+  // 只挑**本月**的空格：邻月灰格会先翻月（见下一条），那是另一条回路。
+  await evalJs(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+  await sleep(120);
+  const emptyDay = await evalJs(`(() => {
+    const cell = Array.from(document.querySelectorAll('.cal-cell.in-month'))
+      .find((c) => !c.querySelector('.cal-chip'));
+    if (!cell) return null;
+    cell.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    return cell.getAttribute('data-date');
+  })()`);
+  await sleep(160);
+  const popAdd = await evalJs(`(() => ({
+    open: !!document.querySelector('.cal-pop'),
+    input: !!document.querySelector('.cal-pop-add-input'),
+    addBtn: !!document.querySelector('.cal-pop-addbtn'),
+    focused: document.activeElement && document.activeElement.classList.contains('cal-pop-add-input'),
+  }))()`);
+  check('点空日期：直接弹出添加窗口（输入框就位且聚焦）',
+    !!emptyDay && popAdd.open && popAdd.input && !popAdd.addBtn && popAdd.focused,
+    JSON.stringify({ day: emptyDay, ...popAdd }));
+
+  // 点邻月灰格 → 先翻到那个月，再在**新格子**上把浮层开出来。
+  // 这一条盯的是「锚点重算」：翻月会换掉整批格子，沿用旧矩形就会浮在空位上。
+  await evalJs(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+  await sleep(120);
+  const monthBefore = await evalJs(`(document.querySelector('.cal-month') || {}).textContent || ''`);
+  const outDay = await evalJs(`(() => {
+    const cell = document.querySelector('.cal-cell.out-month');
+    if (!cell) return null;
+    cell.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    return cell.getAttribute('data-date');
+  })()`);
+  await sleep(240);
+  const outRes = await evalJs(`(() => {
+    const pop = document.querySelector('.cal-pop');
+    const openCell = document.querySelector('.cal-cell.is-open');
+    const r = pop ? pop.getBoundingClientRect() : null;
+    const c = openCell ? openCell.getBoundingClientRect() : null;
     return {
-      hasStart: text.includes('起点设为选中日'),
-      hasClear: text.includes('清除开始日'),
+      month: (document.querySelector('.cal-month') || {}).textContent || '',
+      open: !!pop,
+      openDate: openCell ? openCell.getAttribute('data-date') : null,
+      inMonth: openCell ? openCell.classList.contains('in-month') : false,
+      leftAligned: r && c ? Math.abs(r.left - c.left) <= 1 : false,
+      nearCell: r && c ? (r.top >= c.bottom - 1 || r.bottom <= c.top + 1) : false,
+      inViewport: r ? r.left >= 0 && r.top >= 0 && r.right <= window.innerWidth : false,
     };
   })()`);
-  check('chip 右键菜单挂上了区间起点调整入口', calMenu.hasStart && calMenu.hasClear, JSON.stringify(calMenu));
+  check('点邻月灰格：翻到那个月并在新格子上弹出当天浮层（锚点已重算）',
+    !!outDay && outRes.month !== monthBefore && outRes.open && outRes.openDate === outDay
+      && outRes.inMonth && outRes.leftAligned && outRes.nearCell && outRes.inViewport,
+    JSON.stringify({ day: outDay, from: monthBefore, ...outRes }));
+
+  await evalJs(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+  await sleep(120);
+  check('Esc 收掉浮层', !(await evalJs(`!!document.querySelector('.cal-pop')`)), '');
 
   if (WANT_SHOTS) {
     await shot('calendar-1280.png');
@@ -332,37 +457,34 @@ async function main() {
   const calDone = await evalJs(`(() => ({
     readonly: !!document.querySelector('.cal-stats-ro'),
     tray: !!document.querySelector('.cal-tray'),
-    draggable: document.querySelectorAll('.cal-chip[draggable=true], .cal-tray-item[draggable=true]').length,
+    draggable: document.querySelectorAll('.cal-chip[draggable=true], .cal-bar[draggable=true]').length,
   }))()`);
-  check('已完成视图只读：标了只读、无托盘、没有可拖条目', calDone.readonly && !calDone.tray && calDone.draggable === 0, JSON.stringify(calDone));
+  check('已完成视图只读：标了只读、无可拖条目', calDone.readonly && !calDone.tray && calDone.draggable === 0, JSON.stringify(calDone));
 
-  // ── 3.5 优先级四档：真实浏览器里形状 / 字重 / 中性色都真的分开了 ─────────
-  // 单测只能证明类名对，证明不了 computed style。这里直接读渲染后的样式，
-  // 钉死「无＝虚线空框 / 低＝浅字 / 中＝细描边 / 高＝实心底反白」四档互不相同，
-  // 并锁住高档底色必须是中性墨 —— 防止有人把「高」改回红色，稀释逾期这个唯一强色。
+  // ── 3.5 优先级旗标：真实浏览器里看颜色、量槽宽 ──────────────────────────
+  // 单测只能证明类名对，证明不了 computed style / SVG 真的画出来了。
+  // 2026-11-15 定稿：列表＝标题最左一枚**中空旗**，颜色就是档位（高红 / 中橙 / 低蓝）；
+  // 「无」整枚不画，但 18px 的旗标槽仍在 —— 标题列因此永远对齐。
   await goto('list', 1280, 820);
   const prio = await evalJs(`(() => {
-    const style = (tone) => {
-      const el = document.querySelector('.prio-badge.' + tone);
+    const read = (tone) => {
+      const el = document.querySelector('.task-head .prio-badge.' + tone);
       if (!el) return null;
       const s = getComputedStyle(el);
       return {
-        bg: s.backgroundColor,
-        borderStyle: s.borderTopStyle,
-        borderColor: s.borderTopColor,
-        weight: s.fontWeight,
+        svgs: el.querySelectorAll('svg').length,
         color: s.color,
         text: el.textContent.trim(),
+        aria: el.getAttribute('aria-label') || '',
+        width: Math.round(el.getBoundingClientRect().width),
       };
     };
-    const count = (tone) => document.querySelectorAll('.prio-badge.' + tone).length;
+    const head = document.querySelector('.task-row:not(.is-child) .task-head');
     return {
-      counts: {
-        high: count('prio-high'), mid: count('prio-mid'),
-        low: count('prio-low'), none: count('prio-none'),
-      },
-      high: style('prio-high'), mid: style('prio-mid'),
-      low: style('prio-low'), none: style('prio-none'),
+      high: read('prio-high'), mid: read('prio-mid'),
+      low: read('prio-low'), none: read('prio-none'),
+      headCols: head ? getComputedStyle(head).gridTemplateColumns : null,
+      flagSlot: getComputedStyle(document.documentElement).getPropertyValue('--flag-slot').trim(),
       // 字体排版（2026-11-10 A+B）：静态门禁管令牌值，这里管真实 computed。
       crumbSize: (() => { const el = document.querySelector('.crumb b'); return el ? getComputedStyle(el).fontSize : null; })(),
       group: (() => { const el = document.querySelector('.group-title'); if (!el) return null; const s = getComputedStyle(el); return { size: s.fontSize, weight: s.fontWeight, family: s.fontFamily }; })(),
@@ -371,26 +493,18 @@ async function main() {
       overflow: document.documentElement.scrollWidth - window.innerWidth,
     };
   })()`);
-  const allFour = Object.values(prio.counts).every((n) => n > 0);
-  check('列表视图同时出现高 / 中 / 低 / 无四档徽章', allFour, JSON.stringify(prio.counts));
-  check('四档中文读数正确，「无」是空的', prio.high && prio.mid && prio.low && prio.none
-    && prio.high.text === '高' && prio.mid.text === '中' && prio.low.text === '低'
-    && prio.none.text === '', JSON.stringify(prio));
-  const opaque = (v) => v && !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(v);
-  const neutral = (v) => {
-    const c = (v.match(/\d+/g) || []).slice(0, 3).map(Number);
-    return c.length === 3 && Math.max(...c) - Math.min(...c) <= 24;
-  };
-  check('高档是实心底反白、中档细描边、无档虚线空框', prio.high && prio.mid && prio.none
-    && opaque(prio.high.bg) && prio.mid.borderStyle === 'solid' && opaque(prio.mid.borderColor)
-    && !opaque(prio.low.borderColor) && prio.none.borderStyle === 'dashed', JSON.stringify(prio));
-  check('字重按 600 / 500 / 400 递进', prio.high && prio.mid && prio.low
-    && prio.high.weight === '600' && prio.mid.weight === '500' && prio.low.weight === '400',
-    JSON.stringify({ h: prio.high && prio.high.weight, m: prio.mid && prio.mid.weight, l: prio.low && prio.low.weight }));
-  check('高档实心底是中性墨，不给优先级任何语义色', prio.high && neutral(prio.high.bg),
-    prio.high && prio.high.bg);
+  check('列表画出高 / 中 / 低三档旗标（「无」不画）',
+    !!(prio.high && prio.mid && prio.low) && prio.none === null, JSON.stringify(prio));
+  const tones = [prio.high, prio.mid, prio.low].filter(Boolean).map((p) => p.color);
+  check('三档旗标颜色互不相同（红 / 橙 / 蓝三支）', new Set(tones).size === 3, JSON.stringify(tones));
+  check('旗标是图形记号，不写汉字（(A)/(B)/(C) 只在 title / aria 里）',
+    [prio.high, prio.mid, prio.low].every((p) => p && p.text === '' && p.svgs === 1 && p.aria !== ''),
+    JSON.stringify([prio.high, prio.mid, prio.low]));
+  check('无档不画旗，但旗标槽仍占 18px（标题与读数行对齐）',
+    prio.flagSlot === '18px' && /^18px\b/.test(prio.headCols || ''),
+    JSON.stringify({ slot: prio.flagSlot, cols: prio.headCols }));
   check('列表视图在 1280 宽下无横向溢出', prio.overflow <= 0, `overflow=${prio.overflow}`);
-  check('上下文条主段 16px，与 13px 副段拉开落差', prio.crumbSize === '16px', `crumb=${prio.crumbSize}`);
+  check('上下文条主段 16px（--fs-lg，小字撑不起 36px 顶栏）', prio.crumbSize === '16px', `crumb=${prio.crumbSize}`);
   check('分组名是 11px / 500 的 mono 刻度标签，中文有显式回退', prio.group
     && prio.group.size === '11px' && prio.group.weight === '500'
     && /Mono|mono/.test(prio.group.family)
@@ -421,18 +535,22 @@ async function main() {
 
   // ── 3.7 窄边自动降级：偏好不变、有效布局临时切列表、宽边自动还原 ──────────
   // 决策逻辑由 lib/layoutMode.test.js 钉死；这里验证真实浏览器里的可见结果，
-  // 尤其「三处开关仍显示用户选的日历」—— 偏好绝不能被窗口宽度改写。
+  // 尤其「侧栏仍显示用户选的日历」—— 偏好绝不能被窗口宽度改写。
+  // 2026-11-15：页眉的 .mode-switch 已退场（日历改为侧栏入口），
+  // 「三处开关」只剩侧栏这一处可见口径：窄屏下侧栏被 display:none，
+  // 但 DOM 与 active 态还在，正好用来核对「偏好没被改写」。
   await goto('calendar-autonarrow', 390, 844);
   const narrowAuto = await evalJs(`(() => {
     const q = (s) => document.querySelector(s);
-    const modes = Array.from(document.querySelectorAll('.mode-switch .mode-btn'));
+    const calNav = Array.from(document.querySelectorAll('.sidebar .nav-item'))
+      .find((b) => /日历/.test(b.textContent || ''));
     return {
       notice: q('.layout-notice') ? q('.layout-notice').textContent.trim() : null,
       noticeBtn: q('.layout-notice-btn') ? q('.layout-notice-btn').textContent.trim() : null,
       calGrid: !!q('.cal-grid'),
       taskRows: document.querySelectorAll('.task-row').length,
-      calendarPressed: modes.some((b) => b.getAttribute('aria-pressed') === 'true' && /日历/.test(b.textContent)),
-      crumbSub: q('.crumb span') ? q('.crumb span').textContent.trim() : null,
+      calendarPressed: !!calNav && calNav.classList.contains('active'),
+      crumbSub: q('.crumb') ? q('.crumb').textContent.trim() : null,
       overflow: document.documentElement.scrollWidth - window.innerWidth,
     };
   })()`);
@@ -441,10 +559,10 @@ async function main() {
   check('提示条给出可见解释（列表口径）与「仍用日历」出口', narrowAuto.notice
     && narrowAuto.notice.includes('列表口径') && narrowAuto.noticeBtn === '仍用日历',
     JSON.stringify(narrowAuto));
-  check('三处开关仍显示用户选的「日历」偏好（偏好未被改写）', narrowAuto.calendarPressed,
+  check('侧栏仍显示用户选的「日历」偏好（偏好未被窗口宽度改写）', narrowAuto.calendarPressed,
     JSON.stringify(narrowAuto));
-  check('面包屑按当前实际布局，不再声称日历', narrowAuto.crumbSub
-    && !narrowAuto.crumbSub.includes('日历'), narrowAuto.crumbSub);
+  check('面包屑按当前实际布局且只剩标题（不声称日历、不带计数）', narrowAuto.crumbSub
+    && !narrowAuto.crumbSub.includes('日历') && !narrowAuto.crumbSub.includes('项'), narrowAuto.crumbSub);
   check('窄边降级后无横向溢出', narrowAuto.overflow <= 0, `overflow=${narrowAuto.overflow}`);
   if (WANT_SHOTS) await shot('narrow-fallback-390.png');
 

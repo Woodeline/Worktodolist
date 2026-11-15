@@ -59,23 +59,21 @@ const PROFILE = path.join(tmpdir(), 'todolist-qa-responsive-profile');
 const PROBES = {
   layout: '.layout',
   sidebar: '.sidebar',
+  // 外壳本体：底部导航要贴在它的下沿（宽屏 = 视口；样式指南里是演示区）
+  shell: '.app',
   topbar: '.topbar',
-  // 页眉最左的侧栏开关（2026-10-18 左侧化）：只存在于列表页
-  panelToggle: '.ctx-btn-icon',
+  // 页眉最左的侧栏开关（2026-10-18 左侧化）；窄屏（≤768）整枚退场，见下面的断言
+  panelToggle: '.panel-toggle',
   tabs: '.tabs',
-  // 主区本体：原型 v2 起列表不再套"阅读栏宽上限"，--rail-max 只留给对话页
+  // 窄屏底部导航（2026-11-15）：今日 / 即将到期 / 全部 / 标签，宽屏 display:none
+  bottomnav: '.bottom-nav',
+  bnavitem: '.bnav-item',
+  // 主区本体：原型 v2 起列表不再套"阅读栏宽上限"
   rail: '.main',
-  overview: '.overview',
   row: '.task-row',
   checkbox: '.task-row .checkbox',
   navitem: '.nav-item',
-  panel: '.chat-panel',
-  stream: '.chat-stream',
-  snapshot: '.snapshot',
-  msg: '.msg:not(.msg-tool)',
-  toolcard: '.tool-card',
   editwin: '.edit-window',
-  statusbar: '.statusbar',
   // 工具集（第三个页签）：目录态卡片墙 + 工作态工具区。
   // 2026-10-17 卡片式改版：左栏清单（.tools-nav/.tools-list/.tools-item）已删除，
   // 目录态改探 .tools-wall/.tools-cards/.tools-card；.tool-pane 只在工作态存在。
@@ -86,16 +84,16 @@ const PROBES = {
   toolPane: '.tool-pane',
   rtiTab: '.tool-tab',
   rtiRowDel: '.tool-row-del',
-  // 日历（清单的第二种显示模式）：网格 / 格子 / 日详情 / 托盘 / 模式开关。
-  // calTray 在已完成（只读）视图里刻意不存在，断言按视图分流。
+  // 日历（清单的第二种显示模式）：网格 / 格子 / chip / 页头。
+  // 2026-11-15：模式开关从页眉移除（日历降为侧栏入口），量具随之撤销；
+  // 同一天又删掉了右栏日详情与「无日期」托盘 —— 日历页只剩网格，
+  // 任务只在点开的浮层里成行显示，所以 side/tray 两项探针也一并撤销。
   calGrid: '.cal-grid',
   calCell: '.cal-cell',
   calChip: '.cal-chip',
-  calSide: '.cal-side',
-  calDay: '.cal-day',
-  calTray: '.cal-tray',
   calHead: '.cal-head',
-  modeSwitch: '.mode-switch',
+  // 快录框只在列表页存在：日历页拿它做"已移除"的反证
+  quickAdd: '.quick-add',
 };
 
 // 三档视口 + 断点边界。width 是**视口**宽度（媒体查询看的就是这个）。
@@ -113,18 +111,14 @@ const CASES = [
   { name: 'mobile-390', w: 390, h: 844, view: 'list', tier: 'small', note: 'iPhone 14 逻辑宽度' },
   { name: 'mobile-360', w: 360, h: 780, view: 'list', tier: 'small' },
   { name: 'mobile-320', w: 320, h: 640, view: 'list', tier: 'small', note: '最窄兜底' },
-  { name: 'narrow-390-chat', w: 390, h: 844, view: 'chat', tier: 'small', note: '对话页小屏：快照列转底部条' },
   // 桌面档的另外三个页面各留一张对照图：外壳换过之后它们的骨架同样要验
-  { name: 'desktop-1280-chat', w: 1280, h: 800, view: 'chat', tier: 'wide' },
   { name: 'desktop-1280-tools', w: 1280, h: 800, view: 'tools', tier: 'wide' },
   { name: 'desktop-1280-settings', w: 1280, h: 800, view: 'settings', tier: 'wide' },
-  { name: 'desktop-1280-panel', w: 1280, h: 800, view: 'list-panel', tier: 'wide', note: '今日概览展开态' },
   { name: 'desktop-1280-all', w: 1280, h: 800, view: 'list-all', tier: 'wide' },
   { name: 'narrow-390-drawer', w: 390, h: 844, view: 'drawer', tier: 'small', note: '编辑浮窗小屏：占满可用宽度' },
   { name: 'coarse-390', w: 390, h: 844, view: 'list', tier: 'small', coarse: true, note: '触屏命中区 ≥44px' },
   { name: 'dark-1440', w: 1440, h: 900, view: 'list', tier: 'wide', dark: true },
   { name: 'dark-390', w: 390, h: 844, view: 'list', tier: 'small', dark: true },
-  { name: 'dark-390-chat', w: 390, h: 844, view: 'chat', tier: 'small', dark: true },
   // 工具集（第三个页签）也必须在断点上过一遍 —— 它是最大的一块新表面
   { name: 'mid-1080-tools', w: 1080, h: 800, view: 'tools', tier: 'mid' },
   { name: 'narrow-768-tools', w: 768, h: 900, view: 'tools', tier: 'narrow', note: '断点线上，卡片网格收窄' },
@@ -132,16 +126,17 @@ const CASES = [
   { name: 'coarse-390-tools', w: 390, h: 844, view: 'tools', tier: 'small', coarse: true, note: '触屏：卡片与星标命中区 ≥44px' },
   { name: 'coarse-390-tools-work', w: 390, h: 844, view: 'tools-rti', tier: 'small', coarse: true, note: '触屏：工作态页签命中区 ≥44px' },
   { name: 'dark-1280-tools', w: 1280, h: 800, view: 'tools', tier: 'wide', dark: true },
-  // 日历（清单的第二种显示模式）：宽档网格+右栏并排，窄档转纵向、chip 收成色块。
-  // 已完成（只读）视图单独留一档，验证"无托盘 / 无新建"的只读骨架。
+  // 日历（清单的第二种显示模式）：宽档 42 格铺满主区，窄档 chip 收成色块。
+  // 2026-11-15 起日历页只剩网格（无快录框 / 右栏 / 托盘），浮层不在首屏几何里。
+  // 已完成（只读）视图单独留一档，验证只读标记仍然在。
   { name: 'desktop-1280-calendar', w: 1280, h: 800, view: 'calendar', tier: 'wide' },
-  { name: 'mid-1080-calendar', w: 1080, h: 800, view: 'calendar', tier: 'mid', note: '断点线上，右栏收窄' },
-  { name: 'narrow-768-calendar', w: 768, h: 900, view: 'calendar', tier: 'narrow', note: '断点线上，日详情转底部横排' },
-  { name: 'mobile-390-calendar', w: 390, h: 844, view: 'calendar', tier: 'small', note: 'chip 收成色块，日详情/托盘纵摞' },
+  { name: 'mid-1080-calendar', w: 1080, h: 800, view: 'calendar', tier: 'mid', note: '断点线上，网格不缩边' },
+  { name: 'narrow-768-calendar', w: 768, h: 900, view: 'calendar', tier: 'narrow', note: '断点线上，chip 收成色块' },
+  { name: 'mobile-390-calendar', w: 390, h: 844, view: 'calendar', tier: 'small', note: 'chip 收成色块' },
   { name: 'mobile-360-calendar', w: 360, h: 780, view: 'calendar', tier: 'small' },
   { name: 'coarse-390-calendar', w: 390, h: 844, view: 'calendar', tier: 'small', coarse: true, note: '触屏：日期格命中区 ≥44px' },
   { name: 'dark-1280-calendar', w: 1280, h: 800, view: 'calendar', tier: 'wide', dark: true },
-  { name: 'desktop-1280-calendar-done', w: 1280, h: 800, view: 'calendar-done', tier: 'wide', note: '只读：无托盘 / 无新建' },
+  { name: 'desktop-1280-calendar-done', w: 1280, h: 800, view: 'calendar-done', tier: 'wide', note: '只读：标了只读' },
   // 2026-11-11 窄边自动降级：上面 8 档强制日历，回归的是日历自身的窄屏降级；
   // 这两档走产品同款的有效布局逻辑，回归「临时切列表 / 恢复宽边」后的几何。
   { name: 'mobile-390-autonarrow', w: 390, h: 844, view: 'calendar-autonarrow', tier: 'small', note: '窄边自动降级：列表布局 + 提示条' },
@@ -297,8 +292,11 @@ const MEASURE_FN = `(() => {
     docH: document.documentElement.scrollHeight,
     overflowX: document.documentElement.scrollWidth > window.innerWidth + 1,
     sidebarVar: root.getPropertyValue('--sidebar-w').trim(),
-    snapshotVar: root.getPropertyValue('--snapshot-w').trim(),
     railMax: root.getPropertyValue('--rail-max').trim(),
+    // 外壳行高（2026-11-15 十一改：标题行 44→35、窄屏页签条 44→31）
+    titlebarVar: root.getPropertyValue('--titlebar-h').trim(),
+    railRowVar: root.getPropertyValue('--rail-row-h').trim(),
+    bnavCount: document.querySelectorAll('.bnav-item').length,
     fs2xl: root.getPropertyValue('--fs-2xl').trim(),
     bg: root.getPropertyValue('--bg').trim(),
     surface: root.getPropertyValue('--surface').trim(),
@@ -321,12 +319,6 @@ const MEASURE_FN = `(() => {
   if (calEl) {
     out.calCellCount = calEl.querySelectorAll('.cal-cell').length;
     out.calCols = getComputedStyle(calEl).gridTemplateColumns.split(' ').filter(Boolean).length;
-  }
-  // 托盘条目在触屏窄屏会落到滚动区下方（首屏外），elementFromPoint 探不到，
-  // 直接量盒高 —— min-height:44 保证它无论滚到哪都是够大的拖拽源。
-  const trayItemEl = document.querySelector('.cal-tray-item');
-  if (trayItemEl) {
-    out.calTrayItemH = Math.round(trayItemEl.getBoundingClientRect().height);
   }
 
   // 命中区实测 —— getBoundingClientRect 只给元素盒，
@@ -358,6 +350,7 @@ const MEASURE_FN = `(() => {
   out.hit = {
     checkbox: hitBox('.task-row .checkbox'),
     navitem: hitBox('.nav-item'),
+    bnavitem: hitBox('.bnav-item'),
     iconbtn: hitBox('.icon-btn'),
     tab: hitBox('.tab'),
     toolscard: hitBox('.tools-card'),
@@ -365,7 +358,6 @@ const MEASURE_FN = `(() => {
     rtitab: hitBox('.tool-tab'),
     rtidel: hitBox('.tool-row-del'),
     calcell: hitBox('.cal-cell'),
-    modebtn: hitBox('.mode-btn'),
   };
   return JSON.stringify(out);
 })()`;
@@ -426,8 +418,8 @@ function assertions(c, m) {
   const out = [];
   const ok = (label, cond, detail = '') => out.push({ ok: !!cond, label, detail });
   const g = (k) => m[k];
-  // 只有列表页有 .layout / .sidebar / .topbar / 主区 rail；对话页是另一套骨架，
-  // 拿列表页的断言去套对话页只会产出噪音，所以显式分流。
+  // 只有列表页有 .layout / .sidebar / .topbar / 主区 rail；
+  // 拿别的页面的断言去套只会产出噪音，所以显式分流。
   const isList = m.layout != null;
   // 工具集两态：目录态有 .tools-wall（无 .tool-pane），工作态反之。
   // 断言按态分流，别拿一态的探针去套另一态。
@@ -443,12 +435,15 @@ function assertions(c, m) {
     ok('布局为横向 row', g('layout')?.dir === 'row', `layout.dir=${g('layout')?.dir}`);
     ok('侧栏宽度 = --sidebar-w(176)', g('sidebar')?.w === 176, `w=${g('sidebar')?.w}`);
     ok('侧栏高度撑满主区', (g('sidebar')?.h ?? 0) > 300, `h=${g('sidebar')?.h}`);
-    ok('--rail-max = 900px（留给对话页阅读栏）', m.railMax === '900px', m.railMax);
+    ok('--rail-max = 900px', m.railMax === '900px', m.railMax);
     ok('主区占满剩余宽度（≥ 560）', (g('rail')?.w ?? 0) >= 560, `w=${g('rail')?.w}`);
     ok('上下文条为单行 36px', (g('topbar')?.h ?? 0) >= 30 && (g('topbar')?.h ?? 0) <= 44, `h=${g('topbar')?.h}`);
     ok('活动栏为 46px 竖轨', g('tabs')?.w === 46 && (g('tabs')?.h ?? 0) > 300, JSON.stringify(g('tabs')));
     // 页眉左侧化（2026-10-18）：侧栏开关必须在页眉最左，紧贴左内边距
     ok('侧栏开关在页眉最左', (g('panelToggle')?.x ?? 1e9) - (g('topbar')?.x ?? 0) <= 24, `toggle.x=${g('panelToggle')?.x} topbar.x=${g('topbar')?.x}`);
+    // 外壳行高（2026-11-15 十一改）：标题行 44→35、窄屏页签条 44→31
+    ok('标题行 = --titlebar-h(35)', m.titlebarVar === '35px', m.titlebarVar);
+    ok('宽屏不显示底部导航', g('bottomnav') == null || g('bottomnav').disp === 'none', JSON.stringify(g('bottomnav')));
   }
 
   if (isList && c.tier === 'mid') {
@@ -460,16 +455,24 @@ function assertions(c, m) {
 
   if (isList && (c.tier === 'narrow' || c.tier === 'small')) {
     ok('布局转纵向 column', g('layout')?.dir === 'column', `layout.dir=${g('layout')?.dir}`);
-    // 窄屏页眉更挤，开关位置更不能跑（它和面包屑在同一行）
-    ok('侧栏开关仍在页眉最左', (g('panelToggle')?.x ?? 1e9) - (g('topbar')?.x ?? 0) <= 20, `toggle.x=${g('panelToggle')?.x} topbar.x=${g('topbar')?.x}`);
-    ok('侧栏转横向 flex 条', g('sidebar')?.disp === 'flex' && g('sidebar')?.dir === 'row', JSON.stringify({ disp: g('sidebar')?.disp, dir: g('sidebar')?.dir }));
-    ok('侧栏高度塌成条（<80）', (g('sidebar')?.h ?? 999) < 80, `h=${g('sidebar')?.h}`);
-    ok('侧栏占满宽度', Math.abs((g('sidebar')?.w ?? 0) - m.docW) <= 20, `w=${g('sidebar')?.w} docW=${m.docW}`);
-    ok('侧栏在内容上方', (g('sidebar')?.y ?? 1e9) < (g('rail')?.y ?? -1), `sidebar.y=${g('sidebar')?.y} rail.y=${g('rail')?.y}`);
-    ok('活动栏转横向（在内容上方）', (g('tabs')?.h ?? 999) <= 48 && (g('tabs')?.w ?? 0) > m.docW * 0.9, JSON.stringify(g('tabs')));
+    // 2026-11-15 十一改：窄屏导航搬到底部条，页眉那枚侧栏开关退场（留着也点不出变化）
+    ok('窄屏不显示侧栏开关', g('panelToggle') == null || g('panelToggle').disp === 'none', JSON.stringify(g('panelToggle')));
+    // 侧栏也不再翻成横向过滤条：整条 display:none，宽度归零
+    ok('窄屏不显示侧栏', g('sidebar') == null || g('sidebar').disp === 'none', JSON.stringify(g('sidebar')));
+    ok('侧栏不占高度', (g('sidebar')?.h ?? 0) === 0, `h=${g('sidebar')?.h}`);
+    ok('页签条行高 31（原 44 的 70%）', (g('tabs')?.h ?? 999) <= 34, `h=${g('tabs')?.h} var=${m.railRowVar}`);
+    ok('活动栏转横向（占满宽度）', (g('tabs')?.w ?? 0) > m.docW * 0.9, JSON.stringify(g('tabs')));
     ok('上下文条仍是单行', (g('topbar')?.h ?? 0) >= 30 && (g('topbar')?.h ?? 0) <= 48, `h=${g('topbar')?.h}`);
     ok('rail 占满内容宽', (g('rail')?.w ?? 0) > m.docW * 0.9, `w=${g('rail')?.w} docW=${m.docW}`);
     ok('任务行未溢出', (g('row')?.w ?? 0) <= m.docW, `w=${g('row')?.w}`);
+
+    // --- 底部导航（2026-11-15）---
+    ok('底部导航已渲染（4 个按钮）', m.bnavCount === 4, `count=${m.bnavCount}`);
+    ok('底部导航贴住窗口下沿', Math.abs((g('bottomnav')?.y ?? -1) + (g('bottomnav')?.h ?? 0) - ((g('shell')?.y ?? 0) + (g('shell')?.h ?? 0))) <= 2, `nav.bottom=${(g('bottomnav')?.y ?? 0) + (g('bottomnav')?.h ?? 0)} shell.bottom=${(g('shell')?.y ?? 0) + (g('shell')?.h ?? 0)}`);
+    ok('底部导航占满宽度', Math.abs((g('bottomnav')?.w ?? 0) - m.docW) <= 20, `w=${g('bottomnav')?.w} docW=${m.docW}`);
+    // 关键：列表滚动区止于导航上缘 —— 清单再多也压不到按钮（结构上不可能重叠）
+    ok('列表不与底部导航重叠', (g('rail')?.y ?? 0) + (g('rail')?.h ?? 0) <= (g('bottomnav')?.y ?? 0) + 1, `rail.bottom=${(g('rail')?.y ?? 0) + (g('rail')?.h ?? 0)} nav.y=${g('bottomnav')?.y}`);
+    ok('底部导航按钮均分整宽', (g('bnavitem')?.w ?? 0) >= m.docW / 4 - 2, `btn.w=${g('bnavitem')?.w} docW=${m.docW}`);
   }
 
   // 工具集：目录态卡片网格（宽中档多列、窄小档单列），工作态占满宽度
@@ -493,42 +496,25 @@ function assertions(c, m) {
     }
   }
 
-  // 日历：42 格 7 列是硬契约；宽档右栏并排、窄档转纵向、chip 收成色块。
+  // 日历：42 格 7 列是硬契约；页面上只有网格，没有快录框 / 右栏 / 托盘。
   if (isCal) {
     ok('日历网格恒 42 格（6×7）', m.calCellCount === 42, `cells=${m.calCellCount}`);
     ok('日历网格恒 7 列', m.calCols === 7, `cols=${m.calCols}`);
-    ok('模式开关在页眉（列表↔日历）', g('modeSwitch') != null && (g('modeSwitch')?.w ?? 0) > 0, JSON.stringify(g('modeSwitch')));
     ok('日历头部已渲染（翻月 + 统计）', g('calHead') != null && (g('calHead')?.w ?? 0) > 0, JSON.stringify(g('calHead')));
     ok('网格未溢出视口', (g('calGrid')?.x ?? -1) >= 0 && (g('calGrid')?.x ?? 0) + (g('calGrid')?.w ?? 0) <= m.vw + 1, JSON.stringify({ x: g('calGrid')?.x, w: g('calGrid')?.w, vw: m.vw }));
-    if (c.view === 'calendar-done') {
-      ok('只读视图无「无日期」托盘', g('calTray') == null, `tray=${JSON.stringify(g('calTray'))}`);
-    } else {
-      ok('「无日期」托盘已渲染', g('calTray') != null, `tray=${JSON.stringify(g('calTray'))}`);
-    }
+    // 2026-11-15：日历页不再有快录框（新建走「点日期 → 浮层添加」）
+    ok('日历页没有快录框', g('quickAdd') == null, `quickAdd=${JSON.stringify(g('quickAdd'))}`);
     if (c.tier === 'wide' || c.tier === 'mid') {
-      ok('日详情栏在网格右侧', (g('calSide')?.x ?? 0) >= (g('calGrid')?.x ?? 0) + (g('calGrid')?.w ?? 0) - 2, `side.x=${g('calSide')?.x} grid.right=${(g('calGrid')?.x ?? 0) + (g('calGrid')?.w ?? 0)}`);
-      ok('日详情栏与网格同排（顶部对齐）', Math.abs((g('calSide')?.y ?? 0) - (g('calGrid')?.y ?? 0)) <= 40, `side.y=${g('calSide')?.y} grid.y=${g('calGrid')?.y}`);
+      // 没有右栏之后，网格应当铺满主区（止于右侧内边距，不再被 288px 的日详情挤窄）
+      ok('网格铺满主区宽度', (g('calGrid')?.x ?? 0) + (g('calGrid')?.w ?? 0) >= (g('rail')?.x ?? 0) + (g('rail')?.w ?? 0) - 48,
+        `grid.right=${(g('calGrid')?.x ?? 0) + (g('calGrid')?.w ?? 0)} rail.right=${(g('rail')?.x ?? 0) + (g('rail')?.w ?? 0)}`);
     } else {
-      ok('日详情栏转到网格下方', (g('calSide')?.y ?? 0) >= (g('calGrid')?.y ?? 0) + (g('calGrid')?.h ?? 0) - 2, `side.y=${g('calSide')?.y} grid.bottom=${(g('calGrid')?.y ?? 0) + (g('calGrid')?.h ?? 0)}`);
       ok('窄屏 chip 收成色块（宽 ≤10）', (g('calChip')?.w ?? 99) <= 10, `chip.w=${g('calChip')?.w}`);
     }
   }
 
   if (c.tier === 'small') {
     ok('--fs-2xl 降到 21px', m.fs2xl === '21px', m.fs2xl);
-  }
-
-  if (c.view === 'chat' && m.panel) {
-    // 对话页没有侧栏，页眉最左不该出现侧栏开关（左侧化只发生在列表页）
-    ok('对话页页眉无侧栏开关', g('panelToggle') == null, `toggle=${JSON.stringify(g('panelToggle'))}`);
-    if (c.tier === 'wide' || c.tier === 'mid') {
-      ok('对话页横排', g('panel')?.dir === 'row', `panel.dir=${g('panel')?.dir}`);
-    } else {
-      ok('对话页转纵向', g('panel')?.dir === 'column', `panel.dir=${g('panel')?.dir}`);
-      ok('快照列转底部横条', g('snapshot')?.disp === 'flex' && g('snapshot')?.dir === 'row', JSON.stringify({ disp: g('snapshot')?.disp, dir: g('snapshot')?.dir }));
-      ok('快照条占满宽度', Math.abs((g('snapshot')?.w ?? 0) - m.docW) <= 20, `w=${g('snapshot')?.w} docW=${m.docW}`);
-      ok('快照条在对话流下方', (g('snapshot')?.y ?? 0) > (g('stream')?.y ?? 0), `snapshot.y=${g('snapshot')?.y} stream.y=${g('stream')?.y}`);
-    }
   }
 
   if (c.view === 'drawer' && m.editwin) {
@@ -548,10 +534,15 @@ function assertions(c, m) {
     // 这两组探测点只存在于列表页；工具页上没有它们，
     // 硬套过来只会产出"假失败"（hit=undefined），所以按视图分流。
     if (isList) {
-      ok('nav-item 命中高 ≥44', (h.navitem?.h ?? 0) >= 44, `hit=${h.navitem?.h}`);
-      ok('复选框命中高 ≥44（::before 外扩）', (h.checkbox?.h ?? 0) >= 44, `hit=${h.checkbox?.h}`);
-      ok('复选框命中宽 ≥40', (h.checkbox?.w ?? 0) >= 40, `hit=${h.checkbox?.w}`);
-      ok('复选框不被遮挡', h.checkbox != null, `hit=${JSON.stringify(h.checkbox)}`);
+      // 2026-11-15：窄屏导航搬进底部条，探底部按钮 —— 整条 48px 高、均分整宽
+      ok('底部导航按钮命中 ≥44', (h.bnavitem?.h ?? 0) >= 44 && (h.bnavitem?.w ?? 0) >= 44, `hit=${JSON.stringify(h.bnavitem)}`);
+      // 复选框只在真有任务行的页面量：日历页只剩网格（任务行住在浮层里），
+      // 拿列表的探针去套它会得到 hit=null 的假失败。
+      if (g('row') != null) {
+        ok('复选框命中高 ≥44（::before 外扩）', (h.checkbox?.h ?? 0) >= 44, `hit=${h.checkbox?.h}`);
+        ok('复选框命中宽 ≥40', (h.checkbox?.w ?? 0) >= 40, `hit=${h.checkbox?.w}`);
+        ok('复选框不被遮挡', h.checkbox != null, `hit=${JSON.stringify(h.checkbox)}`);
+      }
     }
     if (isTools) {
       // 目录态：整卡天然是大命中区；星标 24px 视觉、命中区靠 ::before 外扩
@@ -569,10 +560,6 @@ function assertions(c, m) {
       // 高在矮屏上允许 40（整格可点，不存在"点不中"的细条）。
       ok('日期格命中宽 ≥44', (h.calcell?.w ?? 0) >= 44, `hit=${JSON.stringify(h.calcell)}`);
       ok('日期格命中高 ≥40', (h.calcell?.h ?? 0) >= 40, `hit=${JSON.stringify(h.calcell)}`);
-      ok('模式按钮命中高 ≥32', (h.modebtn?.h ?? 0) >= 32, `hit=${JSON.stringify(h.modebtn)}`);
-      if (g('calTray') != null) {
-        ok('托盘条目盒高 ≥44', (m.calTrayItemH ?? 0) >= 44, `h=${m.calTrayItemH}`);
-      }
     }
   } else {
     // 桌面档反证：没有触屏媒体查询时，命中区应当就是视觉盒本身
@@ -693,7 +680,7 @@ async function main() {
     if (unknown.length) throw new Error('未知用例: ' + unknown.join(', ') + '（用 --list 看全部）');
   }
   // 默认 --shots 只截窄屏与暗色这几档，别把 19 张 PNG 全存下来
-  const shotNames = new Set((process.env.SHOT_ONLY || 'mobile-390,mobile-320,narrow-768,narrow-390-chat,dark-1440,dark-390,desktop-1280-calendar,narrow-768-calendar,mobile-390-calendar,dark-1280-calendar').split(','));
+  const shotNames = new Set((process.env.SHOT_ONLY || 'mobile-390,mobile-320,narrow-768,dark-1440,dark-390,desktop-1280-calendar,narrow-768-calendar,mobile-390-calendar,dark-1280-calendar').split(','));
 
   try {
     for (const c of cases) {
@@ -750,7 +737,7 @@ function report(results, failed, fromFile = false) {
   console.log('\n' + '─'.repeat(118));
   console.log(
     pad('view', 19) + num('vw', 5) + num('sidebar', 9) + num('rail', 6) +
-    pad(' railMax', 11) + num('topbar', 8) + num('snapshot', 10) + pad(' layout', 9) + '  溢出'
+    pad(' railMax', 11) + num('topbar', 8) + pad(' layout', 9) + '  溢出'
   );
   console.log('─'.repeat(118));
   for (const r of results) {
@@ -762,10 +749,9 @@ function report(results, failed, fromFile = false) {
     const sb = m.sidebar ? `${m.sidebar.w}×${m.sidebar.h}` : '—';
     const rl = m.rail ? String(m.rail.w) : '—';
     const tb = m.topbar ? String(m.topbar.h) : '—';
-    const sn = m.snapshot ? `${m.snapshot.w}×${m.snapshot.h}` : '—';
     console.log(
       pad(r.case.name, 19) + num(m.vw, 5) + num(sb, 9) + num(rl, 6) +
-      pad(' ' + m.railMax, 11) + num(tb, 8) + num(sn, 10) +
+      pad(' ' + m.railMax, 11) + num(tb, 8) +
       pad(' ' + (m.layout?.dir ?? '—'), 9) + '  ' + (m.overflowX ? '✗ 有' : '· 无')
     );
   }

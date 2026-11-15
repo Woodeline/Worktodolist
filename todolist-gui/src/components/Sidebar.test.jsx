@@ -9,7 +9,7 @@ import Sidebar from './Sidebar.jsx';
 import { parseFile } from '../lib/todoParser.js';
 import { defaultColorId } from '../lib/listStyle.js';
 
-function makeStore(text) {
+function makeStore(text, extra = {}) {
   const entries = parseFile(text);
   return {
     todoEntries: entries,
@@ -18,6 +18,7 @@ function makeStore(text) {
     sortMode: 'auto',
     selectView: () => {},
     quickAddRef: { current: null },
+    ...extra,
   };
 }
 
@@ -60,5 +61,37 @@ describe('Sidebar 列表圆点', () => {
     // 未落盘配置时取的是散列色，与库函数结果同源
     expect(dotsOf(markup).length).toBe(1);
     expect(defaultColorId('投资')).toBeTruthy();
+  });
+});
+
+// 2026-11-15 五入口改版：今日 / 即将到期 / 全部 / 日历 / 日志。
+// 收集箱条目取消，日历从页眉切换控件降为侧栏入口。这层失效不报错，
+// 只会静默退回旧结构，所以用静态标记钉住。
+describe('Sidebar 五入口', () => {
+  it('五个入口都在，收集箱不在', () => {
+    const store = makeStore('写周报 due:2026-11-20');
+    const markup = renderToStaticMarkup(
+      <Sidebar store={store} listMode="list" onPickListMode={() => {}} />
+    );
+    ['今日', '即将到期', '全部', '日历', '日志'].forEach((s) => expect(markup).toContain(s));
+    expect(markup).not.toContain('收集箱');
+  });
+
+  it('日历模式下只有日历条目点亮，列表视图全部熄灭', () => {
+    const store = makeStore('写周报', { view: 'today' });
+    const markup = renderToStaticMarkup(
+      <Sidebar store={store} listMode="calendar" onPickListMode={() => {}} />
+    );
+    // aria-current 只出现一次，且挂在日历条目上（它不含 view 名，靠计数区分不可靠）
+    expect((markup.match(/aria-current="true"/g) || []).length).toBe(1);
+    expect(markup).toContain('日历');
+  });
+
+  it('列表模式下点亮的是当前视图', () => {
+    const store = makeStore('写周报', { view: 'all' });
+    const markup = renderToStaticMarkup(
+      <Sidebar store={store} listMode="list" onPickListMode={() => {}} />
+    );
+    expect((markup.match(/aria-current="true"/g) || []).length).toBe(1);
   });
 });

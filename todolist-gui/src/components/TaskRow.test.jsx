@@ -4,8 +4,12 @@
 // 「层级真的变成了缩进类」「进度真的显示成了 1/3」「重复标记真的渲染出来」。
 // 这几处失效同样是静默的 —— prop 传漏了界面不会报错，只是退回成看不出关系的一排行。
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
 import TaskRow, { Highlight } from './TaskRow.jsx';
+import InlineTitleEditor from './InlineTitleEditor.jsx';
 import { ContextMenuProvider } from '../hooks/useContextMenu.jsx';
 import { parseSingleLine } from '../lib/todoParser.js';
 
@@ -166,30 +170,38 @@ describe('TaskRow 拖拽落点与快捷按钮', () => {
 });
 
 describe('TaskRow 优先级的界面口径', () => {
-  // 界面读数要一眼看出急慢；(A)/(B)/(C) 只是 todo.txt 里的写法，
-  // 只留在 title 与编辑抽屉的「写入行」里。这条契约防止两种静默回退：
-  // 改回纯字母（看不懂）或改回彩色药丸（把真正逾期的那条淹掉）。
-  it('三档显示中文分级，原文记号保留在悬停里', () => {
+  // 2026-11-15：列表的优先级 = 标题最左边一枚**中空旗 + 颜色**（高红 / 中橙 / 低蓝），
+  // 不再数感叹号枚数，也不再为「无」留等宽空位。
+  // (A)/(B)/(C) 是 todo.txt 的写法，只留在 title / aria-label 里供核对。
+  it('高 / 中 / 低各一枚中空旗，档位写在类名上，原文记号留在悬停里', () => {
     const high = render(parseSingleLine('(A) 交周报'));
-    expect(high).toContain('>高</span>');
+    expect(high).toContain('prio-badge prio-high');
     expect(high).toContain('todo.txt 写作 (A)');
-    expect(render(parseSingleLine('(B) 写周报'))).toContain('>中</span>');
-    expect(render(parseSingleLine('(C) 买网线'))).toContain('>低</span>');
+    expect(high).toContain('fill="none"');
+    expect(render(parseSingleLine('(B) 写周报'))).toContain('prio-badge prio-mid');
+    expect(render(parseSingleLine('(C) 买网线'))).toContain('prio-badge prio-low');
   });
 
-  it('任务行不把文件记号当显示文本', () => {
+  it('旗标贴在标题最左边：同一行里旗在前、标题在后', () => {
+    const markup = render(parseSingleLine('(A) 交周报'));
+    const head = markup.slice(markup.indexOf('task-head'), markup.indexOf('task-meta'));
+    expect(head.indexOf('prio-badge')).toBeGreaterThan(-1);
+    expect(head.indexOf('prio-badge')).toBeLessThan(head.indexOf('task-title'));
+  });
+
+  it('任务行不把文件记号或汉字当显示文本', () => {
     const markup = render(parseSingleLine('(A) 交周报'));
     expect(markup).not.toContain('>(A)</span>');
     expect(markup).not.toContain('>(B)</span>');
-  });
-
-  it('没填优先级时留空槽，不画成「中」', () => {
-    const markup = render(parseSingleLine('交周报'));
-    expect(markup).toContain('prio-badge prio-none');
+    expect(markup).not.toContain('>高</span>');
     expect(markup).not.toContain('>中</span>');
   });
 
-  it('元信息簇里没有裸文本：JSX 里的注释必须写成 {/* */}', () => {
+  it('没填优先级时整枚旗不画（不是留空位）', () => {
+    expect(render(parseSingleLine('交周报'))).not.toContain('prio-badge');
+  });
+
+  it('读数行里没有裸文本：JSX 里的注释必须写成 {/* */}', () => {
     // 真事：把 `// 注释` 写在 JSX 子元素位置，React 会当成文本节点画进任务行。
     // 页面不报错，只是行里凭空多两行中文、把布局撑到触屏命中区失效。
     const markup = render(parseSingleLine('(A) 交周报'));
@@ -202,9 +214,223 @@ describe('TaskRow 优先级的界面口径', () => {
     expect(render(parseSingleLine('(A) 甲'))).toContain('prio-badge prio-high');
     expect(render(parseSingleLine('(B) 乙'))).toContain('prio-badge prio-mid');
     expect(render(parseSingleLine('(C) 丙'))).toContain('prio-badge prio-low');
-    expect(render(parseSingleLine('丁'))).toContain('prio-badge prio-none');
     // D~Z 允许写进 todo.txt，界面得有第五档兜底，不能假装它不存在
     expect(render(parseSingleLine('(D) 戊'))).toContain('prio-badge prio-other');
+  });
+});
+
+describe('TaskRow 展开箭头与子任务进度', () => {
+  it('带子任务的父项在行尾有三角箭头：展开 = aria-expanded=true 且原地转 180°', () => {
+    const parent = parseSingleLine('装机 id:p00002');
+    const kids = { done: 1, total: 3 };
+    const expanded = render(parent, { kids, hasChildren: true, collapsed: false, onToggleExpand: () => {} });
+    expect(expanded).toContain('row-expand is-open');
+    expect(expanded).toContain('aria-expanded="true"');
+    expect(expanded).toContain('m6 9 6 6 6-6'); // chevron-down，展开态靠 CSS 转过去
+    const folded = render(parent, { kids, hasChildren: true, collapsed: true, onToggleExpand: () => {} });
+    expect(folded).toContain('class="row-expand"');
+    expect(folded).toContain('aria-expanded="false"');
+    expect(folded).not.toContain('row-expand is-open');
+  });
+
+  it('子任务进度前面那枚小记号是 list-tree，不是展开箭头', () => {
+    const markup = render(parseSingleLine('装机 id:p00002'), { kids: { done: 1, total: 3 } });
+    expect(markup).toContain('sub-count');
+    expect(markup).toContain('M21 12h-8'); // list-tree
+    // 只有进度、没有展开能力的行（今天视图）不画箭头 —— 范围外的那枚不出现
+    expect(markup).not.toContain('row-expand');
+  });
+
+  it('整行单击不再展开：展开 / 收起只由箭头按钮触发', () => {
+    const src = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), 'TaskRow.jsx'), 'utf8'
+    );
+    const clickFn = src.slice(src.indexOf('const handleRowClick'), src.indexOf('const handleRowKeyDown'));
+    expect(clickFn).not.toContain('hasChildren');
+    expect(clickFn).not.toContain('onToggleExpand');
+    // 箭头自己调，父项行拿回普通行的点击语义（双击进浮窗 / 慢双击改标题）
+    expect(src).toContain('onClick={() => onToggleExpand && onToggleExpand()}');
+    expect(src).toContain('aria-expanded={!collapsed}');
+  });
+
+  it('子任务行双击不进编辑', () => {
+    const src = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), 'TaskRow.jsx'), 'utf8'
+    );
+    expect(src).toContain('const editable = !isChild;');
+    expect(src).toContain('if (editable) store.openEditor(task.id)');
+  });
+
+  it('上一次点击是模块级共享：点 A → 点 B → 回点 A 不会被当成快双击', () => {
+    const src = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), 'TaskRow.jsx'), 'utf8'
+    );
+    expect(src).toContain('let lastRowClick');
+    expect(src).not.toContain('lastClickRef');
+  });
+});
+
+describe('TaskRow 旗标与读数行', () => {
+  it('star: 不再在列表里画第二支旗 —— 旗标此后只表示优先级', () => {
+    const markup = render(parseSingleLine('交周报 star:1'));
+    expect(markup).not.toContain('class="star"');
+    expect(markup).not.toContain('fill="currentColor"');
+    expect(markup).not.toContain('prio-badge'); // 没填优先级 = 没有旗
+  });
+
+  it('截止日 / 完成日统一读短日期 YYYY/MM/DD', () => {
+    expect(render(parseSingleLine('交周报 due:2026-10-19'))).toContain('2026/10/19');
+    expect(render(parseSingleLine('x 2026-10-19 交周报'))).toContain('2026/10/19 完成');
+  });
+
+  it('日期折到标题下方的读数行里，不再靠右对齐成一列', () => {
+    const markup = render(parseSingleLine('交周报 due:2026-10-19'));
+    const meta = markup.slice(markup.indexOf('task-meta'));
+    expect(meta).toContain('2026/10/19');
+  });
+
+  it('只有逾期日期换色，其余读数保持弱化', () => {
+    expect(render(parseSingleLine('交周报 due:2020-01-01'))).toContain('class="due overdue"');
+    expect(render(parseSingleLine('交周报 due:2099-01-01'))).toContain('class="due"');
+  });
+});
+
+describe('TaskRow 读数行默认收起 / 悬停展开', () => {
+  // 2026-11-15：标题下方那行日期默认收起，悬停（或键盘聚焦）才展开。
+  // 收放靠 CSS 的 .task-meta（max-height 0 ↔ --meta-h），JS 不再判定「哪几行要常驻」：
+  // 逾期 / 高优先级 / 进度 / 备注 / 重复这些状态只改颜色与记号，不改交互。
+  it('普通行收起：不加任何「常驻展开」的类', () => {
+    const markup = render(parseSingleLine('交周报 due:2099-01-01'));
+    expect(markup).toContain('class="task-meta"');
+    expect(markup).not.toContain('is-pinned');
+  });
+
+  it('逾期行同样收起：红色日期不再开常驻后门', () => {
+    const markup = render(parseSingleLine('交周报 due:2020-01-01'));
+    expect(markup).toContain('class="due overdue"');
+    expect(markup).toContain('class="task-meta"');
+    expect(markup).not.toContain('is-pinned');
+  });
+
+  it('红旗（高 / 中 / 低优先级）不影响收放', () => {
+    for (const line of ['(A) 交周报 due:2099-01-01', '(B) 交周报', '(C) 交周报']) {
+      const markup = render(parseSingleLine(line));
+      expect(markup).toContain('class="task-meta"');
+      expect(markup).not.toContain('is-pinned');
+    }
+    // 逾期 + 红旗同时存在，也一样
+    const both = render(parseSingleLine('(A) 交周报 due:2020-01-01'));
+    expect(both).toContain('class="due overdue"');
+    expect(both).not.toContain('is-pinned');
+  });
+
+  it('进度 / 备注 / 重复三样记号同样不改变收放', () => {
+    expect(render(parseSingleLine('装机 id:p00002'), { kids: { done: 1, total: 3 } })).not.toContain(
+      'is-pinned'
+    );
+    expect(render(parseSingleLine('交周报 rec:mon'))).not.toContain('is-pinned');
+    expect(
+      render(parseSingleLine('写周报 id:aaa111'), {}, { noteIds: new Set(['aaa111']) })
+    ).not.toContain('is-pinned');
+  });
+
+  it('收起的是显示不是数据：日期仍在 DOM 里，读屏与搜索照旧拿得到', () => {
+    expect(render(parseSingleLine('交周报 due:2099-01-01'))).toContain('2099/01/01');
+  });
+
+  it('CSS：读数行绝对定位、只动 opacity / transform，触屏兜底，没有任何常驻例外', () => {
+    const css = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'index.css'),
+      'utf8'
+    );
+    const rule = css.slice(css.indexOf('.task-meta {'));
+    const body = rule.slice(0, rule.indexOf('}'));
+    expect(body).toContain('position: absolute');
+    expect(body).toContain('opacity: 0');
+    // 零重排契约（2026-11-15 十改）：读数行不参与布局，靠 opacity / transform 收放。
+    // 一旦有人把它改回 max-height / height 动画，悬停就会逐帧重排整行 ——
+    // 那正是「鼠标扫过列表时发涩、滚动时发闪」的来源。
+    expect(body).not.toContain('max-height');
+    expect(body).toContain('transition: opacity');
+    // 看不见的时候不能替行吃掉点击
+    expect(body).toContain('pointer-events: none');
+    expect(css).toContain('.task-row:hover .task-meta');
+    expect(css).toContain('.task-row:focus-visible .task-meta');
+    // 常驻例外已整条删除：留着它，逾期行就永远不参与收放
+    expect(css).not.toContain('.task-meta.is-pinned');
+    // 触屏没有悬停这回事，必须给出常驻兜底
+    expect(css).toContain('@media (hover: none)');
+  });
+
+  it('行距恒定：行高只由 --row-h 决定，悬停只让标题组 translateY', () => {
+    const css = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'index.css'),
+      'utf8'
+    );
+    // 行距单一真相源：默认 32（九改：40→32）
+    expect(css).toContain('--row-h: var(--pref-row-h, 32px)');
+    // 行自身不再有纵向内边距 —— 32px 里要塞下标题与读数行的全部空间
+    expect(css).toContain('padding: 0 var(--row-pad)');
+    // 悬停时只有标题组位移（合成层），不碰盒尺寸
+    expect(css).toContain('.task-row:hover .task-head');
+    expect(css).toContain('transform: translateY(calc(var(--meta-lift) * -1))');
+  });
+});
+
+describe('TaskRow 子任务行：独立版式（2026-11-15）', () => {
+  // 主行是「标题 + 读数行」两行 40px；子任务行是**另一套**单行 32px 版式，
+  // 只放复选框 + 标题。判定放在 CSS + 渲染两处，任何一处退回主行版式都要能被抓住。
+  it('单行结构：只有 child-body + 标题，没有主行的 task-head / task-meta', () => {
+    const markup = render(parseSingleLine('拆后盖 parent:par001'), { depth: 1 });
+    expect(markup).toContain('child-body');
+    expect(markup).not.toContain('task-head');
+    expect(markup).not.toContain('task-meta');
+    expect(markup).toContain('拆后盖');
+  });
+
+  it('子任务不画优先级旗标（只留清单信息）', () => {
+    const markup = render(parseSingleLine('(A) 拆后盖 parent:par001'), { depth: 1 });
+    expect(markup).not.toContain('prio-badge');
+    expect(markup).toContain('拆后盖');
+  });
+
+  it('悬停不弹任何东西：不渲染 row-quick，勾选框也不挂原生 title', () => {
+    const markup = render(parseSingleLine('拆后盖 parent:par001'), { depth: 1 });
+    expect(markup).not.toContain('row-quick');
+    expect(markup).not.toContain('title=');
+    // 主行反过来：快捷按钮与勾选框提示都在（只读行除外）
+    const parent = render(parseSingleLine('装机 id:p00002'));
+    expect(parent).toContain('row-quick');
+    expect(parent).toContain('title="完成（空格）"');
+  });
+
+  it('子任务的日期 / 备注 / 重复一概不上屏（数据仍在，只是不画）', () => {
+    const markup = render(
+      parseSingleLine('拆后盖 parent:par001 due:2026-12-01 rec:mon id:kid001'),
+      { depth: 1 },
+      { noteIds: new Set(['kid001']) }
+    );
+    expect(markup).not.toContain('2026/12/01');
+    expect(markup).not.toContain('rec-chip');
+    expect(markup).not.toContain('note-chip');
+  });
+
+  it('版式差异写在 CSS 里：两列网格、26px 单行、14px 勾选框，触屏回到 44', () => {
+    const css = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'index.css'),
+      'utf8'
+    );
+    const at = css.indexOf('.task-row.is-child {');
+    expect(at).toBeGreaterThan(-1);
+    const body = css.slice(at, css.indexOf('}', at));
+    expect(body).toContain('grid-template-columns: var(--cb-child) minmax(0, 1fr)');
+    expect(body).toContain('min-height: var(--row-child-h)');
+    // 子行高度跟着「阅读密度」走（主行 - 6），不写死 26 —— 否则换档时层级会塌
+    expect(css).toContain('--row-child-h: calc(var(--row-h) - 6px)');
+    expect(css).toContain('--cb-child: 14px');
+    expect(css).toContain('.task-row.is-child .checkbox {');
+    // 触屏：矮行必须回到 44，且小勾选框的命中外扩单独补
+    expect(css).toContain('.task-row.is-child .checkbox::before {');
   });
 });
 
@@ -227,5 +453,79 @@ describe('Highlight 搜索高亮', () => {
   it('没命中时不高亮', () => {
     const markup = renderToStaticMarkup(<Highlight text="交周报" query="装机" />);
     expect(markup).not.toContain('<mark>');
+  });
+});
+
+describe('列表行不再展示 @ 开头信息', () => {
+  it('带 @分类 的任务不渲染 @ 徽章，数据仍留在 contexts 里', () => {
+    const t = parseSingleLine('交周报 @工作');
+    expect(t.contexts).toEqual(['工作']);
+    const markup = render(t);
+    expect(markup).not.toContain('class="context"');
+    expect(markup).not.toContain('@工作');
+  });
+
+  it('@**** 这类解析器不认的词只从显示里摘掉，title / raw 原样保留', () => {
+    const t = parseSingleLine('交周报 @****');
+    expect(t.title).toContain('@****');
+    expect(t.raw).toContain('@****');
+    const markup = render(t);
+    expect(markup).toContain('交周报');
+    expect(markup).not.toContain('@****');
+  });
+
+  it('@ 词夹在标题中间时，只去掉那一段', () => {
+    const markup = render(parseSingleLine('交周报 @**** 给老王'));
+    expect(markup).toContain('交周报');
+    expect(markup).toContain('给老王');
+    expect(markup).not.toContain('@****');
+  });
+});
+
+describe('编号列已隐藏且排序链路不动', () => {
+  it('不管调不传行号，都不渲染 row-no / has-no，也不出现序号', () => {
+    const t = parseSingleLine('交周报');
+    for (const props of [{}, { lineNo: 7 }]) {
+      const markup = render(t, props);
+      expect(markup).not.toContain('row-no');
+      expect(markup).not.toContain('has-no');
+      expect(markup).not.toContain('>7<');
+    }
+  });
+
+  it('MainList 仍按 viewTasks → nestChildren 渲染，没动过顺序', () => {
+    const src = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'App.jsx'),
+      'utf8'
+    );
+    expect(src).toContain('viewTasks(store.todoEntries');
+    expect(src).toContain('nestChildren(visible, nesting)');
+    expect(src).toContain('ordered.map(');
+    expect(src).not.toContain('lineNos');
+    expect(src).not.toContain('lineNo:');
+  });
+});
+
+describe('慢速双击的行内编辑', () => {
+  it('输入框坐在 .task-title 里，初值是标题原文（含未显示的 @ 词）', () => {
+    const markup = renderToStaticMarkup(
+      <span className="task-title">
+        <InlineTitleEditor value="交周报 @工作" onCommit={() => {}} onCancel={() => {}} />
+      </span>
+    );
+    expect(markup).toContain('row-title-input');
+    expect(markup).toContain('aria-label="编辑任务标题"');
+    expect(markup).toContain('value="交周报 @工作"');
+  });
+
+  it('只挂 onClick，间隔交给纯函数判定；不再有原生 onDoubleClick 抢一次快双击', () => {
+    const src = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), 'TaskRow.jsx'),
+      'utf8'
+    );
+    expect(src).toContain('classifyRowClick');
+    expect(src).toContain('setInlineEditing(true)');
+    expect(src).toContain('onClick={handleRowClick}');
+    expect(src).not.toContain('onDoubleClick={');
   });
 });

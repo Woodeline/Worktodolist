@@ -1,350 +1,143 @@
-// actions 集成测试：用真实解析/序列化函数 + 内存 store 替身验证 AC 语义；
-// 并直接驱动【真实 useTodoStore】（经 react 替身）验证 add 的逆操作。
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-// 文件级替换 react → 极简 hooks 替身（作用域仅限本文件），用于在 node 环境驱动真实 useTodoStore。
-vi.mock('react', () => import('../../scripts/qa-react-shim.mjs'));
-
-import { __beginRender, __flushEffects, __resetHooks } from '../../scripts/qa-react-shim.mjs';
-import { useTodoStore } from '../hooks/useTodoStore.js';
+// dispatch 覆盖测试：只跑「工具提议 → 确认落盘」这条路径。
+//
+// 对话功能剥离后，dispatch 的唯一生产调用方是 ToolsPage.confirmProposal()
+// （proposalToIntent → dispatch）。所以这里直接喂提议产出的意图，不再经过
+// 中文解析层 —— 断言的是「工具的批量改动真的只经 store 方法」。
+import { describe, expect, it, vi } from 'vitest';
 import { dispatch } from './actions.js';
-import { parseIntent } from './nlRules.js';
-import { activeTasks } from './sortFilter.js';
-import {
-  applyPatch,
-  completeTask,
-  parseFile,
-  reviveTask,
-  serializeTask,
-  taskFromQuickInput,
-} from './todoParser.js';
+import { proposalToIntent, makeBatchProposal } from './proposals.js';
+import { parseFile } from './todoParser.js';
 
 const TODAY = '2026-10-01';
 
-const TODO_FIXTURE = [
-  '(A) 2026-09-20 逾期任务：季报复核 due:2026-09-25',
-  '(B) 2026-09-20 今天到期：写第 10 周回测报告 due:2026-09-30',
-  '(C) 2026-09-20 有项目标签的任务 +回测 due:2026-10-10',
-  '(D) 2026-09-20 星标任务 star:1',
-  '(E) 2026-09-20 未来才开始的任务 t:2026-10-05',
-  '(F) 2026-09-20 普通任务没有任何标签',
-  '2026-09-30 带上下文的任务 @工作 +量化 due:2026-10-08',
-  '2026-09-30 收集箱任务：无任何标记的裸任务',
-  '(B) 2026-09-30 带截止日的周线复盘 @投资 +复盘 due:2026-10-04',
-].join('\n');
+// 用真实解析器造任务：contexts / projects / extraTags / id 都是产线形状，
+// 免得手工夹具与 serializeTask 的必需字段漂移。
+const TASKS = parseFile(
+  [
+    '(A) 2026-09-20 季报复核 due:2026-09-25',
+    '(B) 2026-09-20 写周报 due:2026-10-10',
+    '(C) 2026-09-20 画图',
+  ].join('\n')
+).filter((e) => e.kind === 'task');
 
-// 复用真实序列化/解析逻辑的 store 替身。
+const [T1, T2, T3] = TASKS;
+
 function makeStore() {
-  let todo = parseFile(TODO_FIXTURE);
-  let done = [];
   return {
-    get todoEntries() {
-      return todo;
-    },
-    get doneEntries() {
-      return done;
-    },
-    addTask(input) {
-      const task = taskFromQuickInput(input, TODAY);
-      todo = [...todo, task];
-      return task;
-    },
-    toggleComplete(task) {
-      if (task.completed) {
-        todo = todo.map((e) => (e.id === task.id ? reviveTask(e) : e));
-        done = done.filter((e) => e.id !== task.id);
-      } else {
-        todo = todo.filter((e) => e.id !== task.id);
-        done = [...done, completeTask(task, TODAY)];
-      }
-    },
-    deleteTask(task) {
-      todo = todo.filter((e) => e.id !== task.id);
-    },
-    updateTask(id, patch) {
-      todo = todo.map((e) => (e.id === id && e.kind === 'task' ? applyPatch(e, patch) : e));
-    },
-    undo() {},
+    addTask: vi.fn((raw) => ({ id: 'new1', title: String(raw) })),
+    updateTask: vi.fn(),
+    toggleComplete: vi.fn(),
+    deleteTask: vi.fn(),
+    undo: vi.fn(),
+    doneEntries: [],
   };
 }
 
-function agent(store) {
-  return (text) => {
-    const list = activeTasks(store.todoEntries);
-    const intent = parseIntent(text, { tasks: list, today: TODAY });
-    // 镜像 useChatAgent 的分发策略：unknown 或低置信度（需澄清）时不执行动作。
-    const shouldRun = intent.intent !== 'unknown' && intent.confidence === 'high';
-    const result = shouldRun ? dispatch(intent, { store, tasks: list, today: TODAY }) : null;
-    return { intent, result };
-  };
-}
+const ctx = (store, tasks = TASKS) => ({ store, tasks, today: TODAY });
 
-describe('actions 集成：AC 语义', () => {
-  it('AC-C1 add：不写默认优先级，与列表页 QuickAdd 逐字符同构', () => {
+describe('dispatch · 工具提议路径', () => {
+  it('create 提议 → 走 store.addTask，标题与截止日来自字段', () => {
     const store = makeStore();
-    const run = agent(store);
-    const { result } = run('加一条 明天下午 交周报');
-    expect(result.tool.name).toBe('todo.add');
-    expect(result.tool.status).toBe('ok');
-    const added = store.todoEntries[store.todoEntries.length - 1];
-    // 对话新建的行必须与列表页 QuickAdd（taskFromQuickInput）生成的完全一致，且不含 (B)。
-    const quick = taskFromQuickInput('交周报 due:2026-10-02', TODAY);
-    expect(serializeTask(added)).toBe(serializeTask(quick));
-    expect(serializeTask(added)).toBe('2026-10-01 交周报 due:2026-10-02');
+    const intent = proposalToIntent({
+      kind: 'create',
+      items: [{ fields: { title: '交周报', dueDate: '2026-10-02' } }],
+    });
+    const r = dispatch(intent, ctx(store));
+    expect(r.ok).toBe(true);
+    expect(r.tool.name).toBe('todo.add');
+    expect(store.addTask).toHaveBeenCalledTimes(1);
+    expect(store.addTask.mock.calls[0][0]).toContain('交周报');
+    expect(store.addTask.mock.calls[0][0]).toContain('due:2026-10-02');
+    // 不写默认优先级：只有显式给了才带 (X)
+    expect(store.addTask.mock.calls[0][0]).not.toMatch(/^\(/);
   });
 
-  it('AC-C2 complete：done.txt 追加 x 行', () => {
+  it('create 提议带优先级 → 行首写 (A)', () => {
     const store = makeStore();
-    const run = agent(store);
-    const { intent, result } = run('完成 回测报告');
-    expect(intent.confidence).toBe('high');
-    expect(result.tool.name).toBe('todo.complete');
-    expect(result.tool.params.title).toBe('今天到期：写第 10 周回测报告');
-    expect(store.doneEntries).toHaveLength(1);
-    expect(serializeTask(store.doneEntries[0])).toContain('x 2026-10-01');
+    const intent = proposalToIntent({
+      kind: 'create',
+      items: [{ fields: { title: '交周报', priority: 'A' } }],
+    });
+    dispatch(intent, ctx(store));
+    expect(store.addTask.mock.calls[0][0]).toMatch(/^\(A\)/);
   });
 
-  it('AC-C3 complete 多命中：低置信度不执行', () => {
+  it('edit 提议 → 逐条 updateTask，缺 id 的那条静默跳过', () => {
     const store = makeStore();
-    const run = agent(store);
-    const { intent } = run('完成 任务');
-    expect(intent.confidence).toBe('low');
-    expect(intent.matches.length).toBeGreaterThan(1);
-    // 未执行任何动作
-    expect(store.doneEntries).toHaveLength(0);
-    expect(store.todoEntries.filter((e) => e.kind === 'task')).toHaveLength(9);
-  });
-
-  it('AC-C4 postpone：due 改为 2026-10-07', () => {
-    const store = makeStore();
-    const run = agent(store);
-    run('把 回测报告 延到下周三');
-    const t = store.todoEntries.find((e) => e.title === '今天到期：写第 10 周回测报告');
-    expect(t.dueDate).toBe('2026-10-07');
-  });
-
-  it('AC-C5 setPriority：优先级变为 A', () => {
-    const store = makeStore();
-    const run = agent(store);
-    const { result } = run('标为高 回测报告');
-    expect(result.tool.name).toBe('todo.setPriority');
-    const t = store.todoEntries.find((e) => e.title === '今天到期：写第 10 周回测报告');
-    expect(t.priority).toBe('A');
-  });
-
-  it('AC-C6 query：回复编号列表与快照一致', () => {
-    const store = makeStore();
-    const run = agent(store);
-    const { result } = run('有哪些任务');
-    expect(result.tool.name).toBe('todo.query');
-    const lines = result.reply.split('\n');
-    expect(lines[0]).toBe('共 9 条活跃任务：');
-    expect(lines[1].startsWith('1. ')).toBe(true);
-    expect(lines).toHaveLength(10);
-  });
-
-  it('AC-C8 unknown：无工具调用', () => {
-    const store = makeStore();
-    const run = agent(store);
-    const { intent } = run('今天天气怎么样');
-    expect(intent.intent).toBe('unknown');
-  });
-
-  it('AC-C10 undo：复用 store.undo 并返回 todo.undo 卡片', () => {
-    const store = makeStore();
-    let undone = false;
-    store.undo = () => {
-      undone = true;
-    };
-    const run = agent(store);
-    const { result } = run('撤销');
-    expect(result.tool.name).toBe('todo.undo');
-    expect(undone).toBe(true);
-  });
-
-  it('R2-2 查询残余关键词过滤命中', () => {
-    const store = makeStore();
-    const run = agent(store);
-    const { result } = run('列出 回测');
-    expect(result.tool.name).toBe('todo.query');
-    expect(result.tool.params.keyword).toBe('回测');
-    expect(result.reply).toContain('回测报告');
-    expect(result.reply).not.toContain('星标任务');
-  });
-
-  it('R2-2 查询 0 命中 → 澄清并带 clarify.create', () => {
-    const store = makeStore();
-    const run = agent(store);
-    const { intent, result } = run('列出 完全不存在的任务名');
-    expect(intent.intent).toBe('query');
-    expect(intent.slots.keyword).toBeTruthy();
-    expect(result.reply).toContain('没找到匹配');
-    expect(result.clarify).toEqual({ kind: 'create', keyword: intent.slots.keyword });
-  });
-
-  it('R2：带 add 触发词的标题含查询动词仍是 add', () => {
-    const store = makeStore();
-    const run = agent(store);
-    const { intent, result } = run('加一条 列出购物清单');
-    expect(intent.intent).toBe('add');
-    expect(result.tool.name).toBe('todo.add');
-    const added = store.todoEntries.find((e) => e.title === '列出购物清单');
-    expect(added).toBeTruthy();
-  });
-});
-
-// —— 真实 useTodoStore 的“新增”逆操作验证 —— //
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-// 浏览器 API 替身：目录句柄 / 文件读写 / IndexedDB（与 useTodoStore.test.js 同构，本文件独立作用域）。
-function installBrowserStubs(seed) {
-  const fs = { ...seed };
-  const makeFileHandle = (name, map) => ({
-    async getFile() {
-      return {
-        async text() {
-          return map[name] ?? '';
+    const r = dispatch(
+      {
+        intent: 'edit',
+        target: null,
+        slots: {
+          items: [
+            { id: T1.id, patch: { priority: 'A' } },
+            { id: 'gone', patch: { priority: 'A' } },
+          ],
         },
-      };
-    },
-    async createWritable() {
-      return {
-        async write(t) {
-          map[name] = t;
-        },
-        async close() {},
-      };
-    },
-  });
-  const makeDir = (map) => ({
-    async getFileHandle(name, opt) {
-      if (!(name in map)) {
-        if (opt && opt.create) map[name] = '';
-        else {
-          const e = new Error('NotFound');
-          e.name = 'NotFoundError';
-          throw e;
-        }
-      }
-      return makeFileHandle(name, map);
-    },
-    async getDirectoryHandle(name, opt) {
-      if (!(name in map) && !(opt && opt.create)) {
-        const e = new Error('NotFound');
-        e.name = 'NotFoundError';
-        throw e;
-      }
-      if (!(name in map)) map[name] = '__dir__';
-      return makeDir({});
-    },
-    async queryPermission() {
-      return 'granted';
-    },
-    async requestPermission() {
-      return 'granted';
-    },
-    async *entries() {},
-  });
-  const dir = makeDir(fs);
-  globalThis.window = {
-    showDirectoryPicker: async () => dir,
-    addEventListener() {},
-    removeEventListener() {},
-  };
-  globalThis.indexedDB = {
-    open() {
-      const req = { result: null, onsuccess: null, onerror: null, onupgradeneeded: null };
-      req.result = {
-        objectStoreNames: { contains: () => true },
-        close() {},
-        transaction() {
-          const store = {
-            put: () => ({ result: undefined }),
-            get: () => ({ result: null }),
-            delete: () => ({ result: undefined }),
-          };
-          const tx = { objectStore: () => store, oncomplete: null, onerror: null, onabort: null };
-          setTimeout(() => tx.oncomplete && tx.oncomplete(), 0);
-          return tx;
-        },
-      };
-      setTimeout(() => {
-        if (req.onupgradeneeded) req.onupgradeneeded();
-        if (req.onsuccess) req.onsuccess();
-      }, 0);
-      return req;
-    },
-  };
-  return fs;
-}
-
-async function bootRealStore(seed = { 'todo.txt': '', 'done.txt': '' }) {
-  __resetHooks();
-  installBrowserStubs(seed);
-  const render = () => {
-    __beginRender();
-    const api = useTodoStore();
-    __flushEffects();
-    return api;
-  };
-  let store = render();
-  await store.pickDirectory();
-  await sleep(5);
-  store = render();
-  return { store, render };
-}
-
-describe('store.undo 支持“新增”的逆操作（真实 useTodoStore）', () => {
-  beforeEach(() => {
-    __resetHooks();
+        matches: [T1.id, 'gone'],
+      },
+      ctx(store)
+    );
+    expect(r.ok).toBe(true);
+    expect(store.updateTask).toHaveBeenCalledTimes(1);
+    expect(store.updateTask).toHaveBeenCalledWith(T1.id, { priority: 'A' });
   });
 
-  it('新增 → 撤销 → 任务从 todo 消失', async () => {
-    const { store, render } = await bootRealStore();
-    const task = store.addTask('交周报');
-    expect(task).toBeTruthy();
-    let s = render();
-    expect(s.todoEntries.filter((e) => e.kind === 'task')).toHaveLength(1);
-    s.undo();
-    s = render();
-    expect(s.todoEntries.filter((e) => e.kind === 'task')).toHaveLength(0);
-  });
-
-  it('新增 → 完成 → 撤销 → 不抛异常、不产生重复条目', async () => {
-    const { store, render } = await bootRealStore();
-    const task = store.addTask('交周报');
-    store.toggleComplete(task);
-    await sleep(260);
-    store.undo();
-    await sleep(20);
-    const s = render();
-    const titles = s.todoEntries.filter((e) => e.kind === 'task').map((e) => e.title);
-    expect(titles.filter((t) => t === '交周报')).toHaveLength(1);
-    expect(s.doneEntries.filter((e) => e.kind === 'task')).toHaveLength(0);
-  });
-
-  it('连续撤销（空栈）不抛异常', async () => {
-    const { store, render } = await bootRealStore();
-    store.addTask('临时');
-    store.undo();
-    expect(() => store.undo()).not.toThrow();
-    const s = render();
-    expect(s.todoEntries.filter((e) => e.kind === 'task')).toHaveLength(0);
-  });
-});
-
-describe('actions 集成：逾期查询 scope', () => {
-  it('「哪些事拖到期了」只列 dueDate 已过的活跃任务，且不反问是否新建', () => {
+  it('edit 提议全部落空 → 不假报成功', () => {
     const store = makeStore();
-    const run = agent(store);
-    const { intent, result } = run('哪些事拖到期了');
-    expect(intent.scope).toBe('overdue');
-    expect(result.tool.params.scope).toBe('overdue');
-    // 夹具里相对 2026-10-01 只有这两条逾期
-    expect(result.reply).toContain('季报复核');
-    expect(result.reply).toContain('回测报告');
-    expect(result.reply).not.toContain('星标任务');
-    expect(result.clarify).toBeUndefined();
+    const r = dispatch(
+      { intent: 'edit', slots: { items: [{ id: 'gone', patch: { priority: 'A' } }] }, matches: ['gone'] },
+      ctx(store)
+    );
+    expect(r.ok).toBe(false);
+    expect(store.updateTask).not.toHaveBeenCalled();
+  });
+
+  it('batch 提议（优先级）→ 逐条 updateTask，工具名 todo.batch', () => {
+    const store = makeStore();
+    const p = makeBatchProposal(TASKS, { type: 'setPriority', value: 'A' }, TODAY);
+    const intent = proposalToIntent(p);
+    expect(intent.intent).toBe('batch');
+    const r = dispatch(intent, ctx(store));
+    expect(r.ok).toBe(true);
+    expect(r.tool.name).toBe('todo.batch');
+    expect(store.updateTask).toHaveBeenCalledTimes(3);
+    expect(store.updateTask.mock.calls[0]).toEqual([T1.id, { priority: 'A' }]);
+  });
+
+  it('batch 提议（完成）→ 走 toggleComplete，不直接改文件', () => {
+    const store = makeStore();
+    const intent = { intent: 'batch', slots: { op: { type: 'complete' } }, matches: [T2.id] };
+    const r = dispatch(intent, ctx(store));
+    expect(r.ok).toBe(true);
+    expect(store.toggleComplete).toHaveBeenCalledTimes(1);
+    expect(store.toggleComplete.mock.calls[0][0].id).toBe(T2.id);
+  });
+
+  it('batch 全部处于目标状态 → ok:false 且不产生空改动', () => {
+    const store = makeStore();
+    // T3 本来没有 star，取消星标属于无变化
+    const intent = { intent: 'batch', slots: { op: { type: 'unstar' } }, matches: [T3.id] };
+    const r = dispatch(intent, ctx(store));
+    expect(r.ok).toBe(false);
+    expect(store.updateTask).not.toHaveBeenCalled();
+    expect(store.deleteTask).not.toHaveBeenCalled();
+  });
+
+  it('未知意图 → 拒绝执行，且不碰 store', () => {
+    const store = makeStore();
+    const r = dispatch({ intent: 'nope' }, ctx(store));
+    expect(r.ok).toBe(false);
+    expect(r.tool.name).toBe('agent.noop');
+    expect(store.addTask).not.toHaveBeenCalled();
+    expect(store.updateTask).not.toHaveBeenCalled();
+  });
+
+  it('undo → 复用 store.undo', () => {
+    const store = makeStore();
+    const r = dispatch({ intent: 'undo' }, ctx(store));
+    expect(r.ok).toBe(true);
+    expect(r.tool.name).toBe('todo.undo');
+    expect(store.undo).toHaveBeenCalledTimes(1);
   });
 });

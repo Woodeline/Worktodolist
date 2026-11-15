@@ -183,10 +183,13 @@ export function useTodoStore() {
       setSyncStatus('saved');
       setLastSavedAt(new Date());
     } catch (err) {
-      // 回滚 UI 到上次快照，并同步磁盘实际状态避免误报外部修改
+      // 回滚 UI 到上次快照，并同步磁盘实际状态避免误报外部修改。
+      // 撤销栈也要清：这批未保存的改动已经整体回退，留着旧记录再按 Ctrl+Z
+      // 会按不存在的下标插回 / 删除任务，产生幽灵条目。
       if (snapshotRef.current) {
         setEntries(snapshotRef.current.todo, snapshotRef.current.done);
       }
+      undoStackRef.current = [];
       setSyncStatus('saved');
       try {
         const diskTodo = normalizeText(await readFileText(handle, 'todo.txt'));
@@ -314,10 +317,24 @@ export function useTodoStore() {
     (task) => {
       if (task.kind !== 'task') return;
       if (task.completed) {
-        commit(({ todo, done }) => ({
-          todo: todo.map((e) => (e.id === task.id ? reviveTask(e) : e)),
-          done,
-        }));
+        // 完成动作留下的撤销记录到这里已经不成立了：再按 Ctrl+Z 会按旧记录
+        // 把「下一次」实例删掉，还谎报「已撤销」。取消完成不单独入栈，
+        // 把同一任务的 complete 记录一并丢弃即可。
+        undoStackRef.current = undoStackRef.current.filter(
+          (a) => !(a.kind === 'complete' && a.taskId === task.id)
+        );
+        commit(({ todo, done }) => {
+          if (todo.some((e) => e.id === task.id)) {
+            return { todo: todo.map((e) => (e.id === task.id ? reviveTask(e) : e)), done };
+          }
+          // 已完成的任务住在 done.txt 里（编辑浮窗的子任务就是这么来的）：
+          // 只 map todo 会什么也不发生，删除线永远收不回去。把它复活后搬回去。
+          const revived = done.filter((e) => e.id === task.id).map(reviveTask);
+          return {
+            todo: [...todo, ...revived],
+            done: done.filter((e) => e.id !== task.id),
+          };
+        });
         showToast(`已取消完成：${task.title}`);
         return;
       }
@@ -471,20 +488,19 @@ export function useTodoStore() {
       }
       commit(({ todo, done }) => {
         const taken = collectStableIds([...todo, ...done]);
-        return {
-          todo: todo.map((e) => {
-            if (e.id !== id || e.kind !== 'task') return e;
-            // 编辑老任务时顺手给它补一个 ID —— **渐进**补齐，不为埋 ID 去改写整个文件：
-            // 一份几百行的 todo.txt 一次性全部变样，git 会记下一次谁也看不懂的大 diff。
-            const nextPatch =
-              e.stableId || patch.stableId !== undefined
-                ? patch
-                : { ...patch, stableId: newStableId(taken) };
-            if (nextPatch.stableId) taken.add(nextPatch.stableId);
-            return applyPatch(e, nextPatch);
-          }),
-          done,
+        const patchOne = (e) => {
+          if (e.id !== id || e.kind !== 'task') return e;
+          // 编辑老任务时顺手给它补一个 ID —— **渐进**补齐，不为埋 ID 去改写整个文件：
+          // 一份几百行的 todo.txt 一次性全部变样，git 会记下一次谁也看不懂的大 diff。
+          const nextPatch =
+            e.stableId || patch.stableId !== undefined
+              ? patch
+              : { ...patch, stableId: newStableId(taken) };
+          if (nextPatch.stableId) taken.add(nextPatch.stableId);
+          return applyPatch(e, nextPatch);
         };
+        // 已完成的子任务也在编辑浮窗里露面，改标题同样要落到 done.txt 那一行。
+        return { todo: todo.map(patchOne), done: done.map(patchOne) };
       });
     },
     [commit, showToast]

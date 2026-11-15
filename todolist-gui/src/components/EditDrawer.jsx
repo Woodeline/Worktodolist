@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { RECURRENCE_CHOICES, describeRecurrence } from '../lib/recurrence';
+import { computeTagMenuPlacement } from '../lib/placement.js';
 import { PRIORITY_LABELS, sidebarStats } from '../lib/sortFilter';
-import { serializeTask } from '../lib/todoParser';
 import { buildNesting, childrenOf } from '../lib/subtasks.js';
 import { nextInTrap, pickRestoreTarget, queryFocusable } from '../lib/focusTrap.js';
-import PriorityMark from './PriorityMark.jsx';
+import DateField from './DateField.jsx';
 import Icon from './Icon.jsx';
 
 // 子任务区块。
@@ -14,11 +15,16 @@ import Icon from './Icon.jsx';
 // 加完就能核对，不必回到列表里找它们缩进在哪。
 function SubtaskField({ store, task }) {
   const [text, setText] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editText, setEditText] = useState('');
+  const cancelEditRef = useRef(false);
   const nesting = useMemo(
     () => buildNesting([...(store.todoEntries || []), ...(store.doneEntries || [])]),
     [store.todoEntries, store.doneEntries]
   );
   const kids = childrenOf(nesting, task.stableId);
+  const doneCount = kids.filter((k) => k.completed).length;
+  const pct = kids.length ? Math.round((doneCount / kids.length) * 100) : 0;
 
   const add = () => {
     const title = text.trim();
@@ -27,42 +33,111 @@ function SubtaskField({ store, task }) {
     setText('');
   };
 
+  const startEdit = (k) => {
+    cancelEditRef.current = false;
+    setEditingId(k.id);
+    setEditText(k.title);
+  };
+
+  // 输入框只在失焦时提交一次：回车 / Esc 都主动 blur，避免两条路径各写一次文件。
+  const commitEdit = () => {
+    const id = editingId;
+    const next = editText.trim();
+    const original = kids.find((k) => k.id === id);
+    const cancelled = cancelEditRef.current;
+    cancelEditRef.current = false;
+    setEditingId(null);
+    setEditText('');
+    if (cancelled || !id || !original || !next || next === original.title) return;
+    store.updateTask(id, { title: next });
+  };
+
+  const onEditKeyDown = (e) => {
+    // 回车是「改完这一条」，Esc 是「不改了」；两者都不能漏到浮窗的保存 / 关闭上。
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.currentTarget.blur();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelEditRef.current = true;
+      e.currentTarget.blur();
+    }
+  };
+
   return (
     <div className="field field-subtasks">
-      <span className="field-subtasks-label">
-        子任务{kids.length > 0 ? ` · ${kids.filter((k) => k.completed).length}/${kids.length}` : ''}
-      </span>
-      {kids.length === 0 ? (
-        <p className="subtasks-empty">还没有子任务</p>
-      ) : (
+      <div className="subtask-head">
+        <span className="field-subtasks-label">
+          子任务{kids.length > 0 ? ` · ${doneCount}/${kids.length}` : ''}
+        </span>
+        {kids.length > 0 && (
+          <div className="subtask-progress" aria-hidden="true">
+            <span style={{ width: `${pct}%` }} />
+          </div>
+        )}
+      </div>
+      {kids.length > 0 && (
         <ul className="subtask-list">
-          {kids.map((k) => (
-            <li key={k.id}>
-              <button
-                type="button"
-                className={`checkbox${k.completed ? ' checked' : ''}`}
-                onClick={() => store.toggleComplete(k)}
-                aria-label={k.completed ? '取消完成子任务' : '完成子任务'}
-              />
-              <span className={'subtask-title' + (k.completed ? ' completed' : '')}>{k.title}</span>
-              <button
-                type="button"
-                className="subtask-del"
-                onClick={() => store.deleteTask(k)}
-                title="删除子任务"
-                aria-label={`删除子任务 ${k.title}`}
-              >
-                <Icon name="x" size={12} />
-              </button>
-            </li>
-          ))}
+          {kids.map((k) => {
+            // 完成走 store 的退场窗口；勾与删除线先「演」出来，不然点一下要等一帧才有反馈。
+            const done = k.completed || (store.fadingIds || []).includes(k.id);
+            return (
+              <li key={k.id}>
+                <button
+                  type="button"
+                  className={`checkbox${done ? ' checked' : ''}`}
+                  // 别让 mousedown 抢先让标题输入框失焦：否则 onBlur 会先写一次
+                  // 标题、再执行本按钮，删除/完成变成两次落盘且用户毫无感知。
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    if (editingId === k.id) commitEdit();
+                    store.toggleComplete(k);
+                  }}
+                  aria-label={done ? '取消完成子任务' : '完成子任务'}
+                />
+                {editingId === k.id ? (
+                  <input
+                    className="subtask-title-input"
+                    value={editText}
+                    autoFocus
+                    aria-label="编辑子任务"
+                    onChange={(e) => setEditText(e.target.value)}
+                    onKeyDown={onEditKeyDown}
+                    onBlur={commitEdit}
+                  />
+                ) : (
+                  <span
+                    className={'subtask-title' + (done ? ' completed' : '')}
+                    onClick={() => startEdit(k)}
+                    title="点击编辑"
+                  >
+                    {k.title}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="subtask-del"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    if (editingId === k.id) commitEdit();
+                    store.deleteTask(k);
+                  }}
+                  title="删除子任务"
+                  aria-label={`删除子任务 ${k.title}`}
+                >
+                  <Icon name="x" size={12} />
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
       <div className="subtask-add">
         <input
           type="text"
           value={text}
-          placeholder="添加子任务，回车确认"
+          placeholder="添加子任务"
           aria-label="添加子任务"
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
@@ -96,20 +171,42 @@ function toList(text, prefix) {
 
 // @分类 / +标签 字段：文本输入照旧可手打；右侧箭头展开**已保存**的候选清单，
 // 点候选即勾选/取消。候选与手输写回同一个逗号分隔的字符串，只有一份真相。
-function TagField({ label, hint, prefix, placeholder, value, onChange, options, emptyHint }) {
+//
+// 清单用 createPortal 挂到 body：它原来绝对定位在 .drawer-body 里，向上翻时
+// 顶部一行会被那个 overflow-y:auto 的滚动容器裁掉，还把上方两行字段整片盖住。
+// 挂出去之后按实测空间决定上下方向、收缩高度并自身滚动，首行永远完整可见。
+function TagField({ label, prefix, placeholder, value, onChange, options, emptyHint }) {
   const [open, setOpen] = useState(false);
-  const [dropUp, setDropUp] = useState(false);
+  const [placement, setPlacement] = useState(null);
   const boxRef = useRef(null);
+  const menuRef = useRef(null);
   const selected = toList(value, prefix);
 
-  // 点浮窗其它地方 / 点外部即收起候选清单
   useEffect(() => {
     if (!open) return undefined;
     const onDocDown = (e) => {
-      if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false);
+      // 清单挂在 body 上，不在 boxRef 内，必须单独放行：
+      // 否则 mousedown 先把菜单收掉，随后的 click 就落空了。
+      if (boxRef.current?.contains(e.target) || menuRef.current?.contains(e.target)) return;
+      setOpen(false);
     };
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      // 捕获阶段：候选清单的 Esc 只收清单，不把整个编辑浮窗一起关掉。
+      e.stopPropagation();
+      setOpen(false);
+    };
+    const onDismiss = () => setOpen(false);
     document.addEventListener('mousedown', onDocDown);
-    return () => document.removeEventListener('mousedown', onDocDown);
+    document.addEventListener('keydown', onKey, true);
+    window.addEventListener('scroll', onDismiss, true);
+    window.addEventListener('resize', onDismiss);
+    return () => {
+      document.removeEventListener('mousedown', onDocDown);
+      document.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('scroll', onDismiss, true);
+      window.removeEventListener('resize', onDismiss);
+    };
   }, [open]);
 
   const toggle = (name) => {
@@ -119,24 +216,41 @@ function TagField({ label, hint, prefix, placeholder, value, onChange, options, 
     onChange(next.join(', '));
   };
 
-  // 菜单默认向下展开；若下方空间不足则向上翻，避免被可滚动的浮窗裁掉。
+  // 先量后放：下方不够才向上翻，两个方向都夹在视口内（纯函数见 lib/placement.js）。
   const openMenu = () => {
     const box = boxRef.current;
-    const win = box && box.closest('.edit-window');
-    if (box && win) {
-      const b = box.getBoundingClientRect();
-      const w = win.getBoundingClientRect();
-      setDropUp(b.bottom + 224 > w.bottom);
-    }
+    if (!box) return;
+    setPlacement(
+      computeTagMenuPlacement(box.getBoundingClientRect(), {
+        width: window.innerWidth,
+        height: window.innerHeight,
+      })
+    );
     setOpen(true);
+  };
+
+  // 焦点落在清单里时，Tab 在清单内部循环，不让它穿到浮窗背后。
+  // React Portal 的事件会沿组件树冒泡到 .edit-window，所以这里必须截断，
+  // 否则浮窗自己的 Tab 陷阱会把焦点抢回表单里。
+  const onMenuKeyDown = (e) => {
+    if (e.key !== 'Tab') return;
+    const items = menuRef.current ? queryFocusable(menuRef.current) : [];
+    if (items.length === 0) return;
+    e.stopPropagation();
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
   };
 
   return (
     <div className="field field-tags" ref={boxRef}>
-      <span>
-        {label}
-        {hint ? <em className="field-hint">{hint}</em> : null}
-      </span>
+      <span>{label}</span>
       <div className="tag-input">
         <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
         <button
@@ -144,14 +258,25 @@ function TagField({ label, hint, prefix, placeholder, value, onChange, options, 
           className={'tag-toggle' + (open ? ' is-open' : '')}
           aria-haspopup="listbox"
           aria-expanded={open}
-          title="从已保存的项中选择"
+          aria-label="展开候选"
           onClick={() => (open ? setOpen(false) : openMenu())}
         >
           <Icon name="chevron-down" size={16} />
         </button>
       </div>
-      {open && (
-        <div className={'tag-menu' + (dropUp ? ' drop-up' : '')} role="listbox">
+      {open && placement && typeof document !== 'undefined' && createPortal(
+        <div
+          className="tag-menu"
+          ref={menuRef}
+          role="listbox"
+          onKeyDown={onMenuKeyDown}
+          style={{
+            top: placement.top,
+            left: placement.left,
+            width: placement.width,
+            maxHeight: placement.maxHeight,
+          }}
+        >
           {options.length === 0 ? (
             <div className="tag-menu-empty">{emptyHint}</div>
           ) : (
@@ -178,11 +303,15 @@ function TagField({ label, hint, prefix, placeholder, value, onChange, options, 
               );
             })
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
 }
+
+// 日期字段已抽成独立组件 ./DateField.jsx：编辑浮窗、提议弹窗、批量工具共用同一套
+// 短日期读数 / 自绘弹层 / 清除 / 快捷预设，避免三处口径再次分叉。
 
 /** 备注正文（备注存在 notes.md 里，不在 todo.txt 的行上）。store 缺这个能力时当没备注。 */
 function noteOf(store, stableId) {
@@ -230,6 +359,7 @@ export default function EditDrawer({ store }) {
 
 function EditForm({ task, store }) {
   const [form, setForm] = useState(() => formFromTask(task, store));
+  const [editingNote, setEditingNote] = useState(false);
   const winRef = useRef(null);
 
   // 已保存的分类 / 标签候选：复用侧栏统计，取的就是 todo.txt 里的真实值。
@@ -271,18 +401,6 @@ function EditForm({ task, store }) {
     if (!cur || RECURRENCE_CHOICES.some((c) => c.value === cur)) return RECURRENCE_CHOICES;
     return [...RECURRENCE_CHOICES, { value: cur, label: describeRecurrence(cur) || cur }];
   }, [form.recurrence]);
-
-  const preview = serializeTask({
-    ...task,
-    title: form.title.trim(),
-    priority: form.priority || null,
-    dueDate: form.dueDate || null,
-    remindAt: form.remindAt || null,
-    recurrence: form.recurrence || null,
-    contexts: toList(form.contexts, '@'),
-    projects: toList(form.projects, '+'),
-    starValue: form.starred ? '1' : null,
-  });
 
   const save = async () => {
     // 只提交表单里有的字段；未列出的（如 t: 阈值日期）由 applyPatch 原样保留，
@@ -349,19 +467,25 @@ function EditForm({ task, store }) {
         onKeyDown={handleKeyDown}
       >
         <div className="drawer-header">
-          <h3>编辑任务</h3>
-          <button className="icon-btn" onClick={store.closeEditor} title="关闭（Esc）">
+          <input
+            className="drawer-title-input"
+            value={form.title}
+            onChange={set('title')}
+            placeholder="任务标题"
+            aria-label="任务标题"
+            autoFocus
+          />
+          {/* 标题栏那枚旗标按钮已于 2026-11-15 退场：旗标此后只表示优先级
+              （列表标题左侧的中空旗），同一处再摆一枚「加旗标」开关会让两个概念
+              撞在一起。star: 数据本身仍原样保留（form.starred 直接透传保存）。 */}
+          <button className="icon-btn" onClick={store.closeEditor} aria-label="关闭">
             <Icon name="x" size={16} />
           </button>
         </div>
 
         <div className="drawer-body">
-          <label className="field">
-            <span>标题</span>
-            <input value={form.title} onChange={set('title')} placeholder="任务标题" autoFocus />
-          </label>
-
-          <div className="field-row">
+          {/* 优先级与重复同一行，优先级占 2/3；两个日期在下一行并排。 */}
+          <div className="field-row field-row-prio">
             <div className="field">
               <span>优先级</span>
               <div className="priority-picker">
@@ -369,7 +493,6 @@ function EditForm({ task, store }) {
                   className={form.priority === '' ? 'sel' : ''}
                   onClick={() => setForm((f) => ({ ...f, priority: '' }))}
                 >
-                  <PriorityMark variant="mark" />
                   无
                 </button>
                 {priorities.map((p) => (
@@ -378,7 +501,6 @@ function EditForm({ task, store }) {
                     className={form.priority === p ? 'sel' : ''}
                     onClick={() => setForm((f) => ({ ...f, priority: p }))}
                   >
-                    <PriorityMark priority={p} variant="mark" />
                     {PRIORITY_LABELS[p] || p}
                   </button>
                 ))}
@@ -386,24 +508,7 @@ function EditForm({ task, store }) {
             </div>
 
             <label className="field">
-              <span>截止日期</span>
-              <input type="date" value={form.dueDate} onChange={set('dueDate')} />
-            </label>
-          </div>
-
-          <div className="field-row">
-            <label className="field">
-              <span>提醒时刻<em className="field-hint">一次性</em></span>
-              <input
-                type="datetime-local"
-                value={form.remindAt}
-                onChange={set('remindAt')}
-                title="留空表示不提醒"
-              />
-            </label>
-
-            <label className="field">
-              <span>重复<em className="field-hint">完成后生成下一次</em></span>
+              <span>重复</span>
               <select value={form.recurrence} onChange={set('recurrence')}>
                 {recurrenceOptions.map((c) => (
                   <option key={c.value} value={c.value}>
@@ -415,9 +520,22 @@ function EditForm({ task, store }) {
           </div>
 
           <div className="field-row">
+            <DateField
+              label="截止日期"
+              value={form.dueDate}
+              onChange={(v) => setForm((f) => ({ ...f, dueDate: v }))}
+            />
+            <DateField
+              label="提醒时刻"
+              value={form.remindAt}
+              onChange={(v) => setForm((f) => ({ ...f, remindAt: v }))}
+              withTime
+            />
+          </div>
+
+          <div className="field-row">
             <TagField
               label="@分类"
-              hint="逗号分隔"
               prefix="@"
               placeholder="工作, 生活"
               value={form.contexts}
@@ -428,7 +546,6 @@ function EditForm({ task, store }) {
 
             <TagField
               label="+标签"
-              hint="逗号分隔"
               prefix="+"
               placeholder="回测, 量化"
               value={form.projects}
@@ -438,29 +555,35 @@ function EditForm({ task, store }) {
             />
           </div>
 
-          <label className="field field-inline">
-            <input
-              type="checkbox"
-              checked={form.starred}
-              onChange={(e) => setForm((f) => ({ ...f, starred: e.target.checked }))}
-            />
-            <span>星标</span>
-          </label>
-          <label className="field">
-            <span>备注<em className="field-hint">存 notes.md，不进 todo.txt</em></span>
-            <textarea
-              className="note-input"
-              rows={3}
-              value={form.note}
-              onChange={set('note')}
-              placeholder="支持多行与 Markdown"
-            />
-          </label>
           <SubtaskField store={store} task={task} />
+
+          {/* 子任务与备注之间一道分隔：两组动作不是同一件事。 */}
+          <div className="field-sep" role="separator" />
+
+          <div className="field field-note">
+            <button
+              type="button"
+              className="note-edit-btn"
+              onClick={() => setEditingNote((v) => !v)}
+            >
+              <Icon name={editingNote ? 'check' : 'pencil'} size={12} />
+              {editingNote ? '完成' : form.note ? '编辑备注' : '添加备注'}
+            </button>
+            {editingNote ? (
+              <textarea
+                className="note-input"
+                rows={4}
+                value={form.note}
+                onChange={set('note')}
+                autoFocus
+              />
+            ) : form.note ? (
+              <div className="note-display">{form.note}</div>
+            ) : null}
+          </div>
 
           {task.extraTags.length > 0 && (
             <div className="extra-tags">
-              <span>其他字段（只读）：</span>
               {task.extraTags.map((t, i) => (
                 <span key={`${t.key}-${i}`} className="chip chip-star">
                   {t.key}:{t.value}
@@ -469,11 +592,6 @@ function EditForm({ task, store }) {
             </div>
           )}
 
-          <div className="drawer-preview">
-            <span className="ledger-no">{String(Math.max(1, store.todoEntries.findIndex((e) => e.id === task.id) + 1)).padStart(2, '0')}</span>
-            <span className="ledger-sep">│</span>
-            <span className="drawer-preview-text">{preview}</span>
-          </div>
         </div>
 
         <div className="drawer-actions">
@@ -481,7 +599,6 @@ function EditForm({ task, store }) {
             删除
           </button>
           <span className="spacer" />
-          <span className="drawer-hint">回车保存 · Esc 取消</span>
           <button className="btn" onClick={store.closeEditor}>
             取消
           </button>

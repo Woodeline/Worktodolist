@@ -5,12 +5,9 @@
 //   ② 改样式后的视觉回归对照 —— 这里渲染的是**真实组件**，不是复制的 HTML，
 //      所以不存在"样式指南跟产品长得不一样"的漂移问题。
 //
-// 对话页尤其刻意走真实链路：给 useChatAgent 喂一个假的目录句柄，
-// 让它按 append-only 事件日志真实回放，从而渲染出真正的消息气泡与工具卡片。
-//
 // 运行：npm run dev → http://localhost:<端口>/styleguide.html?view=list
 //       （端口见项目根 .todolist-server.port，默认 15180）
-// 视图：?view=tokens|icons|list|list-all|chat|chatempty|settings|welcome|reauth|unsupported|empty|drawer|toast|modal
+// 视图：?view=tokens|icons|list|list-all|settings|welcome|reauth|unsupported|empty|drawer|toast|modal
 //       ?view=calendar             日历模式（清单的第二种显示模式，演示数据相对今天生成）
 //       ?view=calendar-done        日历 · 已完成（按完成日期锚定，只读）
 //       ?view=tools                工具集（默认选中清单里第一个工具）
@@ -30,30 +27,28 @@ import {
   EmptyToday,
   Toast,
   ConflictModal,
-  Footer,
   MainList,
-  Overview,
 } from './App.jsx';
 import TopBar from './components/TopBar.jsx';
 import Sidebar from './components/Sidebar.jsx';
+import BottomNav from './components/BottomNav.jsx';
 import QuickAdd from './components/QuickAdd.jsx';
 import EditDrawer from './components/EditDrawer.jsx';
-import ChatPanel from './components/ChatPanel.jsx';
 import SettingsPage from './components/SettingsPage.jsx';
 import ToolsPage from './components/tools/ToolsPage.jsx';
 import CalendarView from './components/CalendarView.jsx';
-import PriorityMark from './components/PriorityMark.jsx';
 import LayoutNotice from './components/LayoutNotice.jsx';
 import { useLayoutMode } from './hooks/useLayoutMode.js';
 import { noticeState } from './lib/layoutMode.js';
 import { monthKey, projectionForMonth } from './lib/calendar.js';
 import { parseQuickInput } from './lib/todoParser';
 import { visibleTools } from './components/tools/registry.js';
-import ToolCallCard from './components/ToolCallCard.jsx';
 import Icon, { ICON_NAMES } from './components/Icon.jsx';
 import { ContextMenuProvider } from './hooks/useContextMenu.jsx';
 import { useTheme } from './hooks/useTheme';
+import { useAlwaysOnTop } from './hooks/useAlwaysOnTop.js';
 import { initTheme } from './lib/theme.js';
+import { initDensity } from './lib/readingDensity.js';
 import { buildTodoSnapshot } from './lib/todoSnapshot.js';
 
 const TODAY = dayjs().format('YYYY-MM-DD');
@@ -99,6 +94,14 @@ const TODO_ENTRIES = [
     contexts: ['硬件'],
     extraTags: [{ key: 'src', value: 'ghfast' }],
   }),
+  // 子任务演示：父带 stableId，子认 parent —— 列表里紧随父任务、次级缩进与小字号。
+  T('t10', '准备季度复盘材料', { stableId: 'par001', priority: 'B', projects: ['复盘'], dueDate: '2026-10-12' }),
+  T('t11', '收集各部门数据', { parentId: 'par001', dueDate: '2026-10-11' }),
+  T('t12', '整理会议纪要', { parentId: 'par001' }),
+  // 未来截止日 + 无其它记号：读数行默认收起、悬停才展开的样张。
+  // 上面那批日期全落在 9~10 月、一律逾期（逾期行常驻展开），
+  // 只照它们看会以为"日期行永远在"。
+  T('t13', '结算上月交易流水', { dueDate: '2027-01-05' }),
   { id: 'r1', kind: 'raw', raw: '这一行解析不了 ::: 保持原样不动' },
 ];
 
@@ -154,88 +157,6 @@ const CAL_DONE = [
   T('cd3', '把 todo.txt 接进网页界面', { completed: true, completedAt: rel(-3), contexts: ['工作'], projects: ['量化'] }),
 ];
 
-// ------------------------------------------------- 假目录句柄（供对话页回放）
-const SESSION_FILE = `session-${TODAY}.ndjson`;
-
-const SESSION_EVENTS = [
-  { seq: 1, type: 'user', payload: { text: '加一条 明天 交周报' } },
-  {
-    seq: 2,
-    type: 'tool_call',
-    payload: {
-      callId: 'c1',
-      tool: { name: 'todo.add', params: { text: '交周报', due: '2026-10-02' } },
-    },
-  },
-  {
-    seq: 3,
-    type: 'tool_result',
-    payload: {
-      callId: 'c1',
-      status: 'ok',
-      durationMs: 12,
-      params: { text: '交周报', due: '2026-10-02' },
-    },
-  },
-  { seq: 4, type: 'agent', payload: { text: '已添加：交周报（截止 2026-10-02）' } },
-  { seq: 5, type: 'user', payload: { text: '列出 回测' } },
-  {
-    seq: 6,
-    type: 'tool_call',
-    payload: { callId: 'c2', tool: { name: 'todo.query', params: { keyword: '回测' } } },
-  },
-  {
-    seq: 7,
-    type: 'tool_result',
-    payload: { callId: 'c2', status: 'ok', durationMs: 4, params: { keyword: '回测' } },
-  },
-  {
-    seq: 8,
-    type: 'agent',
-    payload: {
-      text: '匹配到 2 条：\n1. 核对军信股份的周线信号  +回测\n2. 画主力吸筹指标的多周期对比图  +回测',
-    },
-  },
-  { seq: 9, type: 'user', payload: { text: '完成 第 99 条' } },
-  {
-    seq: 10,
-    type: 'tool_call',
-    payload: { callId: 'c3', tool: { name: 'todo.complete', params: { index: 99 } } },
-  },
-  { seq: 11, type: 'tool_result', payload: { callId: 'c3', status: 'fail', durationMs: 2 } },
-  { seq: 12, type: 'error', payload: { message: '没有第 99 条。当前共 9 条活跃任务。' } },
-];
-
-const SESSION_TEXT = SESSION_EVENTS.map((e, i) =>
-  JSON.stringify({ ts: `2026-10-01T0${Math.min(9, 2 + Math.floor(i / 6))}:00:00.000Z`, ...e })
-).join('\n');
-
-function makeFileHandle(name, text) {
-  return {
-    name,
-    async getFile() {
-      return { name, async text() { return text; } };
-    },
-    async createWritable() {
-      return { async write() {}, async close() {} };
-    },
-  };
-}
-
-// 目录句柄桩：给对话页回放会话事件线用（useChatAgent 要真实地读 session-*.ndjson）。
-// 原先还为「事件日志」工具实现了 entries()/keys()/values() 异步迭代器（listDir 走它）；
-// 该工具已移除，迭代器一并撤掉，只留读文件所需的最小面。
-const FAKE_DIR = {
-  name: 'todolist',
-  async getFileHandle(name, options) {
-    if (name === SESSION_FILE) return makeFileHandle(name, SESSION_TEXT);
-    if (options && options.create) return makeFileHandle(name, '');
-    const err = new Error('not found');
-    err.name = 'NotFoundError';
-    throw err;
-  },
-};
-
 // ------------------------------------------------------------------ 桩 store
 function makeStore(overrides = {}) {
   const noop = () => {};
@@ -250,7 +171,7 @@ function makeStore(overrides = {}) {
     search: '',
     searchRef: { current: null },
     quickAddRef: { current: null },
-    dirHandleRef: { current: FAKE_DIR },
+    dirHandleRef: { current: null },
     saveStatus: 'saved',
     lastSavedAt: Date.now(),
     conflict: false,
@@ -293,12 +214,9 @@ const VIEWS = [
   'icons',
   'list',
   'list-all',
-  'list-panel',
   'calendar',
   'calendar-done',
   'calendar-autonarrow',
-  'chat',
-  'chatempty',
   'settings',
   'tools',
   // 每个可见工具各配一个视图（tools-<id>）—— 由 registry 生成，加工具不用改这里
@@ -323,13 +241,6 @@ const PROBES = {
   sidebar: '.sidebar',
   topbar: '.topbar',
   tabs: '.tabs',
-  overview: '.overview',
-  statusbar: '.statusbar',
-  stream: '.chat-stream',
-  panel: '.chat-panel',
-  snapshot: '.snapshot',
-  msg: '.msg:not(.msg-tool)',
-  toolcard: '.tool-card',
   editwin: '.edit-window',
   // 日历（清单的第二种显示模式）：网格 / 格子 / 右侧日详情 / 无日期托盘 / 模式开关
   calGrid: '.cal-grid',
@@ -371,7 +282,6 @@ function MetricsProbe() {
       docW: document.documentElement.scrollWidth,
       overflowX: document.documentElement.scrollWidth > window.innerWidth + 1,
       sidebarVar: root.getPropertyValue('--sidebar-w').trim(),
-      snapshotVar: root.getPropertyValue('--snapshot-w').trim(),
       railMax: root.getPropertyValue('--rail-max').trim(),
       fs2xl: root.getPropertyValue('--fs-2xl').trim(),
       bodyFont: getComputedStyle(document.body).fontFamily,
@@ -401,27 +311,38 @@ function Shell({ view, children }) {
   );
 }
 
-// 活动栏的主题按钮走真实档位（可点、可右键选档）：控件要渲染出来，也得真能按 ——
-// 否则截图与响应式 QA 量不到这颗按钮，深/浅两套也对照不了。
-function useThemeStage() {
-  const { mode, effective, pick, toggle } = useTheme();
-  return { themeMode: mode, themeEffective: effective, onToggleTheme: toggle, onPickTheme: pick };
+// 活动栏的置顶与主题都走真实本机状态（可点、可换）：控件要渲染出来，也得真能按 ——
+// 否则截图与响应式 QA 量不到这组按钮，深/浅两套也对照不了。
+// useAlwaysOnTop 在浏览器里不碰壳（runtime.js 短路），只改本机投影，舞台可安全点击。
+function useRailStage() {
+  const { mode, pick, cycle } = useTheme();
+  const { onTop, toggle } = useAlwaysOnTop();
+  return {
+    themeMode: mode,
+    onPickTheme: pick,
+    onCycleTheme: cycle,
+    alwaysOnTop: onTop,
+    onToggleTop: toggle,
+  };
 }
 
 function AppShell({
   store,
   tab,
   listView,
-  overviewOpen = false,
   listMode = 'list',
   query = '',
   onPickListMode,
-  seed = null,
-  onCreateDay,
   autoNarrowFallback = false,
 }) {
-  const themeStage = useThemeStage();
-  const s = listView ? makeStore({ ...store, view: listView }) : store;
+  const themeStage = useRailStage();
+  const base = listView ? makeStore({ ...store, view: listView }) : store;
+  // 页眉的搜索与排序在舞台里也是活的：搜索框按需挂载、排序真的能切档 ——
+  // 静态空转的话，截图与 CDP 都验证不了这两枚钮"点了到底有没有用"。
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [search, setSearch] = useState(base.search);
+  const [sortMode, setSortMode] = useState(base.sortMode);
+  const s = { ...base, search, setSearch, sortMode, setSortMode };
   const isList = tab === 'list';
   // 舞台默认强制日历（qa-responsive 的 8 个日历档靠它回归窄屏降级本身）。
   // 只有 calendar-autonarrow 视图打开自动降级，用来在浏览器里验证新行为与截图。
@@ -431,6 +352,8 @@ function AppShell({
   } = useLayoutMode({ preferred: listMode, mainEl: autoNarrowFallback ? mainEl : null });
   const effectiveMode = autoNarrowFallback ? narrowEffective : listMode;
   const isCalendar = isList && effectiveMode === 'calendar';
+  // 舞台自己的搜索框写的是 search，产品里由 App 折成 query 传下来 —— 两条都认。
+  const liveQuery = query || search;
   const stageNotice = autoNarrowFallback
     ? noticeState({ preferred: listMode, narrow, override, effective: effectiveMode })
     : null;
@@ -442,18 +365,13 @@ function AppShell({
   const projection = useMemo(
     () =>
       isCalendar
-        ? projectionForMonth(s.todoEntries, s.doneEntries, s.view, query, TODAY, calMonth)
+        ? projectionForMonth(s.todoEntries, s.doneEntries, s.view, liveQuery, TODAY, calMonth)
         : null,
-    [isCalendar, s.todoEntries, s.doneEntries, s.view, query, calMonth]
+    [isCalendar, s.todoEntries, s.doneEntries, s.view, liveQuery, calMonth]
   );
   const navMonth = (delta) =>
     setCalDay((d) => dayjs(d).add(delta, 'month').format('YYYY-MM-DD'));
 
-  const count = isCalendar
-    ? projection.tasks.length
-    : isList
-      ? (s.view === 'done' ? s.doneEntries : s.todoEntries).filter((e) => e.kind === 'task').length
-      : null;
   return (
     <div className="app">
       <Tabs tab={tab} onChange={() => {}} store={s} onOpenSettings={() => {}} {...themeStage} />
@@ -464,26 +382,36 @@ function AppShell({
         <TopBar
           store={s}
           tab={tab}
-          count={count}
           sidebarCollapsed={false}
           onToggleSidebar={() => {}}
           listMode={listMode}
           effectiveMode={effectiveMode}
           onPickListMode={isList ? onPickListMode || (() => {}) : undefined}
+          searchOpen={searchOpen}
+          onOpenSearch={() => setSearchOpen(true)}
+          onCloseSearch={() => {
+            // 与产品同一条约定：关掉搜索就把关键词一起清掉，
+            // 否则筛选还在、输入框却没了，任务会凭空少一半。
+            setSearchOpen(false);
+            setSearch('');
+          }}
         />
         <div className={'content' + (isList ? ' layout' : '')}>
-          {tab === 'chat' ? (
-            <ChatPanel store={s} onOpenList={() => {}} />
-          ) : (
-            <>
-              <Sidebar store={s} />
+          <>
+            {/* 侧栏的「日历」条目就是显示模式的入口（2026-11-15 起页眉开关已退场）：
+                舞台必须把偏好与切换接上，否则窄边降级那组断言量不到
+                「偏好仍是日历、只是这次按列表排」。 */}
+            <Sidebar store={s} listMode={listMode} onPickListMode={isList ? onPickListMode : undefined} />
               <main
                 ref={autoNarrowFallback ? setMainEl : undefined}
                 className={'main' + (isCalendar ? ' main-calendar' : '')}
               >
-                <div className="quick-add-bar">
-                  <QuickAdd store={s} inputRef={s.quickAddRef} seed={seed} />
-                </div>
+                {/* 日历页没有快录框（2026-11-15）：新建走「点日期 → 浮层里添加」。 */}
+                {!isCalendar && (
+                  <div className="quick-add-bar">
+                    <QuickAdd store={s} inputRef={s.quickAddRef} />
+                  </div>
+                )}
                 <LayoutNotice
                   state={stageNotice}
                   onUseCalendar={() => setOverride('calendar')}
@@ -492,25 +420,24 @@ function AppShell({
                 {isCalendar ? (
                   <CalendarView
                     store={s}
-                    query={query}
+                    query={liveQuery}
                     projection={projection}
                     day={calDay}
                     month={calMonth}
                     onPickDay={setCalDay}
                     onNavMonth={navMonth}
                     onToday={() => setCalDay(TODAY)}
-                    onCreate={onCreateDay || (() => {})}
                   />
                 ) : (
-                  <MainList store={s} query={query} />
+                  <MainList store={s} query={liveQuery} />
                 )}
               </main>
             </>
-          )}
         </div>
-        {isList && <Overview store={s} open={overviewOpen} onToggle={() => {}} />}
-        <Footer store={s} />
       </div>
+      {/* 窄屏底部导航（宽屏 display:none）：静态舞台也要渲染出来，
+          否则 qa-responsive 的窄屏档量不到这条真实存在的控件。 */}
+      {isList && <BottomNav store={s} listMode={listMode} />}
       <EditDrawer store={s} />
       <Toast toast={s.toast} onClose={s.dismissToast} />
       {s.conflict && <ConflictModal store={s} />}
@@ -519,8 +446,8 @@ function AppShell({
 }
 
 // ------------------------------------------------------------------ 日历交互舞台
-// 日历页要能"真点"：拖任务改期 / 双击日期新建 / 勾完成 / 搜索过滤 都落在这里的
-// useState 上（不写任何文件），这样浏览器交互 QA 才能走完整回路。
+// 日历页要能"真点"：点日期 → 弹当天任务 / 浮层里添加入口 / 勾完成 / 搜索过滤
+// 都落在这里的 useState 上（不写任何文件），这样浏览器交互 QA 才能走完整回路。
 // 响应式 QA 只量首屏几何，与这个舞台无关但共用同一份 DOM 骨架。
 function CalendarStage({ done = false, autoNarrow = false }) {
   const [todo, setTodo] = useState(CAL_TODO);
@@ -528,7 +455,6 @@ function CalendarStage({ done = false, autoNarrow = false }) {
   const [view, setView] = useState(done ? 'done' : 'today');
   const [listMode, setListMode] = useState('calendar');
   const [search, setSearch] = useState('');
-  const [seed, setSeed] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
   const [toast, setToast] = useState(null);
   const [focusedId, setFocusedId] = useState(null);
@@ -604,11 +530,6 @@ function CalendarStage({ done = false, autoNarrow = false }) {
     undo: () => setToast(null),
   });
 
-  const createOnDay = (date) => {
-    seq.current += 1;
-    setSeed({ text: `due:${date} `, seq: seq.current });
-  };
-
   return (
     <AppShell
       store={store}
@@ -617,8 +538,6 @@ function CalendarStage({ done = false, autoNarrow = false }) {
       listMode={listMode}
       query={search}
       onPickListMode={setListMode}
-      seed={seed}
-      onCreateDay={createOnDay}
       autoNarrowFallback={autoNarrow}
     />
   );
@@ -818,124 +737,25 @@ function IconsDoc() {
   );
 }
 
-function MessageFlow() {
-  // 这里的三个气泡只是类名的直接应用；工具卡片用的是真实组件。
-  const msgs = [
-    { id: 1, role: 'user', text: '加一条 明天 交周报' },
-    { id: 2, role: 'agent', text: '已添加：交周报（截止 2026-10-02）' },
-    { id: 3, role: 'user', text: '列出 回测' },
-    { id: 4, role: 'agent', text: '匹配到 2 条：\n1. 核对军信股份的周线信号\n2. 画主力吸筹指标的多周期对比图' },
-    { id: 5, role: 'error', text: '没有第 99 条。当前共 9 条活跃任务。' },
-  ];
-  return (
-    <>
-      {msgs.map((m) => (
-        <div
-          key={m.id}
-          className={`msg ${m.role === 'user' ? 'msg-user' : 'msg-agent'}${m.role === 'error' ? ' msg-error' : ''}`}
-        >
-          <div className="msg-body">{m.text}</div>
-        </div>
-      ))}
-      <div className="msg msg-tool">
-        <ToolCallCard
-          message={{
-            tool: {
-              name: 'todo.postpone',
-              params: { target: '回测报告', to: '2026-10-08' },
-              status: 'ok',
-              durationMs: 7,
-            },
-            raw: {
-              seq: 42,
-              ts: '2026-10-01T03:12:44.201Z',
-              type: 'tool_call',
-              payload: { callId: 'c42', tool: { name: 'todo.postpone' } },
-            },
-            resultRaw: { seq: 43, type: 'tool_result', payload: { callId: 'c42', status: 'ok' } },
-          }}
-        />
-      </div>
-      <div className="chat-busy">▍处理中…</div>
-    </>
-  );
-}
-
-function ChatFlowStage() {
-  // 复用真实外壳，把消息流替换成固定样本，用于稳定地截图对照。
-  const themeStage = useThemeStage();
-  const store = makeStore({ dirReady: false });
-  return (
-    <div className="app">
-      <Tabs tab="chat" onChange={() => {}} store={store} onOpenSettings={() => {}} {...themeStage} />
-      <div className="workspace">
-        <TopBar store={store} tab="chat" />
-        <div className="content">
-          <div className="chat-panel">
-            <div className="chat-main">
-              <div className="chat-stream">
-                <MessageFlow />
-              </div>
-              <div className="chat-input-wrap">
-                <form className="chat-input" onSubmit={(e) => e.preventDefault()}>
-                  <textarea
-                    rows={1}
-                    defaultValue=""
-                    placeholder="用一句话描述改动（Enter 发送）"
-                  />
-                  <button className="send" type="submit" title="发送（Enter）" aria-label="发送">
-                    <Icon name="upload" size={16} />
-                  </button>
-                </form>
-              </div>
-            </div>
-            <aside className="snapshot">
-              <div className="snapshot-head">任务快照 · 9</div>
-              {TODO_ENTRIES.filter((e) => e.kind === 'task')
-                .slice(0, 8)
-                .map((t, i) => (
-                  <div className="snapshot-item" key={t.id}>
-                    <span className="snapshot-num">{i + 1}</span>
-                    <PriorityMark priority={t.priority} className="snapshot-prio" />
-                    <span className="snapshot-title">{t.title}</span>
-                    {t.dueDate && (
-                      <span className={`snapshot-due${t.dueDate < TODAY ? ' overdue' : ''}`}>
-                        {t.dueDate < TODAY ? '⚠ ' : ''}
-                        {dayjs(t.dueDate).format('M/D')}
-                      </span>
-                    )}
-                  </div>
-                ))}
-            </aside>
-          </div>
-        </div>
-        <Footer store={store} />
-      </div>
-    </div>
-  );
-}
-
-// 设置页：与产品同构（活动栏齿轮处于打开态 + 独立页面 + 底部状态栏）。
-// 渲染的是真实组件（当前内容是只读的快捷键速查）。
+// 设置页：与产品同构（独立页面，无底栏）。入口只在应用菜单里，活动栏不再单列按钮。
+// 渲染的是真实组件（偏好 + 数据动作 + 只读的快捷键速查）。
 function SettingsStage() {
-  const themeStage = useThemeStage();
+  const themeStage = useRailStage();
   const store = makeStore({ dirReady: false });
   return (
     <div className="app">
       <Tabs
-        tab="chat"
+        tab="list"
         onChange={() => {}}
         store={store}
         onOpenSettings={() => {}}
-        settingsOpen
         {...themeStage}
       />
       <div className="workspace">
-        <TopBar store={store} tab="chat" settingsOpen />
+        <TopBar store={store} tab="list" settingsOpen />
         <div className="content">
-          <SettingsPage onClose={() => {}} />
+          <SettingsPage store={store} onClose={() => {}} />
         </div>
-        <Footer store={store} />
       </div>
     </div>
   );
@@ -944,10 +764,10 @@ function SettingsStage() {
 // 工具集：与产品同构（活动栏选中「工具」+ 目录态卡片墙 / 工作态工具区）。
 // 渲染的是真实工具组件，所以截图里就是真实的数据录入表与真实画布。
 // toolId 非空时直达该工具（?view=tools-<id>）—— ToolsPage 的首屏就认这个 request，
-// 所以不需要模拟"从对话页路由进来"，工具拿到的 params 仍是 null；
+// 所以不需要模拟"从别的页签路由进来"，工具拿到的 params 仍是 null；
 // toolId 为空时首屏是卡片墙（目录态）。
 function ToolsStage({ toolId = null }) {
-  const themeStage = useThemeStage();
+  const themeStage = useRailStage();
   const store = makeStore({ dirReady: true });
   // 工具页拿的是**只读投影**（与产品同一条链路），不是 store 本身
   const snapshot = buildTodoSnapshot({
@@ -965,7 +785,6 @@ function ToolsStage({ toolId = null }) {
         <div className="content">
           <ToolsPage snapshot={snapshot} store={store} request={request} />
         </div>
-        <Footer store={store} />
       </div>
     </div>
   );
@@ -992,9 +811,6 @@ function Root() {
       return stage(<AppShell store={makeStore()} tab="list" listView="today" />);
     case 'list-all':
       return stage(<AppShell store={makeStore()} tab="list" listView="all" />);
-    case 'list-panel':
-      // 今日概览展开态：新组件，需要一个能对照的固定视图
-      return stage(<AppShell store={makeStore()} tab="list" listView="today" overviewOpen />);
     case 'calendar':
       // 日历模式：交互舞台（拖改期 / 双击新建 / 勾完成 / 搜索都真实生效）
       return stage(<CalendarStage />);
@@ -1005,13 +821,6 @@ function Root() {
       // 窄边自动降级：偏好仍是日历，主区可用宽度不足时临时按列表排。
       // 与产品 App 走同一套 useLayoutMode / LayoutNotice，可截图、可被 QA 量。
       return stage(<CalendarStage autoNarrow />);
-    case 'chat':
-      // 真实回放：dirReady=true + 假目录句柄 → useChatAgent 还原出真实消息
-      return stage(<AppShell store={makeStore({ dirReady: true })} tab="chat" />);
-    case 'chatempty':
-      return stage(<AppShell store={makeStore({ dirReady: false })} tab="chat" />);
-    case 'chatflow':
-      return stage(<ChatFlowStage />);
     case 'settings':
       return stage(<SettingsStage />);
     case 'tools':
@@ -1045,15 +854,12 @@ function Root() {
   }
 }
 
-// chatflow 不在导航里（用 chat 即可），保留以便单独截图完整消息流
-if (new URLSearchParams(location.search).get('view') === 'chatflow') {
-  VIEWS.splice(VIEWS.indexOf('chatempty') + 1, 0, 'chatflow');
-}
-
 // 样式指南里渲染的是真实组件，真实组件依赖右键菜单 Provider，所以这里也要包一层。
 // 主题同样要走真实链路：QA 脚本用 CDP 模拟 prefers-color-scheme 截暗色图，
 // 而暗色令牌只认 <html data-theme>，所以这一页也要先把档位投上去。
 initTheme();
+// 阅读密度走同一条链路：设置页预览换档时，外壳的字号 / 行距也要真的跟着变。
+initDensity();
 
 createRoot(document.getElementById('sg-root')).render(
   <ContextMenuProvider>

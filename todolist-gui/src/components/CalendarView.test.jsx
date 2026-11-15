@@ -1,10 +1,14 @@
 // 日历渲染的最后一公里：投影逻辑在 calendar.test.js 已钉死，
-// 这里断言"投影真的变成了格子 / chip / 日详情 / 托盘"，以及只读态真的收掉了编辑入口。
+// 这里断言"投影真的变成了格子 / chip / 浮层"，以及只读态真的收掉了编辑入口。
 // 日期全部相对真实今天生成 —— 测试不依赖任何写死的年月日。
+//
+// 2026-11-15 改版后日历只剩网格：右栏日详情、无日期托盘、跨日区间条都已删除，
+// 对应断言改成"这些结构**不再出现**"（防止旧结构在重构里悄悄回流）。
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import dayjs from 'dayjs';
 import CalendarView from './CalendarView.jsx';
+import { DayPanel } from './CalendarDayPopover.jsx';
 import { ContextMenuProvider } from '../hooks/useContextMenu.jsx';
 import { parseSingleLine } from '../lib/todoParser.js';
 import { projectionForMonth, monthKey, shiftDate, monthTitle, dayTitle } from '../lib/calendar.js';
@@ -24,8 +28,8 @@ const TODO = [
 ];
 const DONE = [parseSingleLine(`x ${TODAY} 已完成壬`)];
 
-function render(view = 'all', storeOverride = {}, todoList = TODO) {
-  const store = {
+function makeStore(view, override = {}) {
+  return {
     noteIds: new Set(),
     fadingIds: [],
     spawnedIds: [],
@@ -43,8 +47,12 @@ function render(view = 'all', storeOverride = {}, todoList = TODO) {
     setDragId: () => {},
     setDropInfo: () => {},
     reorder: () => {},
-    ...storeOverride,
+    ...override,
   };
+}
+
+function render(view = 'all', storeOverride = {}, todoList = TODO) {
+  const store = makeStore(view, storeOverride);
   const projection = projectionForMonth(todoList, DONE, view, '', TODAY, MONTH);
   return renderToStaticMarkup(
     <ContextMenuProvider>
@@ -56,7 +64,6 @@ function render(view = 'all', storeOverride = {}, todoList = TODO) {
         onPickDay={() => {}}
         onNavMonth={() => {}}
         onToday={() => {}}
-        onCreate={() => {}}
       />
     </ContextMenuProvider>
   );
@@ -94,6 +101,12 @@ describe('CalendarView 月网格', () => {
     expect(markup).toContain(monthTitle(MONTH));
     expect(markup).toContain('cal-weekdays');
   });
+
+  it('格子声明「点开是弹层」：aria-haspopup=dialog', () => {
+    const markup = render();
+    expect(markup).toContain('aria-haspopup="dialog"');
+    expect(markup).toContain(`aria-label="${dayTitle(TODAY, TODAY)}，4 项任务"`);
+  });
 });
 
 describe('CalendarView 任务 chip', () => {
@@ -104,12 +117,11 @@ describe('CalendarView 任务 chip', () => {
     expect(markup).toContain('今天甲');
   });
 
-  it('日历里四档都有档位类，墨条统一表达轻重，托盘仍用紧凑记号', () => {
+  it('四档都有档位类，chip 里不再画紧凑方块（方块只归浮层/菜单）', () => {
     const markup = render();
-    expect(markup).toContain('cal-chip-bar');
-    expect(markup).toContain('prio-mark prio-none');
     expect(markup).toContain('cal-chip prio-mid');
     expect(markup).toContain('cal-chip prio-none');
+    expect(markup).not.toContain('prio-mark');
   });
 
   it('逾期 chip 带 overdue 状态类', () => {
@@ -123,46 +135,38 @@ describe('CalendarView 任务 chip', () => {
   });
 
   it('有项目的 chip 带列表色点（与侧栏同一套色板）', () => {
-    const markup = render('+:回测');
+    const markup = render('all', {}, [parseSingleLine(`带项目 due:${TODAY} +回测`)]);
     expect(markup).toContain('cal-chip-dot');
     expect(markup).toMatch(/cal-chip-dot" style="background:#[0-9A-Fa-f]{6}"/);
   });
+
+  it('chip 不可拖：任务不跨越日期，也没有改期手势', () => {
+    expect(render()).not.toContain('draggable="true"');
+  });
 });
 
-describe('CalendarView 日详情与托盘', () => {
-  it('日详情标题带星期与今天标记，行复用 TaskRow', () => {
+describe('CalendarView 只剩网格（旧结构不得回流）', () => {
+  it('没有快录框、右栏日详情、无日期托盘', () => {
     const markup = render();
-    expect(markup).toContain(dayTitle(TODAY, TODAY));
-    expect(markup).toContain('cal-day-rows');
-    expect(markup).toContain('task-row');
-    // 今天的 4 条都在日详情里（chip 只露 3 条，剩下的在这里看全）
-    expect(markup).toContain('今天丁');
+    expect(markup).not.toContain('quick-add');
+    expect(markup).not.toContain('cal-side');
+    expect(markup).not.toContain('cal-day-head');
+    expect(markup).not.toContain('cal-day-rows');
+    expect(markup).not.toContain('cal-tray');
   });
 
-  it('日详情里的行不参与列表重排（draggable 关闭）', () => {
-    const markup = render();
-    const rows = markup.match(/<div[^>]*class="task-row[^"]*"[^>]*>/g) || [];
-    expect(rows.length).toBeGreaterThan(0);
-    for (const row of rows) expect(row).toContain('draggable="false"');
+  it('没有跨日区间条 / 跨度读数', () => {
+    const markup = render('all', {}, [
+      parseSingleLine(`跨天任务 t:${shiftDate(TODAY, -2)} due:${TODAY}`),
+    ]);
+    expect(markup).not.toContain('cal-bar');
+    expect(markup).not.toContain('cal-range');
+    // 起点不另画：任务仍只落在 due 那天
+    expect(markup.match(/cal-chip /g)).toHaveLength(1);
   });
 
-  it('无日期任务进托盘，计数写在头上', () => {
-    const markup = render();
-    expect(markup).toContain('cal-tray');
-    expect(markup).toContain('无日期庚');
-    expect(markup).toContain('无日期辛');
-    expect(markup).toContain('<em>2</em>');
-  });
-
-  it('托盘条目有键盘入口：无日期任务不在日详情里，这是唯一的编辑入口', () => {
-    const markup = render();
-    const items = markup.match(/<div[^>]*class="cal-tray-item[^"]*"[^>]*>/g) || [];
-    expect(items).toHaveLength(2);
-    for (const item of items) {
-      expect(item).toContain('role="button"');
-      expect(item).toContain('tabindex="0"');
-      expect(item).toContain('aria-label=');
-    }
+  it('默认不弹浮层（点日期才弹，SSR 首屏没有）', () => {
+    expect(render()).not.toContain('cal-pop');
   });
 
   it('统计：本月到期数 + 全库逾期数', () => {
@@ -190,63 +194,62 @@ describe('CalendarView 只读态（已完成视图）', () => {
   });
 });
 
-describe('CalendarView 区间条（t: → due:，可拖拽）', () => {
-  const ranged = [
-    parseSingleLine(`(A) 跨天区间 t:${shiftDate(TODAY, -2)} due:${TODAY}`),
-    parseSingleLine(`(B) 普通任务 due:${TODAY}`),
-    parseSingleLine(`(C) 无效区间 t:${shiftDate(TODAY, 2)} due:${TODAY}`),
-  ];
+// 浮层内容单独测：createPortal 在 node 环境渲染不了，所以展示层拆成了 DayPanel。
+describe('日历当天任务浮层', () => {
+  const tasks = [parseSingleLine(`(A) 今天甲 due:${TODAY}`)];
+  const store = makeStore('all');
 
-  it('区间任务渲染成连续条，取代旧的格底跨度细线', () => {
-    const markup = render('all', {}, ranged);
-    expect(markup).toContain('cal-bar-strip');
-    expect(markup).toContain('cal-bar');
-    expect(markup).toContain('data-role=');
-    expect(markup).not.toContain('cal-range-track');
+  const renderPanel = (props = {}) =>
+    renderToStaticMarkup(
+      <ContextMenuProvider>
+        <DayPanel
+          date={TODAY}
+          today={TODAY}
+          tasks={[]}
+          store={store}
+          style={{ top: 0, left: 0 }}
+          onTextChange={() => {}}
+          onSubmit={() => {}}
+          onStartAdding={() => {}}
+          onClose={() => {}}
+          {...props}
+        />
+      </ContextMenuProvider>
+    );
+
+  it('有任务：列表复用 TaskRow，底部是「添加任务」按钮', () => {
+    const markup = renderPanel({ tasks });
+    expect(markup).toContain(dayTitle(TODAY, TODAY));
+    expect(markup).toContain('1 项');
+    expect(markup).toContain('task-row');
+    expect(markup).toContain('今天甲');
+    expect(markup).toContain('cal-pop-addbtn');
+    expect(markup).not.toContain('cal-pop-add-input');
   });
 
-  it('区间条两端有拖动手柄，无效区间降级为虚线条', () => {
-    const markup = render('all', {}, ranged);
-    expect(markup).toContain('cal-bar-handle');
-    expect(markup).toContain('data-edge="start"');
-    expect(markup).toContain('data-edge="end"');
-    expect(markup).toContain('is-invalid');
+  it('没任务：直接进添加态（输入框已就位，空标题不能提交）', () => {
+    const markup = renderPanel({ tasks: [], adding: true });
+    expect(markup).toContain('cal-pop-add-input');
+    expect(markup).toContain('添加任务，回车创建');
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>添加<\/button>/);
+    expect(markup).not.toContain('cal-pop-addbtn');
   });
 
-  it('普通任务不产生区间读数，无效区间明确提示', () => {
-    const markup = render('all', {}, ranged);
-    expect(markup.match(/cal-range-note/g)).toHaveLength(2);
-    expect(markup).toContain('区间无效：开始晚于截止');
-    expect(markup).toContain('is-invalid');
+  it('只读（已完成视图）：只有列表，没有任何添加入口', () => {
+    const markup = renderPanel({ tasks, readonly: true });
+    expect(markup).toContain('task-row');
+    expect(markup).not.toContain('cal-pop-foot');
+    expect(markup).not.toContain('添加任务');
   });
 
-  it('格子的 aria-label 报出区间覆盖数', () => {
-    expect(render('all', {}, ranged)).toContain('个区间覆盖');
+  it('只读且当天没记录：说清楚是「没有完成记录」', () => {
+    expect(renderPanel({ tasks: [], readonly: true })).toContain('这一天没有完成记录');
   });
 
-  it('单日任务也是 1 天条，两端手柄可拖出区间', () => {
-    const markup = render('all', {}, [parseSingleLine(`单日 due:${TODAY}`)]);
-    expect(markup).toContain('data-role="single"');
-    expect(markup).toContain('data-edge="start"');
-    expect(markup).toContain('data-edge="end"');
-  });
-
-  it('重叠区间分车道，超出上限进 +N 溢出', () => {
-    const many = [];
-    for (let i = 0; i < 5; i += 1) {
-      many.push(parseSingleLine(`重叠${i} t:${TODAY} due:${shiftDate(TODAY, 2)}`));
-    }
-    const markup = render('all', {}, many);
-    expect(markup).toContain('cal-bar-more');
-  });
-
-  it('chip 标记保留（窄屏 / 只读降级用，宽屏 CSS 隐藏）', () => {
-    expect(render()).toContain('cal-chip');
-  });
-
-  it('只读态不渲染任何区间条与读数（按完成日期锚定，区间无意义）', () => {
-    const markup = render('done', {}, ranged);
-    expect(markup).not.toContain('cal-bar-strip');
-    expect(markup).not.toContain('cal-range-note');
+  it('浮层里的行不参与列表重排（draggable 关闭）', () => {
+    const markup = renderPanel({ tasks });
+    const rows = markup.match(/<div[^>]*class="task-row[^"]*"[^>]*>/g) || [];
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) expect(row).toContain('draggable="false"');
   });
 });

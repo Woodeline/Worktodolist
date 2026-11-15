@@ -659,3 +659,61 @@ describe('useTodoStore 拖拽排序', () => {
     expect(render().todoEntries.map((e) => e.title)).toEqual(['任务A', '任务B', '任务C']);
   });
 });
+
+// 编辑浮窗的子任务列的是 todo + done 两份：已完成的子任务也住在浮窗里，
+// 「再点一次取消完成」和「就地改标题」都必须真的落到 done.txt 那一行，
+// 不能只扫 todo 然后什么都没发生（删除线收不回去就是这么来的）。
+describe('useTodoStore 编辑浮窗里的已完成子任务', () => {
+  const withDoneKid = () => bootStore({
+    'todo.txt': '父任务 id:aaa111\n',
+    'done.txt': 'x 2026-11-14 子任务B parent:aaa111 id:bbb222\n',
+  });
+
+  it('再次点复选框：从 done.txt 复活回 todo.txt，删除线可收回', async () => {
+    const { store, render } = await withDoneKid();
+    const kid = store.doneEntries.find((e) => e.title === '子任务B');
+    expect(kid.completed).toBe(true);
+    store.toggleComplete(kid);
+    const s = render();
+    expect(s.doneEntries).toHaveLength(0);
+    const revived = s.todoEntries.find((e) => e.title === '子任务B');
+    expect(revived).toBeTruthy();
+    expect(revived.completed).toBe(false);
+  });
+
+  it('就地改标题会写回 done.txt，不是只在 todo 上空转', async () => {
+    const { store, render } = await withDoneKid();
+    const kid = store.doneEntries.find((e) => e.title === '子任务B');
+    store.updateTask(kid.id, { title: '子任务B（改过）' });
+    const s = render();
+    expect(s.doneEntries.find((e) => e.id === kid.id).title).toBe('子任务B（改过）');
+    expect(s.todoEntries.find((e) => e.title === '父任务').title).toBe('父任务');
+  });
+});
+
+// 取消完成不是「可撤销的一步」：完成动作入栈的那条记录若留着，下一次
+// Ctrl+Z 会走 dropSpawned 把「下一次」实例删掉，还谎报「已撤销」。
+describe('useTodoStore 取消完成与撤销栈', () => {
+  it('取消完成后再撤销，不会误删重复规则生成的下一次实例', async () => {
+    const { store, render } = await bootStore({
+      'todo.txt': '交周报 rec:mon id:aaa111\n',
+      'done.txt': '',
+    });
+    const a = store.todoEntries[0];
+    store.toggleComplete(a);
+    await sleep(260);
+    let s = render();
+    const doneA = s.doneEntries.find((e) => e.id === a.id);
+    expect(doneA).toBeTruthy();
+    expect(s.todoEntries.length).toBeGreaterThanOrEqual(1); // 「下一次」已生成
+
+    store.toggleComplete(doneA);
+    s = render();
+    expect(s.doneEntries).toHaveLength(0);
+    expect(s.todoEntries.find((e) => e.id === a.id)).toBeTruthy();
+    const countBefore = s.todoEntries.length;
+
+    store.undo();
+    expect(render().todoEntries).toHaveLength(countBefore);
+  });
+});

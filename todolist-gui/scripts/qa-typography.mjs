@@ -78,10 +78,10 @@ check('小屏 --fs-2xl 覆盖仍是 21px（qa-responsive 的另一半契约）',
   /--fs-2xl:\s*21px/.test(clean));
 
 // ── 3. 三层落差真的落到选择器上 ───────────────────────────────────────────
-check('独立页头用 --fs-display（设置 / 工具墙 / 对话空态）',
-  ['.settings-title', '.tools-wall-title', '.chat-empty-title']
+check('独立页头用 --fs-display（设置 / 工具墙）',
+  ['.settings-title', '.tools-wall-title']
     .every((s) => /font-size:\s*var\(--fs-display\)/.test(ruleFor(s)?.body || '')));
-check('36px 上下文条主段用 --fs-lg（不硬顶 22px 撑破骨架）',
+check('36px 上下文条主段用 --fs-lg（2026-11-15 用户评审：13px 撑不起顶栏，恢复 16px）',
   /font-size:\s*var\(--fs-lg\)/.test(ruleFor('.crumb b')?.body || ''),
   ruleFor('.crumb b')?.body.slice(0, 160));
 check('分组名是 11px mono 刻度标签，且不用 --muted',
@@ -112,7 +112,7 @@ check('产品样式里没有 @font-face / webfont / system-ui',
 const WEIGHT_600_OK = new Set([
   '.chip-priority.prio-high', '.prio-badge.prio-high',
   '.cal-month', '.cal-stats b', '.cal-cell.is-today .cal-daynum', '.cal-day-head b',
-  '.chat-empty-title', '.snapshot-due.overdue', '.drawer-header h3', '.settings-title',
+  '.drawer-title-input', '.settings-title',
   '.tools-wall-title', '.tool-title', '.modal-card h3', '.tool-crash-title', '.app-crash-title',
 ]);
 const heavy = RULES.filter((r) => /font-weight:\s*(600|var\(--fw-title\))/.test(r.body));

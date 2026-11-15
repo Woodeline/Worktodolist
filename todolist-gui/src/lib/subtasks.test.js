@@ -5,7 +5,7 @@
 // 三种都不抛异常，只表现为"我的任务不见了" —— 所以每一条都写成断言。
 import { describe, expect, it } from 'vitest';
 import { parseFile } from './todoParser.js';
-import { buildNesting, childProgress, childrenOf, depthOf, nestChildren } from './subtasks.js';
+import { buildNesting, childProgress, childrenOf, depthOf, filterCollapsed, nestChildren } from './subtasks.js';
 
 const T = (lines) => parseFile(lines.join('\n'));
 
@@ -92,6 +92,50 @@ describe('nestChildren', () => {
     const entries = T(['甲', '乙', '丙']);
     const n = buildNesting(entries);
     expect(nestChildren(entries, n).map((t) => t.title)).toEqual(['甲', '乙', '丙']);
+  });
+});
+
+describe('filterCollapsed', () => {
+  const family = () => {
+    const entries = T([
+      '装机 id:aaa111',
+      '拆后盖 parent:aaa111',
+      '买硅脂 parent:aaa111',
+    ]);
+    return { entries, n: buildNesting(entries) };
+  };
+
+  it('没折叠时原样返回（同一个引用，不做无谓重排）', () => {
+    const { entries, n } = family();
+    expect(filterCollapsed(entries, n, new Set())).toBe(entries);
+  });
+
+  it('父在场且被收起：整组子任务一起隐藏，父行留着', () => {
+    const { entries, n } = family();
+    const nested = nestChildren(entries, n);
+    expect(filterCollapsed(nested, n, new Set(['aaa111'])).map((t) => t.title))
+      .toEqual(['装机']);
+  });
+
+  it('父不在本屏（子任务降级顶层）：不被一个不在场的折叠状态连带隐藏', () => {
+    // 真事：nesting 是全量索引，早期版本沿 parentOf 上溯会把「搜索只命中
+    // 子任务」的那一条也过滤掉，切视图后任务凭空消失。
+    const { entries, n } = family();
+    const onlyChild = [entries[1]];
+    expect(nestChildren(onlyChild, n).map((t) => t.title)).toEqual(['拆后盖']);
+    expect(filterCollapsed(onlyChild, n, new Set(['aaa111'])).map((t) => t.title))
+      .toEqual(['拆后盖']);
+  });
+
+  it('沿 parentOf 上溯多级：收起祖父时孙辈也隐藏', () => {
+    const entries = T([
+      '装机 id:aaa111',
+      '拆后盖 parent:aaa111 id:bbb222',
+      '清灰 parent:bbb222',
+    ]);
+    const n = buildNesting(entries);
+    expect(filterCollapsed(entries, n, new Set(['aaa111'])).map((t) => t.title))
+      .toEqual(['装机']);
   });
 });
 

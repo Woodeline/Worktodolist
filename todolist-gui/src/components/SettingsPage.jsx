@@ -1,12 +1,26 @@
-// 独立设置页：快捷键速查 + 两项本机外观偏好（列表外观 / 显示模式）。
+// 独立设置页：四项本机偏好（列表外观 / 阅读密度 / 显示模式 / 数据）+ 三节快捷键速查。
 //
 // 设计约定：
 //  1. 设置不是"工作流的一部分"，所以它不是一个页签，而是一张独立页面
-//     （从顶栏齿轮 / 应用菜单 / Ctrl+, 进入，Esc 或「返回」退出）。
-//  2. 快捷键那一节只读：列的是键盘操作，点不了，也不需要"保存"。
-//     列表外观 / 显示模式两节会写本机配置 —— 它们是偏好，不是数据，所以不进 todo.txt。
+//     （从应用菜单 / Ctrl+, 进入，Esc 或「返回」退出）。
+//  2. 快捷键那三节只读：列的是键盘操作，点不了，也不需要"保存"。
+//     列表外观 / 阅读密度 / 显示模式三节会写本机配置 —— 它们是偏好，不是数据，所以不进 todo.txt。
+//  3. 「数据」节（2026-11-14 从底栏搬来）是页面里唯一带真动作的地方：
+//     保存状态读数 + 手动重载 / 切换目录。主界面不再常驻这两颗按钮。
+import dayjs from 'dayjs';
 import { PALETTE, colorHex, resolveColorId, useListStyle } from '../lib/listStyle.js';
 import { useListMode } from '../lib/listMode.js';
+import {
+  CHILD_FONT_VARS,
+  DENSITY_FIELDS,
+  FONT_TIERS,
+  FONT_VARS,
+  LIST_ROW_PX,
+  NAV_ROW_PX,
+  ROW_GLYPH_GAP,
+  ROW_TIERS,
+  useReadingDensity,
+} from '../lib/readingDensity.js';
 import Icon from './Icon.jsx';
 
 // 键帽：把 "Ctrl + 1 / 2 / 3" 拆成一枚枚可扫的键，分隔符留在中间。
@@ -25,13 +39,13 @@ function Keycaps({ text }) {
   );
 }
 
-// 快捷键清单：与各处的实现保持同一份口径（useHotkeys / App 全局键 / ChatPanel 页内键）。
+// 快捷键清单：与各处的实现保持同一份口径（useHotkeys / App 全局键）。
 const GROUPS = [
   {
     title: '全局',
     note: '在任意页签都可用。',
     rows: [
-      ['Ctrl + 1 / 2 / 3', '切换页签：对话 / 列表 / 工具'],
+      ['Ctrl + 1 / 2', '切换页签：列表 / 工具'],
       ['Ctrl + B', '折叠 / 展开侧栏（列表页）'],
       ['Ctrl + ,', '打开 / 关闭本设置页'],
       ['Esc', '关闭本设置页'],
@@ -61,16 +75,6 @@ const GROUPS = [
       ['Home', '回到今天'],
       ['N / Enter', '在选中那天新建（预填 due:）'],
       ['空格', '选中当前日期'],
-    ],
-  },
-  {
-    title: '对话页',
-    note: '用一句话增删改任务；没听懂时会给出示例指令。',
-    rows: [
-      ['Enter', '发送（Shift + Enter 换行）'],
-      ['↑ / ↓', '翻历史输入'],
-      ['Ctrl + Z', '撤销最后一步动作'],
-      ['Esc', '清空输入 / 关闭弹窗'],
     ],
   },
 ];
@@ -150,6 +154,120 @@ function ListStyleSection({ projects }) {
   );
 }
 
+// 阅读密度：侧栏 / 列表的字号与行距。
+//
+// 交互上不做数值输入 —— 每档按钮自带样张（字号按该档真实字号画「A」，
+// 行距按该档真实疏密画三线），点之前看到的就是点之后的；下方迷你登记簿
+// 按当前组合实时渲染。档位与映射的单一真相源在 lib/readingDensity.js。
+function DensityColumn({ scope, name, cfg, pick }) {
+  return (
+    <div className="density-col">
+      <span className="density-col-name">{name}</span>
+      {DENSITY_FIELDS.filter((f) => f.scope === scope).map((f) => {
+        const tiers = f.kind === 'font' ? FONT_TIERS : ROW_TIERS;
+        return (
+          <div className="density-line" key={f.key}>
+            <span className="density-line-label">{f.kind === 'font' ? '字号' : '行距'}</span>
+            <div className="density-seg" role="group" aria-label={f.label}>
+              {tiers.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={'density-opt' + (cfg[f.key] === t.id ? ' is-on' : '')}
+                  aria-pressed={cfg[f.key] === t.id}
+                  onClick={() => pick(f.key, t.id)}
+                >
+                  {f.kind === 'font' ? (
+                    <span className={`density-a density-a-${t.id}`} aria-hidden="true">A</span>
+                  ) : (
+                    <span
+                      className="density-rows"
+                      style={{ gap: `${ROW_GLYPH_GAP[t.id]}px` }}
+                      aria-hidden="true"
+                    >
+                      <i /><i /><i />
+                    </span>
+                  )}
+                  <span>{t.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// 迷你登记簿：左目录右列表，行高 / 字号全按当前档位真实渲染 ——
+// 含子任务（小一档）与逾期行（唯一强色），换档时三处一起变。
+function DensityPreview({ cfg }) {
+  const navH = NAV_ROW_PX[cfg.navRows];
+  const rowH = LIST_ROW_PX[cfg.listRows];
+  const navFont = FONT_VARS[cfg.navFont];
+  const listFont = FONT_VARS[cfg.listFont];
+  const childFont = CHILD_FONT_VARS[cfg.listFont];
+  return (
+    <div className="density-preview" aria-label="阅读密度实时预览">
+      <div className="dp-side">
+        <span className="dp-nav is-on" style={{ height: `${navH}px`, fontSize: navFont }}>
+          今天<span className="dp-count">3</span>
+        </span>
+        <span className="dp-nav" style={{ height: `${navH}px`, fontSize: navFont }}>
+          全部<span className="dp-count">8</span>
+        </span>
+        <span className="dp-nav" style={{ height: `${navH}px`, fontSize: navFont }}>
+          <i className="dp-dot" style={{ background: colorHex('green') }} />
+          回测<span className="dp-count">2</span>
+        </span>
+      </div>
+      <div className="dp-list">
+        <span className="dp-row" style={{ height: `${rowH}px` }}>
+          <i className="dp-check" />
+          <span className="dp-title" style={{ fontSize: listFont }}>交周报</span>
+          <span className="dp-date">11/09</span>
+        </span>
+        <span className="dp-row is-child" style={{ height: `${rowH}px` }}>
+          <span className="dp-title" style={{ fontSize: childFont }}>整理数据附录</span>
+        </span>
+        <span className="dp-row is-overdue" style={{ height: `${rowH}px` }}>
+          <i className="dp-check" />
+          <span className="dp-title" style={{ fontSize: listFont }}>核对军信股份的周线信号</span>
+          <span className="dp-date">11/12</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function DensitySection() {
+  const { cfg, pick, reset, isDefault } = useReadingDensity();
+  return (
+    <section className="settings-group">
+      <div className="settings-group-side">
+        <h3 className="settings-group-title">阅读密度</h3>
+        <p className="settings-group-note">
+          侧栏与列表的字号、行距。本机偏好，不写进 todo.txt。
+        </p>
+      </div>
+      <div className="settings-fields">
+        <div className="density-grid">
+          <DensityColumn scope="nav" name="侧栏" cfg={cfg} pick={pick} />
+          <DensityColumn scope="list" name="列表" cfg={cfg} pick={pick} />
+        </div>
+        <DensityPreview cfg={cfg} />
+        {!isDefault && (
+          <div className="density-foot">
+            <button type="button" className="density-reset" onClick={reset}>
+              恢复默认
+            </button>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 // 显示模式：与顶栏分段开关、应用菜单读的是同一份 configStore（一个能力一个键）。
 // 这里再放一份，是为了让「从设置页进来的人」也能找到它，并且把红线写清楚：
 // 选的是本机怎么排任务，不是写进 todo.txt 的字段。
@@ -191,7 +309,52 @@ function DisplayModeSection() {
   );
 }
 
-export default function SettingsPage({ onClose, projects }) {
+// 数据：保存状态 + 两个以前挂在底栏上的动作。
+//
+// 2026-11-14 底栏整行删掉后，主界面不再报「已保存 / 上次保存」，
+// 但这件事不能凭空消失 —— 挪到这里，顺手把「手动重载 / 切换目录」也收进来。
+// 页面因此不再是纯只读：快捷键三节仍然只读，数据这两颗按钮是真动作。
+function DataSection({ store }) {
+  if (!store) return null;
+  const savedAt = store.lastSavedAt ? dayjs(store.lastSavedAt).format('HH:mm:ss') : '—';
+  const stateText = store.conflict
+    ? '外部修改待处理'
+    : store.saveStatus === 'unsaved'
+      ? '未保存'
+      : '已保存';
+  const lines = (store.todoEntries || []).filter((e) => e.kind === 'task').length;
+
+  return (
+    <section className="settings-group">
+      <div className="settings-group-side">
+        <h3 className="settings-group-title">数据</h3>
+        <p className="settings-group-note">
+          todo.txt / done.txt 在本机的读写。文件被外部程序改过、或换了数据目录，从这里重来一次。
+        </p>
+      </div>
+      <div className="settings-fields">
+        <div className="settings-row">
+          <span className="settings-label">保存状态</span>
+          <div className="settings-control">
+            <span className="settings-range">
+              {stateText} · 上次 {savedAt} · {lines} 条任务
+            </span>
+          </div>
+        </div>
+        <div className="settings-actions">
+          <button type="button" className="btn" onClick={() => store.manualReload()}>
+            手动重载
+          </button>
+          <button type="button" className="btn" onClick={() => store.pickDirectory()}>
+            切换目录
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export default function SettingsPage({ onClose, projects, store }) {
   return (
     <div className="settings">
       <div className="settings-head">
@@ -201,12 +364,14 @@ export default function SettingsPage({ onClose, projects }) {
         </button>
         <h2 className="settings-title">设置</h2>
         <span className="spacer" />
-        <span className="settings-head-note">快捷键只读 · 外观与显示偏好存本机</span>
+        <span className="settings-head-note">快捷键速查只读 · 外观与数据操作在这里</span>
       </div>
 
       <div className="settings-body">
         <ListStyleSection projects={projects} />
+        <DensitySection />
         <DisplayModeSection />
+        <DataSection store={store} />
         {GROUPS.map((g) => (
           <section className="settings-group" key={g.title}>
             <div className="settings-group-side">
@@ -230,9 +395,7 @@ export default function SettingsPage({ onClose, projects }) {
 
       <div className="settings-foot">
         <span className="spacer" />
-        <span className="settings-where">
-          随时可查：活动栏齿轮 / 应用菜单「设置…」/ Ctrl + ,
-        </span>
+        <span className="settings-where">随时可查：应用菜单「设置…」/ Ctrl + ,</span>
       </div>
     </div>
   );

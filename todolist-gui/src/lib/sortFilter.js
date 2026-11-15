@@ -19,6 +19,13 @@ export function isVisibleToday(task, today) {
   return task.dueDate <= today;
 }
 
+// 「即将到期」视图可见：未完成、有截止日、且截止日严格晚于今天。
+// 逾期的不算"即将"（它们在「今天」里已有强色提示），无日期的也不算 ——
+// 这个视图只回答一个问题："接下来几天有什么等着做"。
+export function isUpcoming(task, today) {
+  return !task.completed && Boolean(task.dueDate) && task.dueDate > today;
+}
+
 export function activeTasks(entries) {
   return entries.filter((e) => e.kind === 'task' && !e.completed);
 }
@@ -28,6 +35,8 @@ export function tasksForView(entries, view, today) {
   switch (view) {
     case 'today':
       return tasks.filter((t) => isVisibleToday(t, today));
+    case 'upcoming':
+      return tasks.filter((t) => isUpcoming(t, today));
     case 'all':
       return tasks;
     case 'inbox':
@@ -67,12 +76,24 @@ export function sortTasks(tasks, mode) {
   return tasks; // 手动模式 = 文件行序
 }
 
+// 「即将到期」的排序：截止日升序是视图的本意（"接下来几天"按时间走），
+// 优先级 / 文件行序都不该压过它。同日再落回 compareAuto（优先级 → 创建序）。
+export function compareUpcoming(a, b) {
+  const dueA = a.dueDate || '9999-99-99';
+  const dueB = b.dueDate || '9999-99-99';
+  if (dueA !== dueB) return dueA < dueB ? -1 : 1;
+  return compareAuto(a, b);
+}
+
 // 当前视图下、经搜索过滤与排序后的任务列表（「今天」视图尚未分组）。
 // 主列表与键盘导航共用这一条口径，避免"看得见的顺序"和"上下键走的顺序"分叉。
 export function viewTasks(entries, view, sortMode, query, today) {
   const base = tasksForView(entries, view, today);
   const filtered = base.filter((t) => searchMatch(t, query));
-  const sorted = sortTasks(filtered, sortMode);
+  const sorted =
+    view === 'upcoming'
+      ? [...filtered].sort(compareUpcoming)
+      : sortTasks(filtered, sortMode);
   // 「今天」视图按日期分组，父子本来就会被拆到不同组 —— 那正是这个视图的语义
   // （先按紧急度分流，而不是先按归属聚拢），所以只有其余视图做嵌套。
   // 两种情况下渲染与键盘导航都走 viewTasks 这一条路径，顺序不会分叉。

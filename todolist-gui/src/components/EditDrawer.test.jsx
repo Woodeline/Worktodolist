@@ -56,8 +56,8 @@ describe('EditDrawer 渲染', () => {
     expect(markup).toContain('edit-window');
     // 重复规则选中了预设里的「每周一」，而不是显示成空下拉
     expect(markup).toContain('value="mon"');
-    expect(markup).toContain('@工作');
-    expect(markup).toContain('+回测');
+    expect(markup).toContain('value="工作"');
+    expect(markup).toContain('value="回测"');
   });
 
   it('备注正文从 notes.md 读出来填进 textarea', () => {
@@ -73,14 +73,104 @@ describe('EditDrawer 渲染', () => {
     expect(() => render(store)).not.toThrow();
   });
 
-  it('不再提供阈值日期输入项，其他日期字段与源文本预览仍在', () => {
+  it('不再提供阈值日期输入项，日期字段与重复四档仍在', () => {
     const task = parseSingleLine('写周报 due:2026-10-25 t:2026-10-05 rem:2026-10-23T15:00 id:aaa111');
     const markup = render(makeStore(task));
     expect(markup).not.toContain('阈值日期');
     expect(markup).toContain('截止日期');
     expect(markup).toContain('提醒时刻');
-    // 预览是「源文本行」：已有的 t: 不因为表单删了字段就被抹掉
-    expect(markup).toContain('t:2026-10-05');
+    // 写入行预览已移除；t: 由 save 只提交表单字段、applyPatch 原样保留
+    expect(markup).not.toContain('drawer-preview');
+    for (const label of ['从不', '每日', '每周', '每月']) {
+      expect(markup).toContain(`>${label}</option>`);
+    }
+  });
+
+  it('精简后：标题栏不多摆按钮、日期按钮、空态不再写说明', () => {
+    const task = parseSingleLine('写周报 due:2026-10-25 id:aaa111');
+    const markup = render(makeStore(task));
+    expect(markup).toContain('drawer-title-input');
+    expect(markup).toContain('date-field-btn');
+    expect(markup).toContain('子任务');
+    for (const text of ['暂无备注', '还没有子任务', '逗号分隔', '完成后生成下一次', '存 notes.md', '支持多行与 Markdown', 'drawer-preview']) {
+      expect(markup).not.toContain(text);
+    }
+  });
+
+  it('标题栏的旗标按钮已退场（旗标此后只表示优先级），star: 数据仍原样透传', () => {
+    const starred = parseSingleLine('写周报 star:1 id:aaa111');
+    const markup = render(makeStore(starred));
+    expect(markup).not.toContain('star-toggle');
+    expect(markup).not.toContain('aria-label="取消旗标"');
+    expect(markup).not.toContain('aria-label="加旗标"');
+    // 表单里不再有那个开关，但保存时要把原值带回去 —— 否则编辑一次就把 star: 抹了
+    const src = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), 'EditDrawer.jsx'),
+      'utf8'
+    );
+    expect(src).toContain('starred: Boolean(task.starValue)');
+    expect(src).toContain("starValue: form.starred ? '1' : null");
+  });
+
+  it('有备注时默认显示为只读块，不直接进 textarea 编辑态', () => {
+    const task = parseSingleLine('写周报 id:aaa111');
+    const markup = render(makeStore(task, { getNote: () => '记得附上上周的数据' }));
+    expect(markup).toContain('note-display');
+    expect(markup).toContain('记得附上上周的数据');
+    expect(markup).not.toContain('note-input');
+  });
+
+  it('老重复规则仍在下拉里，不被四档预设挤掉', () => {
+    const task = parseSingleLine('写周报 rec:mon id:aaa111');
+    const markup = render(makeStore(task));
+    expect(markup).toContain('value="mon"');
+    expect(markup).toContain('>每周一</option>');
+  });
+
+  it('不再显示与按钮重复的操作说明（少写说明，让布局自己说话）', () => {
+    const task = parseSingleLine('写周报 id:aaa111');
+    const markup = render(makeStore(task));
+    expect(markup).not.toContain('回车保存');
+    expect(markup).not.toContain('drawer-hint');
+  });
+
+  it('备注只有一个「添加备注」按钮，不再叠「备注 + 添加」两层入口', () => {
+    const markup = render(makeStore(parseSingleLine('写周报 id:aaa111')));
+    expect(markup).toContain('添加备注');
+    expect(markup.match(/class="note-edit-btn"/g) || []).toHaveLength(1);
+    expect(markup).not.toContain('field-note-head');
+    expect(markup.replace('添加备注', '')).not.toContain('>备注<');
+  });
+
+  it('有备注时按钮改叫「编辑备注」，仍然只有一个入口', () => {
+    const markup = render(makeStore(parseSingleLine('写周报 id:aaa111'), {
+      getNote: () => '记得附上上周的数据',
+    }));
+    expect(markup).toContain('编辑备注');
+    expect(markup).toContain('note-display');
+    expect(markup.match(/class="note-edit-btn"/g) || []).toHaveLength(1);
+  });
+
+  it('优先级只摆「无 / 高 / 中 / 低」汉字按钮，不带记号图标', () => {
+    const markup = render(makeStore(parseSingleLine('写周报 id:aaa111')));
+    const picker = (markup.match(/<div class="priority-picker">([\s\S]*?)<\/div>/) || [])[1] || '';
+    for (const label of ['无', '高', '中', '低']) {
+      expect(picker).toContain(`${label}</button>`);
+    }
+    expect(picker).not.toContain('prio-mark');
+    expect(picker).not.toContain('<svg');
+  });
+
+  it('子任务区与备注按钮之间有分割线，进度线与读数同一行', () => {
+    const parent = parseSingleLine('写周报 id:aaa111');
+    const kid = parseSingleLine('拆后盖 parent:aaa111 id:bbb222');
+    const markup = render(makeStore(parent, { todoEntries: [parent, kid] }));
+    expect(markup).toContain('subtask-head');
+    expect(markup).toContain('subtask-progress');
+    expect(markup).toContain('field-sep');
+    expect(markup).toContain('添加备注');
+    expect(markup.indexOf('subtask-head')).toBeLessThan(markup.indexOf('field-sep'));
+    expect(markup.indexOf('field-sep')).toBeLessThan(markup.indexOf('note-edit-btn'));
   });
 });
 
@@ -115,5 +205,43 @@ describe('EditDrawer 的 Hook 规则', () => {
   it('表单状态与提交参数里不再有 thresholdDate', () => {
     expect(src).not.toContain('form.thresholdDate');
     expect(src).not.toContain('task.thresholdDate');
+    expect(src).not.toContain('thresholdDate:');
+  });
+
+  it('说明文案与写入行预览已移除，标题栏不再挂旗标开关', () => {
+    expect(src).not.toContain('field-hint');
+    expect(src).not.toContain('drawer-preview');
+    expect(src).not.toContain('star-toggle');
+  });
+
+  it('候选清单挂到 body，不再被 .drawer-body 的滚动区裁掉首行', () => {
+    expect(src).toContain('createPortal');
+    expect(src).toContain('computeTagMenuPlacement');
+    expect(src).toContain('document.body');
+    expect(src).not.toContain('drop-up');
+    expect(src).not.toContain("closest('.edit-window')");
+  });
+
+  it('候选清单的 Esc 只收清单，外部点击放行菜单自身', () => {
+    expect(src).toContain("document.addEventListener('keydown', onKey, true)");
+    expect(src).toContain('menuRef.current?.contains(e.target)');
+    expect(src).toContain('onMenuKeyDown');
+  });
+
+  it('字段重排与单入口：优先级 + 重复同行、两个日期同行、备注不叠第二层', () => {
+    expect(src).toContain('field-row-prio');
+    expect(src).toContain('field-sep');
+    expect(src).not.toContain('field-note-head');
+    expect(src).not.toContain('date-clear-btn');
+    expect(src).not.toContain('PriorityMark');
+  });
+
+  it('子任务文本可就地编辑，完成 / 取消完成走同一个 store 动作', () => {
+    expect(src).toContain('subtask-title-input');
+    expect(src).toContain('onBlur={commitEdit}');
+    expect(src).toContain('store.toggleComplete(k)');
+    expect(src).toContain('store.fadingIds');
+    // 点完成 / 删除时先拦住 mousedown，否则输入框 onBlur 会隐式写回一次标题
+    expect((src.match(/onMouseDown=\{\(e\) => e\.preventDefault\(\)\}/g) || [])).toHaveLength(2);
   });
 });

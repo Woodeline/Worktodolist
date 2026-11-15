@@ -109,13 +109,6 @@ const PATHS = {
       <circle cx="12" cy="12" r="3" />
     </>
   ), // lucide:settings
-  'file-check': (
-    <>
-      <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
-      <path d="M14 2v5a1 1 0 0 0 1 1h5" />
-      <path d="m9 15 2 2 4-4" />
-    </>
-  ), // lucide:file-check
   'toolbox': (
     <>
       <path d="M16 12v4" />
@@ -130,29 +123,6 @@ const PATHS = {
       <path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z" />
     </>
   ), // lucide:thermometer
-  'ruler': (
-    <>
-      <path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z" />
-      <path d="m14.5 12.5 2-2" />
-      <path d="m11.5 9.5 2-2" />
-      <path d="m8.5 6.5 2-2" />
-      <path d="m17.5 15.5 2-2" />
-    </>
-  ), // lucide:ruler
-  'braces': (
-    <>
-      <path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1" />
-      <path d="M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1" />
-    </>
-  ), // lucide:braces
-  'regex': (
-    <>
-      <path d="M17 3v10" />
-      <path d="m12.67 5.5 8.66 5" />
-      <path d="m12.67 10.5 8.66-5" />
-      <path d="M9 17a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-2z" />
-    </>
-  ), // lucide:regex
   'calendar': (
     <>
       <path d="M8 2v3" />
@@ -161,20 +131,31 @@ const PATHS = {
       <path d="M3 9h18" />
     </>
   ), // lucide:calendar
-  'hash': (
+  'calendar-clock': (
     <>
-      <line x1="4" x2="20" y1="9" y2="9" />
-      <line x1="4" x2="20" y1="15" y2="15" />
-      <line x1="10" x2="8" y1="3" y2="21" />
-      <line x1="16" x2="14" y1="3" y2="21" />
+      <path d="M16 14v2.2l1.6 1" />
+      <path d="M16 2v3" />
+      <path d="M21 7.338V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h2.338" />
+      <path d="M3 9h5.859" />
+      <path d="M8 2v3" />
+      <circle cx="16" cy="16" r="6" />
     </>
-  ), // lucide:hash
-  'shield': (
+  ), // lucide:calendar-clock —— 侧栏「即将到期」
+  'grid': (
     <>
-      <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
-      <path d="m9 12 2 2 4-4" />
+      <rect width="7" height="7" x="3" y="3" rx="1" />
+      <rect width="7" height="7" x="14" y="3" rx="1" />
+      <rect width="7" height="7" x="14" y="14" rx="1" />
+      <rect width="7" height="7" x="3" y="14" rx="1" />
     </>
-  ), // lucide:shield-check
+  ), // lucide:layout-grid —— 侧栏「全部」
+  'history': (
+    <>
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
+      <path d="M12 7v5l4 2" />
+    </>
+  ), // lucide:history —— 侧栏「日志」
   'chart': (
     <>
       <path d="M3 3v16a2 2 0 0 0 2 2h16" />
@@ -194,31 +175,23 @@ const PATHS = {
       <path d="M12 3v18" />
     </>
   ), // lucide:columns-2
-  'panel-fold': (
+  'panel-left': (
     <>
-      <path d="M3.75 5.25v13.5" />
-      <path d="M20.25 12H9" />
-      <path d="M12.9 7.8L9 12l3.9 4.2" />
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M9 3v18" />
     </>
-  ), // （原型 v2 的折叠图形：左缘竖条 + 左向箭头，自绘；16×24 已换算到 24 画布）—— 页眉最左的侧栏开关
+  ), // lucide:panel-left —— 页眉最左的侧栏开关（2026-11-15 起，替代自绘折叠箭头）
   'filter': (
     <>
       <path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z" />
     </>
   ), // lucide:funnel
-  'eye': (
+  'tag': (
     <>
-      <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
-      <circle cx="12" cy="12" r="3" />
+      <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" />
+      <circle cx="7.5" cy="7.5" r="0.5" fill="currentColor" stroke="none" />
     </>
-  ), // lucide:eye
-  'globe': (
-    <>
-      <circle cx="12" cy="12" r="10" />
-      <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
-      <path d="M2 12h20" />
-    </>
-  ), // lucide:globe
+  ), // lucide:tag —— 窄屏底部导航的「标签」（分类 / 列表筛选用）
   'upload': (
     <>
       <path d="M12 3v12" />
@@ -232,11 +205,6 @@ const PATHS = {
       <path d="M12 6v6l4 2" />
     </>
   ), // lucide:clock
-  'message-square': (
-    <>
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </>
-  ), // lucide:message-square —— 活动栏「对话」
   'list': (
     <>
       <path d="M3 5h.01" />
@@ -247,12 +215,15 @@ const PATHS = {
       <path d="M8 19h13" />
     </>
   ), // lucide:list —— 活动栏「列表」
-  'inbox': (
+  'list-tree': (
     <>
-      <path d="M22 12h-6l-2 3h-4l-2-3H2" />
-      <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+      <path d="M21 12h-8" />
+      <path d="M21 6H8" />
+      <path d="M21 18h-8" />
+      <path d="M3 6v4c0 1.1.9 2 2 2h3" />
+      <path d="M3 10v6c0 1.1.9 2 2 2h3" />
     </>
-  ), // lucide:inbox —— 侧栏「收集箱」
+  ), // lucide:list-tree —— 子任务进度（「2/5」前面那一枚小记号）
   'trash': (
     <>
       <path d="M3 6h18" />
@@ -296,6 +267,24 @@ const PATHS = {
       <path d="M12 17v4" />
     </>
   ), // lucide:monitor —— 主题档位「跟随系统」
+  'arrow-up-down': (
+    <>
+      <path d="m21 16-4 4-4-4" />
+      <path d="M17 20V4" />
+      <path d="m3 8 4-4 4 4" />
+      <path d="M7 4v16" />
+    </>
+  ), // lucide:arrow-up-down —— 排序「自动」（按优先级 · 日期）
+  'grip-vertical': (
+    <>
+      <circle cx="9" cy="5" r="1" />
+      <circle cx="9" cy="12" r="1" />
+      <circle cx="9" cy="19" r="1" />
+      <circle cx="15" cy="5" r="1" />
+      <circle cx="15" cy="12" r="1" />
+      <circle cx="15" cy="19" r="1" />
+    </>
+  ), // lucide:grip-vertical —— 排序「手动」（文件行序，可拖拽）
 };
 
 export default function Icon({ name, size = 16, title, className = '', ...rest }) {

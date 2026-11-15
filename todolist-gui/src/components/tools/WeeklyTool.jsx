@@ -58,7 +58,6 @@ export default function WeeklyTool({ snapshot }) {
             {stats.doneCount}
             <small> 条</small>
           </span>
-          <span className="tool-metric-note">{report.label}</span>
         </div>
         <div className="tool-metric">
           <span className="tool-metric-label">
@@ -68,7 +67,6 @@ export default function WeeklyTool({ snapshot }) {
             {stats.activeCount}
             <small> 条</small>
           </span>
-          <span className="tool-metric-note">未完成任务总数</span>
         </div>
         <div className="tool-metric">
           <span className="tool-metric-label">
@@ -78,7 +76,6 @@ export default function WeeklyTool({ snapshot }) {
             {stats.dueCount}
             <small> 条</small>
           </span>
-          <span className="tool-metric-note">截止日落在本周</span>
         </div>
         <div className="tool-metric">
           <span className="tool-metric-label">
@@ -88,7 +85,6 @@ export default function WeeklyTool({ snapshot }) {
             {stats.overdueCount}
             <small> 条</small>
           </span>
-          <span className="tool-metric-note">截止日早于今天</span>
         </div>
       </div>
 

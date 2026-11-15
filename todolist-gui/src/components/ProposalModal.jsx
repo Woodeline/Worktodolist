@@ -11,13 +11,14 @@
 // 要改就直接改建议的来源（工具里的条件），而不是在最后一秒手改。
 //
 // 与 EditDrawer 的本质区别：这里编辑的是**还没落盘的提议**。确认走 dispatch
-// （与对话页同一张 ACTIONS 表），取消则提议原样保留，按钮仍在。
+// （唯一的 ACTIONS 表），取消则提议原样保留，按钮仍在。
 import dayjs from 'dayjs';
 import { useState } from 'react';
 import { PRIORITY_LABELS } from '../lib/sortFilter';
 import { PREVIEW_LIMIT } from '../lib/proposals';
 import { serializeTask } from '../lib/todoParser';
 import PriorityMark from './PriorityMark.jsx';
+import DateField from './DateField.jsx';
 import Icon from './Icon.jsx';
 
 const PRIORITY_ORDER = ['A', 'B', 'C'];
@@ -33,7 +34,7 @@ function toList(text, prefix) {
 }
 
 /* ---------------------------------------------------------------------------
-   一 · 新建：可编辑表单（对话页的「修改后新建」与工具的"新建类建议"共用）
+   一 · 新建：可编辑表单（工具的"新建类建议"）
    ------------------------------------------------------------------------- */
 function CreateForm({ source, busy, onConfirm, onCancel }) {
   const [form, setForm] = useState(() => ({
@@ -117,10 +118,11 @@ function CreateForm({ source, busy, onConfirm, onCancel }) {
           </div>
         </div>
 
-        <label className="field">
-          <span>截止日期</span>
-          <input type="date" value={form.dueDate} onChange={set('dueDate')} />
-        </label>
+        <DateField
+          label="截止日期"
+          value={form.dueDate}
+          onChange={(v) => setForm((f) => ({ ...f, dueDate: v }))}
+        />
 
         <label className="field">
           <span>@分类（逗号分隔）</span>
@@ -208,7 +210,7 @@ export default function ProposalModal({ proposal, busy, onConfirm, onCancel }) {
   if (!proposal) return null;
   const kind = proposal.kind || 'create';
   if (kind === 'create') {
-    // 兼容两种来源：对话页的裸字段对象，与工具产出的 {kind, items:[{fields}]}
+    // 兼容两种来源：裸字段对象（旧格式），与工具产出的 {kind, items:[{fields}]}
     const source = (proposal.items && proposal.items[0] && proposal.items[0].fields) || proposal;
     return <CreateForm source={source} busy={busy} onConfirm={onConfirm} onCancel={onCancel} />;
   }

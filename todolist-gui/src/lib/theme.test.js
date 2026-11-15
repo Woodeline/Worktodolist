@@ -135,6 +135,22 @@ describe('主题档位', () => {
     expect(() => theme.initTheme()).not.toThrow();
   });
 
+  it('单按钮的轮换顺序：跟随系统 → 深色 → 浅色 → 跟随系统', async () => {
+    const theme = await freshTheme();
+    makeDom({ dark: false });
+    expect(theme.THEME_CYCLE).toEqual(['auto', 'dark', 'light']);
+    expect(theme.nextThemeMode('auto')).toBe('dark');
+    expect(theme.nextThemeMode('dark')).toBe('light');
+    expect(theme.nextThemeMode('light')).toBe('auto');
+    expect(theme.nextThemeMode(undefined)).toBe('dark'); // 脏值按 auto 起算
+    expect(theme.nextThemeMode('midnight')).toBe('dark');
+  });
+
+  it('按钮图标：显示器＝跟随系统、太阳＝深色、月亮＝浅色', async () => {
+    const theme = await freshTheme();
+    expect(theme.THEME_ICONS).toEqual({ auto: 'monitor', dark: 'sun', light: 'moon' });
+  });
+
   it('完全没有 window 时按亮色处理（老 WebView / 纯 node）', async () => {
     const theme = await freshTheme();
     delete globalThis.window;

@@ -15,7 +15,7 @@ function findTaskById(ctx, id) {
   return (ctx.tasks || []).find((t) => t.id === id) || null;
 }
 
-// 按 target 在给定任务池中解析候选（与 nlRules.resolveTarget 语义一致）。
+// 按 target 在给定任务池中解析候选。
 function resolveInPool(pool, target) {
   if (!target) return [];
   if (target.kind === 'index') {
@@ -43,12 +43,8 @@ function fail(name, params, reply) {
   return { ok: false, reply, tool: { name, params, status: 'fail' } };
 }
 
-function ok(name, params, reply, extra) {
-  return { ok: true, reply, tool: { name, params, status: 'ok' }, ...(extra || {}) };
-}
-
-function taskChip(task) {
-  return { target: `第?条`, title: task.title };
+function ok(name, params, reply) {
+  return { ok: true, reply, tool: { name, params, status: 'ok' } };
 }
 
 // —— 具体动作 —— //
@@ -174,13 +170,10 @@ function runQuery(ctx, intent) {
   const matchKeyword = (t) =>
     !keyword || String(t.title || '').toLowerCase().includes(String(keyword).toLowerCase());
 
-  // 0 命中分支：有残余关键词 → 询问是否新建（交由 useChatAgent 的澄清框架处理）。
+  // 0 命中分支：有残余关键词 → 如实报告没找到（对话层已退场，不再有"澄清后新建"）。
   const emptyReply = (scope) => {
     if (keyword) {
-      return {
-        reply: `没找到匹配「${keyword}」的任务。你是想新建一条「${keyword}」吗？（回"是"创建）`,
-        clarify: { kind: 'create', keyword },
-      };
+      return { reply: `没找到匹配「${keyword}」的任务。` };
     }
     if (scope === 'done') return { reply: '还没有已完成的任务。' };
     return { reply: '没有匹配的任务。' };
@@ -196,7 +189,7 @@ function runQuery(ctx, intent) {
     if (keyword) params.keyword = keyword;
     if (sorted.length === 0) {
       const e = emptyReply('done');
-      return ok('todo.query', params, e.reply, e.clarify ? { clarify: e.clarify } : undefined);
+      return ok('todo.query', params, e.reply);
     }
     const lines = sorted.map((t, i) => {
       const n = i + 1;
@@ -226,7 +219,7 @@ function runQuery(ctx, intent) {
   if (tasks.length === 0) {
     if (keyword) {
       const e = emptyReply('active');
-      return ok('todo.query', params, e.reply, { clarify: e.clarify });
+      return ok('todo.query', params, e.reply);
     }
     const tail = contextName ? ` @${contextName}` : '';
     if (scope === 'overdue') return ok('todo.query', params, `没有逾期任务${tail} 🎉`);
@@ -253,9 +246,9 @@ function runUndo(ctx) {
 
 // —— 工具提议的执行入口 ——
 //
-// 这两条不是"给工具开的后门"，而是把工具产出的建议映射到与对话页**同一张**
+// 这两条不是"给工具开的后门"，而是把工具产出的建议映射到**唯一的**
 // ACTIONS 表上：提议确认后照样走 dispatch(intent, ctx)，副作用照样只经 store。
-// 于是"工具改数据"和"对话改数据"在审计日志里长得一样，回放也一样。
+// 于是所有"改数据"的动作在审计日志里长得一样，回放也一样。
 
 // edit：逐条给已存在的任务打补丁（每条可以不同）。
 function runEdit(ctx, intent) {
@@ -335,17 +328,4 @@ export function dispatch(intent, ctx) {
     };
   }
   return action.run(ctx, intent, action.id);
-}
-
-// 多命中澄清时，根据用户回复的序号/文本选定候选。
-export function pickByReply(candidates, replyText) {
-  const text = String(replyText || '').trim();
-  const m = text.match(/\d+/);
-  if (m) {
-    const idx = Number(m[0]) - 1;
-    return idx >= 0 && idx < candidates.length ? candidates[idx] : null;
-  }
-  const kw = text.toLowerCase();
-  const hits = candidates.filter((c) => String(c.title || '').toLowerCase().includes(kw));
-  return hits.length === 1 ? hits[0] : null;
 }

@@ -8,11 +8,65 @@
 //   ↑↓ 移动 · Enter 执行 · → 进子菜单 · ← 回上层 · Esc 关闭 · Home/End 首尾
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Icon from './Icon.jsx';
-
-const VIEWPORT_MARGIN = 6;
+import { computeMenuPlacement, computeSubmenuPlacement, VIEWPORT_MARGIN } from '../lib/placement.js';
 
 // 可停靠（能被上下键选中）的项：分隔线与分组标题跳过
 const isSelectable = (it) => it && it.type !== 'sep' && it.type !== 'header';
+
+// 子菜单自己「先量后放」：外层只量了主菜单 anchor，管不到往外长的这一层。
+// 贴窗口右缘时翻到父行左侧，贴下缘时上移，窗口极窄时再夹回视口 ——
+// 否则子菜单右半截（括注、圆角、文字）直接被窗口裁掉，看起来像少了内容。
+function Submenu({ items, onClose, onBack }) {
+  const ref = useRef(null);
+  const [place, setPlace] = useState(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const row = el && el.parentElement;
+    if (!el || !row) return;
+    const menu = el.getBoundingClientRect();
+    setPlace(
+      computeSubmenuPlacement(
+        row.getBoundingClientRect(),
+        menu,
+        { width: window.innerWidth, height: window.innerHeight },
+        VIEWPORT_MARGIN
+      )
+    );
+  }, []);
+
+  // 定位完成（visibility 生效）后把键盘焦点交给二级列表：
+  // 否则 → 展开之后方向键 / Enter 仍停在一级，二级项鼠标能点、键盘却够不着。
+  useEffect(() => {
+    if (!place) return;
+    const menu = ref.current && ref.current.querySelector('.ctx-menu');
+    if (menu) menu.focus();
+  }, [place]);
+
+  // ← 回上层时把焦点还给分组行，别让焦点掉到 body 上。
+  const back = () => {
+    const row = ref.current && ref.current.parentElement;
+    const btn = row && row.querySelector('.ctx-menu-item');
+    onBack();
+    if (btn) btn.focus();
+  };
+
+  // 量完之前先藏着：不然会先在右侧闪一帧，再跳到左侧。
+  const style = place
+    ? {
+        top: place.top,
+        left: place.flip ? 'auto' : undefined,
+        right: place.flip ? 'calc(100% + 2px)' : undefined,
+        transform: place.shiftX ? `translateX(${place.shiftX}px)` : undefined,
+      }
+    : { visibility: 'hidden' };
+
+  return (
+    <div className="ctx-submenu" ref={ref} style={style}>
+      <MenuList items={items} onClose={onClose} onBack={back} />
+    </div>
+  );
+}
 
 function MenuList({ items, onClose, onBack }) {
   // 初始不高亮任何项 —— 系统菜单打开时就是"什么都不选"，
@@ -36,7 +90,9 @@ function MenuList({ items, onClose, onBack }) {
   const run = (it, i) => {
     if (!it || it.disabled) return;
     if (it.type === 'sub') {
-      setSubOpen((cur) => (cur === i ? -1 : i));
+      // 一级分组点一下就是「展开」：悬停已经把它打开了，再按 toggle 收回去，
+      // 会让「点分组」看起来像什么都没做。收起交给 ← 或移到别的项。
+      setSubOpen(i);
       return;
     }
     onClose();
@@ -121,9 +177,7 @@ function MenuList({ items, onClose, onBack }) {
               )}
             </button>
             {it.type === 'sub' && subOpen === i && (
-              <div className="ctx-submenu">
-                <MenuList items={it.items || []} onClose={onClose} onBack={() => setSubOpen(-1)} />
-              </div>
+              <Submenu items={it.items || []} onClose={onClose} onBack={() => setSubOpen(-1)} />
             )}
           </div>
         );
@@ -132,8 +186,9 @@ function MenuList({ items, onClose, onBack }) {
   );
 }
 
-// x/y 是屏幕坐标；菜单超出视口时先量后翻，避免"贴边被截断"。
-export default function ContextMenu({ x, y, items, onClose }) {
+// x/y 是屏幕坐标；菜单超出视口时先量后放，避免"贴边被截断"。
+// place='above'：y 按"锚点上缘"解释，菜单从下往上弹（窗口底部的按钮用）。
+export default function ContextMenu({ x, y, items, onClose, place }) {
   const boxRef = useRef(null);
   const [pos, setPos] = useState(null);
 
@@ -141,16 +196,16 @@ export default function ContextMenu({ x, y, items, onClose }) {
     const el = boxRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    let left = x;
-    let top = y;
-    if (left + r.width > window.innerWidth - VIEWPORT_MARGIN) {
-      left = Math.max(VIEWPORT_MARGIN, window.innerWidth - r.width - VIEWPORT_MARGIN);
-    }
-    if (top + r.height > window.innerHeight - VIEWPORT_MARGIN) {
-      top = Math.max(VIEWPORT_MARGIN, window.innerHeight - r.height - VIEWPORT_MARGIN);
-    }
-    setPos({ left, top });
-  }, [x, y, items]);
+    setPos(
+      computeMenuPlacement(
+        x,
+        y,
+        { width: r.width, height: r.height },
+        { width: window.innerWidth, height: window.innerHeight },
+        place === 'above' ? 'above' : 'below'
+      )
+    );
+  }, [x, y, items, place]);
 
   // 菜单必须自己拿到焦点：否则方向键 / Enter 会漏给全局快捷键，
   // 菜单看起来能用、键盘却毫无反应。

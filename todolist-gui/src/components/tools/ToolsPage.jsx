@@ -13,7 +13,7 @@
 //   mode='tool'  渲染页头（返回 + 面包屑 + 风险徽标）与工具本体，
 //                本体部分与改造前一致 —— ToolBoundary / Suspense /
 //                懒加载缓存 / propose / logEvent 全部原样。
-//   对话页路由（request.id）直达工作态，不经过墙；Esc 或「← 工具集」回墙。
+//   直达路由（request.id，styleguide / QA 视图）直达工作态，不经过墙；Esc 或「← 工具集」回墙。
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { canWrite, findTool, riskBadges, visibleTools } from './registry.js';
 import ToolsWall from './ToolsWall.jsx';
@@ -38,7 +38,7 @@ export default function ToolsPage({ snapshot, store, request }) {
   const [activeId, setActiveId] = useState(
     () => (findTool(request && request.id) ? request.id : list[0] && list[0].id) || null
   );
-  // 目录态是"家"：刷新回落在这里；只有带 request.id（对话页路由 / QA 直达视图）
+  // 目录态是"家"：刷新回落在这里；只有带 request.id（styleguide / QA 直达视图）
   // 才一进来就在工作态。
   const [mode, setMode] = useState(() =>
     request && request.id && findTool(request.id) ? 'tool' : 'wall'
@@ -103,7 +103,7 @@ export default function ToolsPage({ snapshot, store, request }) {
     requestAnimationFrame(() => tryFocus(4));
   }, []);
 
-  // 对话页路由进来（tool.open）：切到指定工具 + 预填参数 + 聚焦。
+  // 直达路由进来（styleguide / QA 视图）：切到指定工具 + 预填参数 + 聚焦。
   // 用 seq 去重：同一次请求只消费一次，React 重渲染不会重复触发。
   useEffect(() => {
     if (!request || !request.id) return;
@@ -137,7 +137,7 @@ export default function ToolsPage({ snapshot, store, request }) {
     setBusy(true);
     let result;
     try {
-      // 执行路径与对话页完全一致：同一张 ACTIONS 表，不新增旁路。
+      // 执行走唯一的 ACTIONS 表，不新增旁路。
       result = dispatch(intent, {
         store,
         tasks: (snapshot && snapshot.tasks) || [],

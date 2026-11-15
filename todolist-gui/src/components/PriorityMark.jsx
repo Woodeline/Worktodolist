@@ -1,29 +1,40 @@
-// 优先级四档的唯一渲染口。
+// 优先级的唯一渲染口。
 //
-// 两种形态共用同一组档位类名：
-//   badge —— 任务行 / 对话快照，带中文读数（高 / 中 / 低）；
-//   mark  —— 日历 chip、无日期托盘、快速添加 chip、选择器、右键菜单，
-//            只保留形状，不重复中文（那些位置要么太窄，要么已经有文字）。
+//   badge —— 列表行的旗标：标题最左边一枚**中空旗**，颜色就是档位
+//            （高红 / 中橙 / 低蓝；「无」列表里整枚不画 —— 由调用点决定要不要渲染）。
+//            D~Z 这类自定义字母给中性墨色，不撒谎。
+//   flag  —— 菜单 / 选择器里的同款小旗：不带 title / aria，外面那行文字已经说清楚了。
+//   mark  —— 日历 chip、无日期托盘、写入行、右键菜单：紧凑形状记号
+//            （这些位置太窄或已经有文字，保持原来的小方块）。
 //
-// 「无」始终是空的虚线框：它表示「没填」，不是第四种等级的值。
-// 颜色一律中性 —— 逾期才是整行唯一的强色，accent 只给选中 / 今天到期 / 焦点。
-import { priorityClass, priorityLabel, priorityTitle } from '../lib/priority.js';
+// 档位类名取 lib/priority.js 的 priorityClass()，组件只负责画。
+import Icon from './Icon.jsx';
+import { priorityClass, priorityTitle } from '../lib/priority.js';
 
-export default function PriorityMark({ priority, variant = 'badge', className = '' }) {
+export default function PriorityMark({ priority, variant = 'badge' }) {
   const tone = priorityClass(priority);
-  const cls = `${variant === 'mark' ? 'prio-mark' : 'prio-badge'} ${tone}${className ? ' ' + className : ''}`;
 
   if (variant === 'mark') {
-    return <i className={cls} aria-hidden="true" />;
+    return <i className={`prio-mark ${tone}`} aria-hidden="true" />;
+  }
+
+  // 菜单里的小旗是「这一档长什么样」的样张，不带第二层提示。
+  if (variant === 'flag') {
+    return (
+      <span className={`prio-badge ${tone}`} aria-hidden="true">
+        <Icon name="flag" size={14} />
+      </span>
+    );
   }
 
   return (
     <span
-      className={cls}
-      aria-hidden={priority ? undefined : true}
+      className={`prio-badge ${tone}`}
+      role="img"
       title={priorityTitle(priority)}
+      aria-label={priorityTitle(priority)}
     >
-      {priorityLabel(priority)}
+      <Icon name="flag" size={14} />
     </span>
   );
 }

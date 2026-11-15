@@ -6,7 +6,7 @@
 //
 // 已知的两类误报（本版已修，历史版本会各报 6 个 / 2 个假阳性）：
 //   1. 三元与短路表达式里的「取值」被当成类名：
-//        tab === 'chat' ? ' active' : ''      → 'chat' 是值，' active' 才是类
+//        tab === 'tools' ? ' active' : ''     → 'tools' 是值，' active' 才是类
 //        tool-${tool.status || 'running'}      → 'running' 是值，不是类
 //      规则：紧跟 === / == / != / !== / || / && 的字符串跳过。
 //   2. CSS 侧把 url(...) 里的网址当选择器：
@@ -71,26 +71,22 @@ console.log('\n缺失（JSX 用了但 CSS 未定义）:', missing.join(', ') || 
 
 // 动态运行时取值单独核对（这些由 `${...}` 拼出来，静态扫描看不到）
 const RUNTIME_VALUES = [
-  'dot-ok', 'dot-warn', 'dot-danger',
+  // 底栏三态圆点（dot-ok / dot-warn / dot-danger）自 2026-11-14 随底栏一起删除，
+  // 保存状态改在设置页「数据」节以文字读数呈现，不再有图形编码。
   // 优先级四档：lib/priority.js 的 priorityClass() 统一拼 prio-<tone>，
   // 五个值都要有 CSS 规则。过去是 p-A/p-B/p-C/p-other + priority-none，
   // 「无」在日历里被当成 p-other，所以那套白名单反而掩盖了漂移。
   'prio-high', 'prio-mid', 'prio-low', 'prio-none', 'prio-other',
-  'status-dot-running', 'status-dot-ok', 'status-dot-fail',
-  'tool-ok', 'tool-fail', 'tool-running',
   'row-overdue', 'row-readonly',
-  // 对话：AI 记号 .ai-mark 是静态类；用户/工具不再用字母头像
   // 日历格子：cls 数组 join(' ')，静态扫描看不见（in-month 走默认样式，无规则）
-  'cal-cell', 'out-month', 'is-weekend', 'is-today', 'is-selected',
+  'cal-cell', 'out-month', 'is-weekend', 'is-today', 'is-selected', 'is-open',
   // 日历 chip 状态：chipState() 返回 ' cal-done' / ' overdue' / ' now'
   // 三个都要列，否则删掉 .cal-chip.overdue / .cal-chip.now 的规则门禁也不会红。
   'cal-done', 'overdue', 'now',
-  // 区间跨度：role 与无效态由模板 / 三元拼出，静态扫描看不见
-  'cal-range-track', 'cal-range-seg', 'cal-range-note',
-  'is-start', 'is-mid', 'is-end', 'is-single', 'is-invalid',
-  // 区间条：cls 数组 join(' ')，role / 续刻痕 / 拖拽态静态扫描看不见
-  'cal-bar', 'cont-left', 'cont-right', 'is-overlong', 'is-open',
-  'is-preview', 'is-dragging', 'is-readonly', 'is-resizing',
+  // 跨日区间条（cal-range-* / cal-bar-*）与 is-resizing 已随 2026-11-15 的
+  // 「任务只在单日显示」一起删除，白名单里也不该再留着它们的名字。
+  // 阅读密度字号样张：`density-a density-a-${t.id}` 拼出三档，静态扫描只见前缀
+  'density-a-s', 'density-a-m', 'density-a-l',
 ];
 const runtimeMissing = RUNTIME_VALUES.filter((c) => !cssClasses.has(c));
 console.log('\n运行时拼接值缺失:', runtimeMissing.join(', ') || '无');

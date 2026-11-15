@@ -127,3 +127,27 @@ export function nestChildren(tasks, nesting) {
   }
   return out;
 }
+
+/**
+ * 收起父项时把它的后代一起撤掉。
+ *
+ * 只认「父行也在当前这批可见行里」的层级关系：父不在本屏时 nestChildren
+ * 会把子任务降级成顶层行，此时不能因为一个不在场的父被收起就把它隐藏 ——
+ * 否则切视图 / 搜索只命中子任务时，那条任务会凭空消失。
+ *
+ * @param {Array} entries nestChildren 的输出（父前子后的平铺数组）
+ * @param {object} nesting buildNesting 的产物（可能含本屏之外的父）
+ * @param {Set<string>} collapsed 被收起父项的 stableId 集合
+ */
+export function filterCollapsed(entries, nesting, collapsed) {
+  if (!nesting || !collapsed || collapsed.size === 0) return entries;
+  const present = new Set(entries.map((e) => e.id));
+  return entries.filter((e) => {
+    let parent = nesting.parentOf.get(e.id);
+    while (parent && present.has(parent.id)) {
+      if (collapsed.has(parent.stableId)) return false;
+      parent = nesting.parentOf.get(parent.id);
+    }
+    return true;
+  });
+}

@@ -91,7 +91,6 @@ export default function QuickAdd({ store, inputRef, seed = null, resetKey = 0 })
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder="添加任务，回车创建"
-        title="支持 @分类 +项目 due:日期 t:日期 (A)=高 star:1"
       />
       {/* 语法提示从占位文字里挪到右端：占位文字一长，第一眼就不知道这一行是干什么的。
           它只在不输入时出现，输入后让位给 chips 预览。 */}

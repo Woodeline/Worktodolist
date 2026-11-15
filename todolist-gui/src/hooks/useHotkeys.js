@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 
 // 全局快捷键：n 新增 / 搜索 / ↑↓ 移动选中 / 空格 完成 / e·回车 编辑 / Esc 关闭 / Ctrl+Z 撤销
-// enabled=false 时整体禁用（对话页签下由 ChatPanel 自行处理快捷键，避免冲突）。
+// enabled=false 时整体禁用（输入框聚焦等场景由调用方传入，避免冲突）。
 export default function useHotkeys({
   onNew,
   onSearch,

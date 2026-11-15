@@ -66,6 +66,11 @@ describe('视图过滤', () => {
     expect(titles).toEqual(['逾期', '今日', '无日期']);
   });
 
+  it('upcoming 视图 = 未完成 + 有截止日 + 严格晚于今天', () => {
+    const titles = tasksForView(entries, 'upcoming', TODAY).map((t) => t.title);
+    expect(titles).toEqual(['未来']);
+  });
+
   it('inbox 视图 = 无 @ 任务', () => {
     const titles = tasksForView(entries, 'inbox', TODAY).map((t) => t.title);
     expect(titles).toEqual(['未来', '无日期', '阈值未到']);
@@ -162,6 +167,17 @@ describe('列表显示顺序（键盘上下移动的口径）', () => {
     const ordered = displayOrder(entries, 'all', 'auto', '', TODAY).map((t) => t.title);
     const same = viewTasks(entries, 'all', 'auto', '', TODAY).map((t) => t.title);
     expect(ordered).toEqual(same);
+  });
+
+  it('upcoming 视图：截止日升序压过排序模式（手动/自动都一样）', () => {
+    const future = [
+      task({ title: 'late', dueDate: '2026-10-10', priority: 'A' }),
+      task({ title: 'early', dueDate: '2026-10-02', priority: 'C' }),
+    ];
+    for (const mode of ['manual', 'auto']) {
+      const titles = displayOrder(future, 'upcoming', mode, '', TODAY).map((t) => t.title);
+      expect(titles).toEqual(['early', 'late']);
+    }
   });
 
   it('搜索过滤后顺序随之收窄', () => {

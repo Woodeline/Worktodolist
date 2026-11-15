@@ -16,10 +16,6 @@
     "tauri:build": "tauri build",
     "build:app": "tauri build --no-bundle",
     "test:guard": "node scripts/assert-tests.mjs",
-    "test:nl": "node scripts/qa-nl-coverage.mjs && node scripts/qa-nl-drift.mjs",
-    "test:nl:verbose": "node scripts/qa-nl-coverage.mjs --verbose",
-    "test:nl:drift": "node scripts/qa-nl-drift.mjs",
-    "test:nl:heldout": "node scripts/qa-nl-heldout.mjs",
     "test:ui": "node scripts/qa-css-check.mjs && node scripts/qa-contrast.mjs && node scripts/qa-typography.mjs && node scripts/qa-hooks.mjs",
     "test:typography": "node scripts/qa-typography.mjs",
     "test:hooks": "node scripts/qa-hooks.mjs",
@@ -30,12 +26,10 @@
     "test:responsive": "node scripts/qa-responsive.mjs",
     "test:responsive:shots": "node scripts/qa-responsive.mjs --shots",
     "test:responsive:report": "node scripts/qa-responsive.mjs --report=qa-artifacts/responsive.json",
-    "test:attack": "node --import ./scripts/register-qa-loader.mjs scripts/qa-independent.mjs",
-    "test:attack-chat": "node --import ./scripts/register-qa-loader.mjs scripts/qa-chat-attack.mjs",
-    "test:attack-chat2": "node --import ./scripts/register-qa-loader.mjs scripts/qa-chat-attack2.mjs",
-    "test:attack-chat3": "node --import ./scripts/register-qa-loader.mjs scripts/qa-chat-attack3.mjs"
+    "test:attack": "node --import ./scripts/register-qa-loader.mjs scripts/qa-independent.mjs"
   },
   "dependencies": {
+    "@daypicker/react": "^10.0.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
@@ -43,9 +37,9 @@
     "@esbuild/win32-x64": "0.21.5"
   },
   "devDependencies": {
-    "dayjs": "^1.11.13",
     "@tauri-apps/cli": "^2",
     "@vitejs/plugin-react": "^4.3.4",
+    "dayjs": "^1.11.13",
     "vite": "^5.4.11",
     "vitest": "^2.1.8"
   }

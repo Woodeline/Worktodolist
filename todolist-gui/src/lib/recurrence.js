@@ -164,18 +164,8 @@ export function nextOccurrence(task, today) {
 
 /** 编辑浮窗里的可选项。手写 rec: 不受此限 —— 这只是少打字用的。 */
 export const RECURRENCE_CHOICES = [
-  { value: '', label: '不重复' },
-  { value: '+1d', label: '每天' },
+  { value: '', label: '从不' },
+  { value: '+1d', label: '每日' },
   { value: '+1w', label: '每周' },
-  { value: '+2w', label: '每 2 周' },
   { value: '+1m', label: '每月' },
-  { value: '+3m', label: '每 3 个月' },
-  { value: 'mon,tue,wed,thu,fri', label: '每个工作日' },
-  { value: 'mon', label: '每周一' },
-  { value: 'tue', label: '每周二' },
-  { value: 'wed', label: '每周三' },
-  { value: 'thu', label: '每周四' },
-  { value: 'fri', label: '每周五' },
-  { value: 'sat', label: '每周六' },
-  { value: 'sun', label: '每周日' },
 ];

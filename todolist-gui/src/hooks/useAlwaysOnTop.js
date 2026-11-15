@@ -13,7 +13,9 @@ import { createConfigStore } from '../lib/configStore.js';
 const shellPrefs = createConfigStore({
   key: 'worktodolist.shell',
   defaults: { alwaysOnTop: false },
-  normalize: (c) => ({ alwaysOnTop: Boolean(c && c.alwaysOnTop) }),
+  // 严格 === true：手改 localStorage 成 {"alwaysOnTop":"false"} 时，
+  // Boolean("false") 会真值化，启动时把窗口强制置顶。
+  normalize: (c) => ({ alwaysOnTop: c?.alwaysOnTop === true }),
 });
 
 /** 上次保存的置顶偏好（浏览器里也能读，纯前端测试不受影响）。 */

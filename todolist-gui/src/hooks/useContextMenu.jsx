@@ -51,7 +51,7 @@ export function inputMenu(getInput) {
   ];
 }
 
-// 只读文本（对话消息、任务行、快照项）的菜单：复制当前选中的内容。
+// 只读文本（任务行、快照项）的菜单：复制当前选中的内容。
 export function copyMenu(getText) {
   return [
     {
@@ -88,11 +88,13 @@ export function ContextMenuProvider({ children }) {
     }
   }, []);
 
-  const openAt = useCallback((x, y, items) => {
+  // opts.place='above'：把 y 当作触发控件的上缘，菜单从下往上弹（窗口底部的按钮用）。
+  const openAt = useCallback((x, y, items, opts) => {
     if (!items || items.length === 0) return;
+    const place = opts && opts.place === 'above' ? 'above' : null;
     setMenu((cur) => {
       if (!cur && typeof document !== 'undefined') prevFocusRef.current = document.activeElement;
-      return { x, y, items };
+      return { x, y, items, place };
     });
   }, []);
 
@@ -193,7 +195,9 @@ export function ContextMenuProvider({ children }) {
   return (
     <MenuContext.Provider value={value}>
       {children}
-      {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={closeMenu} />}
+      {menu && (
+        <ContextMenu x={menu.x} y={menu.y} items={menu.items} place={menu.place} onClose={closeMenu} />
+      )}
     </MenuContext.Provider>
   );
 }

@@ -10,44 +10,36 @@ import { useTodoSnapshot } from './hooks/useTodoSnapshot';
 import useDebounce from './hooks/useDebounce';
 import useHotkeys from './hooks/useHotkeys';
 import { useContextMenu } from './hooks/useContextMenu.jsx';
-import { displayOrder, isVisibleToday, sidebarStats, todayGroups, viewTasks } from './lib/sortFilter';
+import { displayOrder, sidebarStats, todayGroups, viewTasks } from './lib/sortFilter';
 import { monthKey, projectionForMonth, shiftDate } from './lib/calendar.js';
 import { useListMode } from './lib/listMode.js';
 import { noticeState } from './lib/layoutMode.js';
 import { useLayoutMode } from './hooks/useLayoutMode.js';
-import { buildNesting, childProgress, depthOf } from './lib/subtasks.js';
+import { buildNesting, childProgress, depthOf, filterCollapsed, nestChildren } from './lib/subtasks.js';
+import { useRowCollapse } from './hooks/useRowCollapse.js';
+import { buildAppMenuItems } from './lib/appMenu.js';
 import TopBar from './components/TopBar.jsx';
 import Sidebar from './components/Sidebar.jsx';
+import BottomNav from './components/BottomNav.jsx';
 import TaskRow from './components/TaskRow.jsx';
 import QuickAdd from './components/QuickAdd.jsx';
 import CalendarView from './components/CalendarView.jsx';
 import LayoutNotice from './components/LayoutNotice.jsx';
 import EditDrawer from './components/EditDrawer.jsx';
-import ChatPanel from './components/ChatPanel.jsx';
 import SettingsPage from './components/SettingsPage.jsx';
 import ToolsPage from './components/tools/ToolsPage.jsx';
 import Icon from './components/Icon.jsx';
 import { WindowControls, WindowResizeHandles } from './components/WindowChrome.jsx';
 
-// 三个页签是同一层级的"工作区"：对话（说）、列表（看）、工具（算）。
-// 顺序即 Ctrl+1 / 2 / 3 的绑定顺序，也是左侧活动栏自上而下的顺序。
+// 两个页签是同一层级的"工作区"：列表（看）、工具（算）。
+// 顺序即 Ctrl+1 / 2 的绑定顺序，也是左侧活动栏自上而下的顺序。
 export const TABS = [
-  ['chat', '对话'],
   ['list', '列表'],
   ['tools', '工具'],
 ];
 
 // 活动栏是纯图标：图标只负责"认出是哪个区"，文字交给悬停提示。
-const TAB_ICONS = { chat: 'message-square', list: 'list', tools: 'toolbox' };
-
-// 主题按钮的状态文字。档位 +（跟随系统时）它此刻落到了哪一边 ——
-// 只看"跟随系统"三个字，用户没法知道现在屏幕上是什么。
-function themeTip(mode, effective) {
-  const label = THEME_LABELS[mode] || THEME_LABELS.auto;
-  if (mode && mode !== 'auto') return '主题 · ' + label;
-  return '主题 · ' + label + '（现在' + (effective === 'dark' ? '深' : '浅') + '）';
-}
-
+const TAB_ICONS = { list: 'list', tools: 'toolbox' };
 
 export function UnsupportedPage() {
   return (
@@ -119,7 +111,7 @@ export function WelcomePage({ store }) {
         <ol className="welcome-steps">
           <li>点下面的按钮，选一个文件夹</li>
           <li>
-            找到 <code>WorkBuddy</code> 文件夹，进去选中 <code>todolist</code> 文件夹
+            选中放 <code>todo.txt</code> 的文件夹；还没有的话，新建一个空文件夹也行
           </li>
           <li>
             {shell ? (
@@ -221,34 +213,6 @@ export function ConflictModal({ store }) {
   );
 }
 
-export function Footer({ store }) {
-  const savedLabel = store.lastSavedAt
-    ? dayjs(store.lastSavedAt).format('HH:mm:ss')
-    : '—';
-  const statusText =
-    store.saveStatus === 'unsaved' ? '未保存' : store.conflict ? '外部修改待处理' : '已保存';
-  const dotClass = store.conflict ? 'danger' : store.saveStatus === 'unsaved' ? 'warn' : 'ok';
-  const dotIcon = store.conflict
-    ? 'alert-triangle'
-    : store.saveStatus === 'unsaved'
-      ? 'circle-half'
-      : 'dot';
-
-  return (
-    <footer className="statusbar">
-      <span className={`dot dot-${dotClass}`}>
-        <Icon name={dotIcon} size={12} />
-      </span>
-      <span>{statusText}</span>
-      <span>上次保存 {savedLabel}</span>
-      <span className="statusbar-lines">{store.todoEntries.length} 行 · todo.txt</span>
-      <span className="spacer" />
-      <button onClick={store.manualReload}>手动重载</button>
-      <button onClick={store.pickDirectory}>切换目录</button>
-    </footer>
-  );
-}
-
 // 分组头：等宽小标签 + 左侧色条 + 右端计数（原型里的 .group）。
 // 不再画"延伸到底的规则线" —— 列表本身没有行分隔线，标题也不需要再画一条。
 function GroupHead({ label, count, tone }) {
@@ -260,8 +224,14 @@ function GroupHead({ label, count, tone }) {
   );
 }
 
-export function MainList({ store, query }) {
+export function MainList({ store, query, collapsed: collapsedProp, toggleExpand: toggleProp }) {
   const today = dayjs().format('YYYY-MM-DD');
+  // 收起态按 stableId 存（运行时 id 每次解析现算，拿它当键一切换视图就丢）。
+  // 产品里由 App 传同一份，键盘导航 / 顶栏计数才和真实渲染的行同源；
+  // 静态舞台（styleguide）不传时自带一份，展开照样可点。
+  const own = useRowCollapse();
+  const collapsed = collapsedProp ?? own.collapsed;
+  const toggleExpand = toggleProp ?? own.toggleExpand;
 
   const rawEntries = useMemo(
     () => store.todoEntries.filter((e) => e.kind === 'raw'),
@@ -285,29 +255,35 @@ export function MainList({ store, query }) {
     () => buildNesting([...store.todoEntries, ...store.doneEntries]),
     [store.todoEntries, store.doneEntries]
   );
-  // 行号 gutter：todo.txt 里的物理位置（含 raw / 注释行计数，与编辑浮窗预览栏
-  // 的 ledger-no 同一口径）。今天视图按紧急度重排后号会跳序 —— 那正是「文件第几行」。
-  const lineNos = useMemo(() => {
-    const m = new Map();
-    store.todoEntries.forEach((e, i) => m.set(e.id, i + 1));
-    return m;
-  }, [store.todoEntries]);
+  // 编号列已隐藏：不再算行号，也不把它作为 prop 传进行。
+  // 排序仍走 viewTasks / nestChildren —— 行号与顺序从来是两条独立链路。
+  // 「今天」视图按紧急度分组，父子本来就不挨着，展开 / 收起在那里没有意义；
+  // 只有带层级的列表才把整行单击接到子列表上。
+  const expandable = store.view !== 'today';
+
   const rowProps = useCallback(
-    (t) => ({
-      depth: store.view === 'today' ? 0 : depthOf(nesting, t),
-      kids: childProgress(nesting, t.stableId),
-      lineNo: lineNos.get(t.id) ?? null,
-    }),
-    [nesting, store.view, lineNos]
+    (t) => {
+      const kids = childProgress(nesting, t.stableId);
+      const canExpand = expandable && kids.total > 0;
+      const key = t.stableId || t.id;
+      return {
+        depth: expandable ? depthOf(nesting, t) : 0,
+        kids,
+        hasChildren: canExpand,
+        collapsed: canExpand && collapsed.has(key),
+        onToggleExpand: canExpand ? () => toggleExpand(key) : null,
+      };
+    },
+    [nesting, expandable, collapsed, toggleExpand]
   );
 
   const rawSection = (store.view === 'all' || store.view === 'inbox') && rawEntries.length > 0;
 
   if (store.view === 'done') {
-    if (doneTasks.length === 0) return <div className="empty-state">还没有已完成的任务</div>;
+    if (doneTasks.length === 0) return <div className="empty-state">日志还是空的</div>;
     return (
       <div>
-        <GroupHead label="已完成 · done.txt（只读）" count={doneTasks.length} />
+        <GroupHead label="日志 · done.txt（只读）" count={doneTasks.length} />
         {doneTasks.map((task) => (
           <TaskRow key={task.id} task={task} store={store} query={query} readonly />
         ))}
@@ -318,7 +294,8 @@ export function MainList({ store, query }) {
   const renderRawSection = () =>
     rawSection ? (
       <>
-        <GroupHead label="未识别行 · 原样保留" count={rawEntries.length} tone="overdue" />
+        {/* 未识别行是「类别」不是「逾期」：不借 --danger，行内已有 --warn 三角记号 */}
+        <GroupHead label="未识别行 · 原样保留" count={rawEntries.length} />
         {rawEntries.map((e) => (
           <div key={e.id} className="task-row row-readonly raw-line">
             <span className="raw-flag">
@@ -333,6 +310,7 @@ export function MainList({ store, query }) {
   if (visible.length === 0) {
     if (query) return <div className="empty-state">无匹配任务：“{query}”</div>;
     if (store.view === 'today') return <EmptyToday store={store} />;
+    if (store.view === 'upcoming') return <div className="empty-state">未来几天没有带截止日的任务</div>;
     if (!rawSection) return <div className="empty-state">暂无任务，按 n 键开始添加</div>;
   }
 
@@ -360,10 +338,19 @@ export function MainList({ store, query }) {
     );
   }
 
+  // 子任务紧随父任务出场（父不在本屏时降级顶层，绝不消失）；缩进与次级字号由 is-child 表达。
+  // 收起父项时把它下面整条后代链一起撤掉，不留半截缩进的孤行。
+  // filterCollapsed 只认「父也在这屏」的层级，避免切视图 / 搜索后任务凭空消失。
+  const nested = nestChildren(visible, nesting);
+  const ordered = filterCollapsed(nested, nesting, collapsed);
+
   return (
     <div>
-      <GroupHead label={store.view === 'inbox' ? '收集箱' : '全部任务'} count={visible.length} />
-      {visible.map((t) => (
+      <GroupHead
+        label={store.view === 'inbox' ? '收集箱' : store.view === 'upcoming' ? '即将到期' : '全部任务'}
+        count={visible.length}
+      />
+      {ordered.map((t) => (
         <TaskRow key={t.id} task={t} store={store} query={query} {...rowProps(t)} />
       ))}
       {renderRawSection()}
@@ -375,25 +362,25 @@ export function MainList({ store, query }) {
 // 活动栏 —— 原型把页签从"顶部横向条"改成"左侧 46px 纵向轨道"。
 //
 // 保留的契约：
-//   · 三个页签仍在 .tabs-group .tab 里，且文字内容就是页签名（QA 依赖这一条）；
-//   · 应用菜单 / 置顶 / 主题 / 设置四个入口一个不少，只是从顶栏右端搬到了轨道底部。
+//   · 两个页签仍在 .tabs-group .tab 里，且文字内容就是页签名（QA 依赖这一条）；
+//   · 轨道底部：应用菜单 / 置顶 / 主题，主题只有**一枚**按钮，点一次轮换一档。
+//     「设置」不再单列按钮，入口收进应用菜单，避免同一个动作摆两处。
 // ---------------------------------------------------------------------------
 export function Tabs({
   tab,
   onChange,
   store,
   onOpenSettings,
-  settingsOpen,
   alwaysOnTop,
   onToggleTop,
   themeMode,
-  themeEffective,
-  onToggleTheme,
   onPickTheme,
+  onCycleTheme,
+  onOpenSearch,
   listMode = 'list',
   onPickListMode,
 }) {
-  const { openAt, openMenu } = useContextMenu();
+  const { openAt } = useContextMenu();
   const menuBtnRef = useRef(null);
 
   // 列表页的动作需要先切页签再聚焦，React 提交后再 focus。
@@ -410,9 +397,7 @@ export function Tabs({
     requestAnimationFrame(() => tryFocus(4));
   };
 
-  // 主题三档的一份菜单条目，按钮右键与应用菜单「外观」共用。
-  // 按钮本体只做浅↔深：从肉眼当前看到的那一屏出发，点一下必然有变化。
-  // 「跟随系统」只有在三档同时摆出来时才说得清，所以它住在菜单里。
+  // 应用菜单「外观」分组的三档条目，与轨道上三枚主题按钮读同一份档位表。
   const themeItems = THEME_MODES.map((m) => ({
     type: 'item',
     label: THEME_LABELS[m],
@@ -420,106 +405,29 @@ export function Tabs({
     onClick: () => onPickTheme && onPickTheme(m),
   }));
 
+  // 两级菜单：一级只列分组，具体动作全在二级里逐级展开。
+  // 结构与动作清单在 lib/appMenu.js（纯函数、已单测），这里只把外壳状态接进去。
   const openAppMenu = () => {
     const btn = menuBtnRef.current;
     if (!btn || !store) return;
     const r = btn.getBoundingClientRect();
-    openAt(r.right + 3, r.top, [
-      { type: 'item', label: '新建任务', accel: 'N', onClick: () => focusAfterSwitch(store.quickAddRef) },
-      { type: 'item', label: '搜索', accel: '/', onClick: () => focusAfterSwitch(store.searchRef) },
-      { type: 'item', label: '撤销上一步', accel: 'Ctrl+Z', onClick: store.undo },
-      { type: 'sep' },
-      { type: 'header', label: '页面' },
-      ...TABS.map(([id, label], i) => ({
-        type: 'item',
-        label,
-        accel: `Ctrl+${i + 1}`,
-        checked: tab === id,
-        onClick: () => onChange(id),
-      })),
-      { type: 'sep' },
-      { type: 'header', label: '列表视图' },
-      ...[
-        ['today', '今天'],
-        ['all', '全部'],
-        ['done', '已完成'],
-        ['inbox', '收集箱'],
-      ].map(([v, label]) => ({
-        type: 'item',
-        label,
-        checked: tab === 'list' && store.view === v,
-        onClick: () => {
-          onChange('list');
-          store.selectView(v);
-        },
-      })),
-      // 显示模式（列表 / 日历）：与"看哪个视图"正交 —— 视图管过滤，模式管排布。
-      // 没接模式切换的外壳（样式指南静态舞台）不显示这一段。
-      ...(onPickListMode
-        ? [
-            { type: 'sep' },
-            { type: 'header', label: '显示模式' },
-            {
-              type: 'item',
-              label: '列表（按行）',
-              checked: tab === 'list' && listMode === 'list',
-              onClick: () => {
-                onChange('list');
-                onPickListMode('list');
-              },
-            },
-            {
-              type: 'item',
-              label: '日历（按日期）',
-              checked: tab === 'list' && listMode === 'calendar',
-              onClick: () => {
-                onChange('list');
-                onPickListMode('calendar');
-              },
-            },
-          ]
-        : []),
-      { type: 'sep' },
-      { type: 'header', label: '排序' },
-      {
-        type: 'item',
-        label: '手动（文件行序）',
-        checked: tab === 'list' && store.sortMode === 'manual',
-        onClick: () => {
-          onChange('list');
-          store.setSortMode('manual');
-        },
+    openAt(r.right + 3, r.top, buildAppMenuItems({
+      tab,
+      listMode,
+      alwaysOnTop,
+      tabs: TABS,
+      themeItems,
+      store,
+      showListMode: Boolean(onPickListMode),
+      on: {
+        focusAfterSwitch,
+        changeTab: onChange,
+        pickListMode: onPickListMode,
+        toggleTop: onToggleTop,
+        openSettings: onOpenSettings,
+        openSearch: onOpenSearch,
       },
-      {
-        type: 'item',
-        label: '自动（优先级 / 日期）',
-        checked: tab === 'list' && store.sortMode === 'auto',
-        onClick: () => {
-          onChange('list');
-          store.setSortMode('auto');
-        },
-      },
-      { type: 'sep' },
-      { type: 'header', label: '外观' },
-      ...themeItems,
-      { type: 'sep' },
-      { type: 'header', label: '窗口' },
-      {
-        type: 'item',
-        label: alwaysOnTop ? '取消窗口置顶' : '窗口置顶',
-        checked: Boolean(alwaysOnTop),
-        onClick: () => onToggleTop && onToggleTop(),
-      },
-      { type: 'item', label: '重新载入文件', onClick: store.manualReload },
-      { type: 'item', label: '切换数据目录…', onClick: store.pickDirectory },
-      { type: 'sep' },
-      {
-        type: 'item',
-        label: '设置…',
-        accel: 'Ctrl+,',
-        onClick: () => onOpenSettings && onOpenSettings(),
-      },
-    ]);
+    }));
   };
 
   return (
@@ -560,37 +468,30 @@ export function Tabs({
       {onToggleTop && (
         <button
           type="button"
-          className={'tab' + (alwaysOnTop ? ' is-on' : '')}
+          className={'tab' + (alwaysOnTop ? ' is-pinned' : '')}
           onClick={onToggleTop}
           title={alwaysOnTop ? '取消窗口置顶' : '窗口置顶（总在最前）'}
           aria-pressed={Boolean(alwaysOnTop)}
         >
-          <Icon name="pin" size={16} />
+          {/* 置顶态只把针实心化，不套底色块：底色会把轨道读成一排按钮开关。
+              图钉斜 45°（2026-11-15）：正着画的图钉像别针，斜过来才是"钉住"。 */}
+          <Icon name="pin" size={16} className="pin-tilt" fill={alwaysOnTop ? 'currentColor' : 'none'} />
           <span className="tip">{alwaysOnTop ? '取消置顶' : '窗口置顶'}</span>
         </button>
       )}
-      {onToggleTheme && (
+      {onCycleTheme && (
         <button
           type="button"
-          className={'tab' + (themeMode && themeMode !== 'auto' ? ' is-on' : '')}
-          onClick={onToggleTheme}
-          onContextMenu={(e) => onPickTheme && openMenu(e, themeItems)}
-          title={themeTip(themeMode, themeEffective) + ' · 点按切浅↔深，右键选档'}
-          aria-pressed={Boolean(themeMode && themeMode !== 'auto')}
+          data-mode={themeMode || 'auto'}
+          className="tab"
+          onClick={onCycleTheme}
+          title={'主题 · ' + THEME_LABELS[themeMode || 'auto'] + '（点按换下一档）'}
+          aria-label={'主题：' + THEME_LABELS[themeMode || 'auto']}
         >
-          <Icon name={THEME_ICONS[themeMode] || THEME_ICONS.auto} size={16} />
-          <span className="tip">{themeTip(themeMode, themeEffective)}</span>
-        </button>
-      )}
-      {onOpenSettings && (
-        <button
-          type="button"
-          className={'tab' + (settingsOpen ? ' is-on' : '')}
-          onClick={onOpenSettings}
-          title="设置（Ctrl+,）"
-        >
-          <Icon name="settings" size={16} />
-          <span className="tip">设置 · Ctrl+,</span>
+          {/* 一枚按钮三档轮换：图标画的就是当前档 —— 显示器＝跟随系统、
+              太阳＝深色（点它回浅色）、月亮＝浅色（点它去深色）。 */}
+          <Icon name={THEME_ICONS[themeMode || 'auto']} size={16} />
+          <span className="tip">{THEME_LABELS[themeMode || 'auto']}</span>
         </button>
       )}
     </nav>
@@ -598,85 +499,10 @@ export function Tabs({
 }
 
 // ---------------------------------------------------------------------------
-// 今日概览：贴在状态栏上方的可折叠统计条（原型里的 .panel）。
-//
-// 只读派生：四个数字全部由现有 entries 现算，不写回、不改动任何任务状态。
+// 今日概览已于 2026-11-14 整块移除（连同底部状态栏）：用户要的是"任务本身占满
+// 竖向空间"。原来那四个数字只读派生自 entries，删掉不涉及任何数据链路；
+// 保存状态与「手动重载 / 切换目录」搬进了设置页「数据」节。
 // ---------------------------------------------------------------------------
-export function Overview({ store, open, onToggle }) {
-  const today = dayjs().format('YYYY-MM-DD');
-
-  const stats = useMemo(() => {
-    const doneToday = store.doneEntries.filter(
-      (e) => e.kind === 'task' && e.completedAt === today
-    ).length;
-    const todayTasks = store.todoEntries.filter(
-      (e) => e.kind === 'task' && isVisibleToday(e, today)
-    );
-    const overdue = todayTasks.filter((t) => t.dueDate && t.dueDate < today).length;
-    const pool = todayTasks.length + doneToday;
-
-    // 近 7 天日均完成：窗口 [today-6, today]，分母固定 7 天 —— 今天才过半天，
-    // 用"有记录的天数"当分母会把均值得意地抬高。
-    const from = dayjs().subtract(6, 'day').format('YYYY-MM-DD');
-    const week = store.doneEntries.filter(
-      (e) => e.kind === 'task' && e.completedAt && e.completedAt >= from && e.completedAt <= today
-    ).length;
-    const highPrio = store.todoEntries.filter(
-      (e) => e.kind === 'task' && !e.completed && e.priority === 'A'
-    ).length;
-
-    return {
-      doneToday,
-      pool,
-      overdue,
-      avg: (week / 7).toFixed(1),
-      highPrio,
-    };
-  }, [store.todoEntries, store.doneEntries, today]);
-
-  return (
-    <section className={'overview' + (open ? ' is-open' : '')} aria-label="今日概览">
-      <button
-        type="button"
-        className="overview-handle"
-        onClick={onToggle}
-        aria-expanded={open}
-      >
-        <Icon name="chevron-down" size={12} className="overview-chev" />
-        <span>今日概览</span>
-        <span className="overview-meta">
-          完成 {stats.doneToday} / {stats.pool} · 逾期 {stats.overdue}
-        </span>
-      </button>
-      <div className="overview-body">
-        <div className="overview-stats">
-          <div className="stat">
-            <div className="stat-k">今日完成</div>
-            <div className="stat-v stat-ok">
-              {stats.doneToday}
-              <small>/ {stats.pool}</small>
-            </div>
-          </div>
-          <div className="stat">
-            <div className="stat-k">逾期</div>
-            <div className="stat-v stat-bad">{stats.overdue}</div>
-          </div>
-          <div className="stat">
-            <div className="stat-k">近 7 天</div>
-            <div className="stat-v">
-              {stats.avg}
-              <small>项/天</small>
-            </div>
-          </div>
-          <div className="stat">
-            <div className="stat-k">高优先级</div>
-            <div className="stat-v">{stats.highPrio}</div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
 
 // 页签切换的一次性过渡信号：切页时为 true，200ms 后收回。
 // 首屏渲染不算「切换」，不走动画。
@@ -721,18 +547,30 @@ export default function App() {
   // 窗口置顶：状态由壳广播回传，按钮与托盘菜单共用一个真相。
   const { onTop: alwaysOnTop, toggle: toggleAlwaysOnTop } = useAlwaysOnTop();
   // 明暗档位：不进壳、不进数据目录，只落本机配置 + <html data-theme>。
-  const {
-    mode: themeMode,
-    effective: themeEffective,
-    pick: pickThemeMode,
-    toggle: toggleThemeMode,
-  } = useTheme();
+  // 活动栏那枚按钮点一次轮换一档（THEME_CYCLE），菜单里仍可直接选档。
+  const { mode: themeMode, pick: pickThemeMode, cycle: cycleThemeMode } = useTheme();
   const query = useDebounce(store.search, 150);
-  const [tab, setTab] = useState('chat');
+  const [tab, setTab] = useState('list');
   // 侧栏折叠只是"看不看目录"，不影响任何数据 —— 因此不进 store，也不落盘。
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  // 今日概览默认收起：列表页首屏优先给任务行本身。
-  const [overviewOpen, setOverviewOpen] = useState(false);
+  // 搜索平时只是一枚放大镜：输入框按需挂载，所以开关状态在 App 里（/ 键、右键
+  // 菜单、应用菜单都要能把它打开，三处不能各存一份）。
+  const [searchOpen, setSearchOpen] = useState(false);
+  const openSearch = useCallback(() => {
+    setSearchOpen(true);
+    // 输入框是条件渲染的：这一帧可能还没挂上，下一帧再聚焦；已经开着就直接聚焦。
+    if (store.searchRef.current) store.searchRef.current.focus();
+    else requestAnimationFrame(() => {
+      if (store.searchRef.current) store.searchRef.current.focus();
+    });
+  }, [store.searchRef]);
+  // 关闭时连关键词一起清掉 —— 筛选还在、输入框却不见了，任务会凭空少一半。
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    if (store.search) store.setSearch('');
+  }, [store.search, store.setSearch]);
+  // 折叠态提到 App：主列表渲染、↑↓ 导航、顶栏「共 N 项」三处读同一份。
+  const { collapsed, toggleExpand } = useRowCollapse();
   // 列表显示模式（列表 / 日历）：外观**偏好**走 configStore，不进 todo.txt（红线③）。
   // 2026-11-11 起偏好与「此刻实际用哪种布局」分开：窄边只临时改布局，永不写盘。
   const [preferredMode, pickListMode] = useListMode();
@@ -743,23 +581,26 @@ export default function App() {
   // "选中日不在显示月内"这种失同步从结构上就不可能发生。
   const [calDay, setCalDay] = useState(() => dayjs().format('YYYY-MM-DD'));
   const calMonth = monthKey(calDay);
-  // 日历新建的日期预填：seq 让"同一天再建一条"也是一次新信号（QuickAdd 才会重新预填）。
-  const [quickSeed, setQuickSeed] = useState(null);
-  const seedSeq = useRef(0);
-  // 列表页键盘导航用的顺序：与主列表实际渲染顺序同源（displayOrder 是唯一排布口径）。
-  // 只读视图（已完成）没有可选行，返回空数组让 ↑↓ 自然失效。
+  // 日历新建的信号：{ date, seq }。seq 让"同一天再点一次新建"也是一次新信号。
+  // 2026-11-15 起日历页没有常驻快录框，新建 = 打开那一天的浮层并直接进添加态。
+  const [calAdd, setCalAdd] = useState(null);
+  const addSeq = useRef(0);
+  // 列表页键盘导航用的顺序：非「今天」视图与主列表完全同源
+  // （viewTasks → nestChildren → filterCollapsed），否则收起父项后 ↑↓ 会选中
+  // DOM 里根本不存在的行，选中态与光标一起丢，顶栏计数也会虚高。
+  // 「今天」视图按紧急度分组渲染、不启用折叠，沿用 displayOrder。
   const orderedIds = useMemo(() => {
     if (store.view === 'done') return [];
     const today = dayjs().format('YYYY-MM-DD');
-    return displayOrder(store.todoEntries, store.view, store.sortMode, query, today).map((t) => t.id);
-  }, [store.todoEntries, store.view, store.sortMode, query]);
-  // 面包屑右侧的"共 N 项"：与列表同源，已完成视图没有可选行所以单独数。
-  const listCount = useMemo(() => {
-    if (store.view === 'done') return store.doneEntries.filter((e) => e.kind === 'task').length;
-    return orderedIds.length;
-  }, [store.view, store.doneEntries, orderedIds]);
+    if (store.view === 'today') {
+      return displayOrder(store.todoEntries, store.view, store.sortMode, query, today).map((t) => t.id);
+    }
+    const visible = viewTasks(store.todoEntries, store.view, store.sortMode, query, today);
+    const nesting = buildNesting([...store.todoEntries, ...store.doneEntries]);
+    return filterCollapsed(nestChildren(visible, nesting), nesting, collapsed).map((t) => t.id);
+  }, [store.todoEntries, store.doneEntries, store.view, store.sortMode, query, collapsed]);
   // 页签切换过渡：内容区一次 140ms 的轻淡入。刻意不走「按 key 重挂内容」——
-  // 那会把对话历史、侧栏展开状态一起重置，代价远超收益；这里只让整个
+  // 那会把侧栏展开状态一起重置，代价远超收益；这里只让整个
   // 内容区Opacity 沉一下再起来，不碰任何组件的生命周期。
   const tabSwitching = useTabSwitch(tab);
   // 设置是独立页面，不占页签：打开时主内容整体让位，Esc / 「返回」退出。
@@ -781,21 +622,11 @@ export default function App() {
   // 设置页不自己扫一遍 todo.txt，免得两处对"列表"的定义分叉。
   const projects = useMemo(() => sidebarStats(store.todoEntries).projects, [store.todoEntries]);
   const snapshot = useTodoSnapshot(store);
-  // 对话页 → 工具页的路由请求：{ id, params, seq }。seq 每发一次自增，
-  // 工具页据此只消费一次（React 重渲染不会重复切页/重复聚焦）。
-  const [toolRequest, setToolRequest] = useState(null);
-  const toolReqSeq = useRef(0);
   // 设置页覆盖着主内容，所以点页签必须连带把设置页关掉 ——
   // 否则会出现"点了「列表」什么都没发生"的假死观感。
   const goTab = (next) => {
     setSettingsOpen(false);
     setTab(next);
-  };
-  // tool.open 的落地：切页 + 带参数（预填）+ 关掉设置页（一律走 goTab，不另写一套）
-  const openTool = (id, plan) => {
-    toolReqSeq.current += 1;
-    setToolRequest({ id, params: plan ? { query: plan } : null, seq: toolReqSeq.current });
-    goTab('tools');
   };
   const pickMode = (m) => {
     // 隔了很久再切回日历时先拉回本月 —— 别把用户晾在一个不知什么时候的旧月份上。
@@ -815,30 +646,27 @@ export default function App() {
       setOverride(narrow && preferredMode === 'calendar' ? 'calendar' : null);
     }
   }, [preferredMode, narrow]);
-  // 从日历布局切走时清掉只属于日历的状态。QuickAdd 挂在条件渲染之外不会卸载，
-  // 不清的话预填的 `due:YYYY-MM-DD ` 会跟着进列表、回车就写盘；focusedId 残留
-  // 会让 ↑↓ 以一个可能已不可见的任务为起点。其余状态在 App 顶层，天然保留。
-  const [quickResetKey, setQuickResetKey] = useState(0);
+  // 从日历布局切走时清掉只属于日历的状态：focusedId 残留会让 ↑↓ 以一个
+  // 可能已不可见的任务为起点。（日历的添加入口自 2026-11-15 起是浮层，随组件卸载消失，
+  // 不再有"预填的 due: 跟着进列表"这条路。）
   const prevCalendarRef = useRef(isCalendar);
   useEffect(() => {
     const wasCalendar = prevCalendarRef.current;
     prevCalendarRef.current = isCalendar;
-    if (wasCalendar && !isCalendar) {
-      setQuickSeed(null);
-      setQuickResetKey((k) => k + 1);
-      store.setFocusedId(null);
-    }
-  }, [isCalendar, store]);
+    if (wasCalendar && !isCalendar) store.setFocusedId(null);
+    // 依赖只挑稳定的 setFocusedId（useState 的 setter）：整个 store 每次渲染
+    // 都是新对象，写进依赖会让这个 effect 每帧空跑一遍。
+  }, [isCalendar, store.setFocusedId]);
   // 翻月带着选中日一起走（dayjs 对短月自动收敛：1月31 → 2月28），选中日恒在显示月内。
   const navCalMonth = (delta) => setCalDay((d) => dayjs(d).add(delta, 'month').format('YYYY-MM-DD'));
   const calToday = () => setCalDay(dayjs().format('YYYY-MM-DD'));
-  const seedQuickAdd = (text) => {
-    seedSeq.current += 1;
-    setQuickSeed({ text, seq: seedSeq.current });
+  // 日历里新建 = 打开那一天的浮层并直接进添加态。写入仍是同一条 addTask 链路，
+  // todo.txt 里落下的就是一行标准的 `due:YYYY-MM-DD`。
+  const createOnDay = (date) => {
+    setCalDay(date);
+    addSeq.current += 1;
+    setCalAdd({ date, seq: addSeq.current });
   };
-  // 日历里新建 = 预填 due: 的普通快速添加 —— 走的仍是同一条 addTask 链路，
-  // 不另造写入路径，todo.txt 里落下的就是一行标准的 `due:YYYY-MM-DD`。
-  const createOnDay = (date) => seedQuickAdd(`due:${date} `);
   const { openMenu } = useContextMenu();
   // macOS 用 overlay 标题栏、Windows 用自绘标题栏，都把上下文条抬到窗口第一行；
   // 浏览器与 Linux 保留各自的原生窗口框，不为了统一外观去换掉系统的命中测试。
@@ -865,7 +693,7 @@ export default function App() {
         type: 'item',
         label: '搜索',
         accel: '/',
-        onClick: () => store.searchRef.current && store.searchRef.current.focus(),
+        onClick: openSearch,
       },
       // 日历恒按日期分组、组内 compareAuto，排序模式对它没有作用对象；
       // 摆两项「改了没反应」的菜单只会让人以为坏了。列表里照旧。
@@ -892,13 +720,14 @@ export default function App() {
   };
 
   // ↑↓ 在列表里移动选中项：到达首/尾即停（不环绕），未选中时向下选第一条、向上选最后一条。
-  // 日历里分两种焦点：日详情行之间照旧移行；焦点在网格上时 ↑↓ 跨周（←→ 移日由网格自己处理）。
+  // 日历里分两种焦点：焦点在「当天任务」浮层里时照旧移行（浮层是唯一能看到一天全部任务的地方）；
+  // 焦点在网格上时 ↑↓ 跨周（←→ 移日由网格自己处理）。
   const moveSelection = useCallback(
     (delta) => {
       if (isCalendar) {
         const active = document.activeElement;
         const dayRows = (calProjection && calProjection.byDate.get(calDay)) || [];
-        if (active && active.closest && active.closest('.cal-day') && dayRows.length > 0) {
+        if (active && active.closest && active.closest('.cal-pop') && dayRows.length > 0) {
           const ids = dayRows.map((t) => t.id);
           const cur = ids.indexOf(store.focusedId);
           const next =
@@ -927,8 +756,7 @@ export default function App() {
   );
 
   useHotkeys({
-    // 对话页签激活时禁用全局快捷键，改由 ChatPanel 内部处理（避免 / 与 Ctrl+Z 冲突）。
-    // 设置页打开时同样禁用 —— 否则在设置里按 Esc 会顺手清掉列表页的搜索词。
+    // 设置页打开时禁用全局快捷键 —— 否则在设置里按 Esc 会顺手清掉列表页的搜索词。
     // 编辑浮窗打开时也禁用：空格 / e / n 不该穿透到浮窗后面的列表（Esc / 回车由浮窗自己处理）。
     enabled: tab === 'list' && !settingsOpen && !store.editingTask,
     onNew: () => {
@@ -936,7 +764,7 @@ export default function App() {
       if (isCalendar) createOnDay(calDay);
       else if (store.quickAddRef.current) store.quickAddRef.current.focus();
     },
-    onSearch: () => store.searchRef.current && store.searchRef.current.focus(),
+    onSearch: openSearch,
     onMove: moveSelection,
     onToggle: () => {
       const task = findFocusedTask();
@@ -952,6 +780,7 @@ export default function App() {
       if (store.editingTask) {
         store.closeEditor();
       } else {
+        if (searchOpen) setSearchOpen(false);
         if (store.search) store.setSearch('');
         store.setFocusedId(null);
       }
@@ -959,9 +788,9 @@ export default function App() {
     onUndo: store.undo,
   });
 
-  // 设置页的全局快捷键：Ctrl+, 打开、Esc 退出；Ctrl+1/2/3 在三个页签之间切换；
+  // 设置页的全局快捷键：Ctrl+, 打开、Esc 退出；Ctrl+1/2 在两个页签之间切换；
   // Ctrl+B 折叠 / 展开侧栏（只在列表页有意义）。
-  // 这几条与页签无关（对话页里也能直接开设置、直接跳页）。
+  // 这几条与页签无关（工具页里也能直接开设置、直接跳页）。
   useEffect(() => {
     const onKey = (e) => {
       if (e.ctrlKey || e.metaKey) {
@@ -1017,13 +846,14 @@ export default function App() {
       store={store}
       tab={tab}
       settingsOpen={settingsOpen}
-      count={isCalendar ? calProjection.tasks.length : listCount}
       sidebarCollapsed={sidebarCollapsed}
       onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
       chrome={customTitlebar}
       listMode={preferredMode}
       effectiveMode={effectiveMode}
-      onPickListMode={pickMode}
+      searchOpen={searchOpen}
+      onOpenSearch={openSearch}
+      onCloseSearch={closeSearch}
     />
   );
 
@@ -1044,15 +874,14 @@ export default function App() {
         onChange={goTab}
         store={store}
         onOpenSettings={() => setSettingsOpen(true)}
-        settingsOpen={settingsOpen}
         alwaysOnTop={alwaysOnTop}
         onToggleTop={toggleAlwaysOnTop}
         themeMode={themeMode}
-        themeEffective={themeEffective}
-        onToggleTheme={toggleThemeMode}
         onPickTheme={pickThemeMode}
+        onCycleTheme={cycleThemeMode}
         listMode={preferredMode}
         onPickListMode={pickMode}
+        onOpenSearch={openSearch}
       />
 
       <div className="workspace">
@@ -1066,14 +895,19 @@ export default function App() {
           }
         >
           {settingsOpen ? (
-            <SettingsPage onClose={() => setSettingsOpen(false)} projects={projects} />
-          ) : tab === 'chat' ? (
-            <ChatPanel store={store} onOpenList={() => setTab('list')} onOpenTool={openTool} />
+            <SettingsPage store={store} onClose={() => setSettingsOpen(false)} projects={projects} />
           ) : tab === 'tools' ? (
-            <ToolsPage snapshot={snapshot} store={store} request={toolRequest} />
+            <ToolsPage snapshot={snapshot} store={store} />
           ) : (
             <>
-              <Sidebar store={store} collapsed={sidebarCollapsed} />
+              <Sidebar
+                store={store}
+                collapsed={sidebarCollapsed}
+                // 日历入口接管显示模式切换（2026-11-15）：侧栏点「日历」= pickMode('calendar')，
+                // 点其余视图回列表布局；与页眉开关、应用菜单读同一份偏好。
+                listMode={preferredMode}
+                onPickListMode={pickMode}
+              />
               <main
                 ref={setMainEl}
                 className={'main' + (isCalendar ? ' main-calendar' : '')}
@@ -1081,14 +915,6 @@ export default function App() {
               >
                 {isCalendar ? (
                   <>
-                    <div className="quick-add-bar">
-                      <QuickAdd
-                        store={store}
-                        inputRef={store.quickAddRef}
-                        seed={quickSeed}
-                        resetKey={quickResetKey}
-                      />
-                    </div>
                     <LayoutNotice
                       state={layoutNotice}
                       onUseCalendar={() => setOverride('calendar')}
@@ -1103,25 +929,25 @@ export default function App() {
                       onPickDay={setCalDay}
                       onNavMonth={navCalMonth}
                       onToday={calToday}
-                      onCreate={createOnDay}
+                      addSignal={calAdd}
                     />
                   </>
                 ) : (
                   <div className="list-col">
                     <div className="quick-add-bar">
-                      <QuickAdd
-                        store={store}
-                        inputRef={store.quickAddRef}
-                        seed={quickSeed}
-                        resetKey={quickResetKey}
-                      />
+                      <QuickAdd store={store} inputRef={store.quickAddRef} />
                     </div>
                     <LayoutNotice
                       state={layoutNotice}
                       onUseCalendar={() => setOverride('calendar')}
                       onRestoreAuto={() => setOverride(null)}
                     />
-                    <MainList store={store} query={query} />
+                    <MainList
+                      store={store}
+                      query={query}
+                      collapsed={collapsed}
+                      toggleExpand={toggleExpand}
+                    />
                   </div>
                 )}
               </main>
@@ -1129,12 +955,15 @@ export default function App() {
           )}
         </div>
 
-        {!settingsOpen && tab === 'list' && (
-          <Overview store={store} open={overviewOpen} onToggle={() => setOverviewOpen((v) => !v)} />
-        )}
-
-        <Footer store={store} />
+        {/* 2026-11-14：今日概览条与底部状态栏整行移除，竖向空间全给任务行。
+            保存状态 / 重载 / 切目录搬进设置页「数据」节。 */}
       </div>
+
+      {/* 窄屏底部导航：宽屏 display:none（整条不参与网格，不占高度）。
+          只在列表页出现 —— 工具页与设置页没有"按视图筛任务"这回事。 */}
+      {!settingsOpen && tab === 'list' && (
+        <BottomNav store={store} listMode={preferredMode} onPickListMode={pickMode} />
+      )}
 
       <EditDrawer store={store} />
       <Toast toast={store.toast} onClose={store.dismissToast} />

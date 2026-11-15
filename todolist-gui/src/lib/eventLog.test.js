@@ -1,6 +1,6 @@
 // eventLog 测试：append-only 落盘、读取、重放（纯函数、无副作用）。
 import { describe, expect, it } from 'vitest';
-import { appendEvent, loadEvents, makeEvent, replay, sessionFileName } from './eventLog.js';
+import { appendEvent, loadEvents, makeEvent, sessionFileName } from './eventLog.js';
 
 // 内存目录句柄替身（仅实现 eventLog 用到的方法）。
 function makeDirHandle() {
@@ -76,45 +76,5 @@ describe('append-only 落盘与读取', () => {
   it('无句柄时不抛异常', async () => {
     await expect(appendEvent(null, makeEvent(1, 'user', {}, TS))).resolves.toBe(false);
     await expect(loadEvents(null, '2026-10-01')).resolves.toEqual([]);
-  });
-});
-
-describe('replay 重放（无副作用）', () => {
-  it('user / tool_call / tool_result / agent 还原为聊天记录', () => {
-    const events = [
-      makeEvent(1, 'user', { text: '完成 回测报告' }, TS),
-      makeEvent(2, 'intent', { intent: 'complete' }, TS),
-      makeEvent(3, 'tool_call', { callId: 'call-1', tool: { name: 'todo.complete', params: { target: '回测报告' } } }, TS),
-      makeEvent(4, 'tool_result', { callId: 'call-1', status: 'ok', durationMs: 3, params: { target: '回测报告', title: '写第 10 周回测报告' } }, TS),
-      makeEvent(5, 'agent', { text: '已完成：写第 10 周回测报告' }, TS),
-    ];
-    const msgs = replay(events);
-    expect(msgs.map((m) => m.role)).toEqual(['user', 'tool', 'agent']);
-    expect(msgs[1].tool.status).toBe('ok');
-    expect(msgs[1].tool.durationMs).toBe(3);
-    expect(msgs[1].tool.params.title).toBe('写第 10 周回测报告');
-    expect(msgs[2].text).toContain('已完成');
-  });
-
-  it('tool_call 无结果时保持 running', () => {
-    const events = [makeEvent(1, 'tool_call', { callId: 'c', tool: { name: 'todo.query' } }, TS)];
-    const msgs = replay(events);
-    expect(msgs[0].tool.status).toBe('running');
-    expect(msgs[0].tool.durationMs).toBe(null);
-  });
-
-  it('error 事件渲染为错误消息', () => {
-    const msgs = replay([makeEvent(1, 'error', { message: 'boom' }, TS)]);
-    expect(msgs[0].role).toBe('agent');
-    expect(msgs[0].kind).toBe('error');
-    expect(msgs[0].text).toBe('boom');
-  });
-
-  it('重放不产生任何副作用（对同一事件流多次调用结果一致）', () => {
-    const events = [
-      makeEvent(1, 'user', { text: 'a' }, TS),
-      makeEvent(2, 'agent', { text: 'b' }, TS),
-    ];
-    expect(replay(events)).toEqual(replay(events));
   });
 });

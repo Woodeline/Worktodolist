@@ -1,19 +1,16 @@
 // 明暗主题的 React 绑定。
 //
-// 状态真相在 localStorage（lib/theme.js），这里只是它的投影 + 两个动作：
-// 点按钮切浅↔深，菜单/右键选档（含"跟随系统"）。
-//
-// 点按刻意不是三档循环：从肉眼看到的这一屏出发取反，用户永远知道按下会发生什么；
-// 想回"跟随系统"走右键或应用菜单，那里三档并列，档位含义写在label上。
+// 状态真相在 localStorage（lib/theme.js），这里只是它的投影 + 换档动作。
+// 活动栏只有**一枚**主题按钮：点一次按 THEME_CYCLE 轮换（跟随系统 → 深色 → 浅色）；
+// 想直接落到某一档走应用菜单「外观」分组，两条入口读同一份档位表。
 import { useCallback, useEffect, useState } from 'react';
-import { loadThemeMode, resolveTheme, setThemeMode, subscribeTheme } from '../lib/theme.js';
+import { loadThemeMode, nextThemeMode, setThemeMode, subscribeTheme } from '../lib/theme.js';
 
 /**
- * @returns {{mode:string, effective:string, pick:(m:string)=>void, toggle:()=>void}}
- *   mode       落盘档位：'auto' | 'light' | 'dark'
- *   effective  当前真正生效的明暗（auto 已解析）
- *   pick       直接指定档位
- *   toggle     在当前生效色与另一色之间切换（auto 档下等于"离开跟随系统"）
+ * @returns {{mode:string, pick:(m:string)=>void, cycle:()=>void}}
+ *   mode  落盘档位：'auto' | 'light' | 'dark'
+ *   pick  直接指定档位（应用菜单用）
+ *   cycle 轮换到下一档（活动栏按钮用）
  */
 export function useTheme() {
   const [mode, setMode] = useState(loadThemeMode);
@@ -22,9 +19,9 @@ export function useTheme() {
 
   const pick = useCallback((next) => setThemeMode(next), []);
 
-  const toggle = useCallback(() => {
-    setThemeMode(resolveTheme(loadThemeMode()) === 'dark' ? 'light' : 'dark');
-  }, []);
+  // 从落盘值算下一档，而不是用闭包里的 mode：连点两下时 state 还没回流，
+  // 用旧值会把第二次点击算成同一档、按钮看起来"点不动"。
+  const cycle = useCallback(() => setThemeMode(nextThemeMode(loadThemeMode())), []);
 
-  return { mode, effective: resolveTheme(mode), pick, toggle };
+  return { mode, pick, cycle };
 }

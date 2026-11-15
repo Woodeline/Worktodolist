@@ -15,8 +15,14 @@ export const THEME_MODES = ['auto', 'light', 'dark'];
 /** 档位的中文说法（按钮提示与菜单项共用一份，避免三处各写各的）。 */
 export const THEME_LABELS = { auto: '跟随系统', light: '浅色', dark: '深色' };
 
-/** 档位 → 按钮图标（跟随系统用显示器，明暗两档用日月）。 */
-export const THEME_ICONS = { auto: 'monitor', light: 'sun', dark: 'moon' };
+/** 档位 → 活动栏那枚唯一按钮画的记号。
+ *  跟随系统＝显示器；深色＝太阳（点了去浅色）；浅色＝月亮（点了去深色）。
+ *  即明暗两档画的是"点下去会变成什么"，与常见切换按钮同一套直觉。 */
+export const THEME_ICONS = { auto: 'monitor', dark: 'sun', light: 'moon' };
+
+/** 单按钮的点击顺序：跟随系统 → 深色 → 浅色 → 跟随系统。
+ *  按钮上看到的图标依次是 显示器 → 太阳 → 月亮，与 THEME_ICONS 一一对应。 */
+export const THEME_CYCLE = ['auto', 'dark', 'light'];
 
 const themePrefs = createConfigStore({
   key: 'worktodolist.theme',
@@ -32,6 +38,12 @@ function clean(mode) {
 /** 落盘的档位（没配过 = auto）。 */
 export function loadThemeMode() {
   return themePrefs.loadOr().mode;
+}
+
+/** 点一下按钮之后的档位。脏值从「跟随系统」起算，不会卡在原地。 */
+export function nextThemeMode(mode) {
+  const i = THEME_CYCLE.indexOf(clean(mode));
+  return THEME_CYCLE[(i + 1) % THEME_CYCLE.length];
 }
 
 /** 系统自己偏暗吗。没有 matchMedia 的环境（vitest 的 node、老 WebView）按偏亮处理。 */

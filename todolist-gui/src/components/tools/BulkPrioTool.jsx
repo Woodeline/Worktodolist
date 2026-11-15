@@ -7,6 +7,7 @@
 // 版式：inspector。左栏（aside）放筛选条件与选中摘要；右栏放命中列表与操作区。
 import { useMemo, useState } from 'react';
 import ToolShell from './ToolShell.jsx';
+import DateField from '../DateField.jsx';
 import Icon from '../Icon.jsx';
 import { useToolToast } from '../../hooks/useToolShell.js';
 import { makeBatchProposal } from '../../lib/proposals.js';
@@ -272,14 +273,25 @@ export default function BulkPrioTool({ snapshot, propose }) {
             <label className="tool-field">
               <span className="tool-field-label">操作值</span>
               <span className="tool-field-body">
-                <input
-                  className="tool-input"
-                  type="text"
-                  inputMode={kind === 'days' ? 'decimal' : undefined}
-                  value={opValue}
-                  placeholder={PLACEHOLDER[kind] || '填写操作值'}
-                  onChange={(e) => setOpValue(e.target.value)}
-                />
+                {kind === 'date' ? (
+                  <DateField
+                    label="操作值"
+                    hideLabel
+                    className="tool-date-field"
+                    value={opValue}
+                    onChange={setOpValue}
+                    placeholder="选择日期"
+                  />
+                ) : (
+                  <input
+                    className="tool-input"
+                    type="text"
+                    inputMode={kind === 'days' ? 'decimal' : undefined}
+                    value={opValue}
+                    placeholder={PLACEHOLDER[kind] || '填写操作值'}
+                    onChange={(e) => setOpValue(e.target.value)}
+                  />
+                )}
               </span>
             </label>
           )}

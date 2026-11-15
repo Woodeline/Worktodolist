@@ -90,6 +90,23 @@ fn safe_name(name: &str) -> Result<&str, String> {
     Ok(n)
 }
 
+/// 数据文件白名单：`fs_read` / `fs_write` 只认前端实际读写的这几个名字。
+/// 比 safe_name 的防穿越更严一层 —— Windows 上 `C:foo` 是盘符相对路径，
+/// `Path::join` 会替换掉目录前缀，光挡分隔符不够。导出（fs_save_as）的
+/// 文件名由用户起，仍走 safe_name，不受此白名单约束。
+fn data_file_name(name: &str) -> Result<&str, String> {
+    let n = safe_name(name)?;
+    let is_session_log = n.starts_with("session-")
+        && n.ends_with(".ndjson")
+        && n.len() == 25 // "session-" + YYYY-MM-DD + ".ndjson"
+        && is_iso_date(&n[8..18]);
+    if matches!(n, "todo.txt" | "done.txt" | "notes.md") || is_session_log {
+        Ok(n)
+    } else {
+        Err(format!("非法数据文件名：{name}"))
+    }
+}
+
 fn is_iso_date(s: &str) -> bool {
     let b = s.as_bytes();
     b.len() == 10
@@ -234,7 +251,7 @@ pub fn ws_set_git_on_save(app: AppHandle, enabled: bool) -> Result<(), String> {
 /// 读文本文件；文件不存在返回空串（与浏览器侧 readFileText 的语义一致）。
 #[tauri::command]
 pub fn fs_read(state: State<'_, Workspace>, name: String) -> Result<String, String> {
-    let name = safe_name(&name)?;
+    let name = data_file_name(&name)?;
     let dir = current_dir(&state)?;
     match fs::read_to_string(dir.join(name)) {
         Ok(text) => Ok(text),
@@ -246,7 +263,7 @@ pub fn fs_read(state: State<'_, Workspace>, name: String) -> Result<String, Stri
 /// 写入文本文件（原子写 + 进程内串行）。
 #[tauri::command]
 pub fn fs_write(state: State<'_, Workspace>, name: String, text: String) -> Result<(), String> {
-    let name = safe_name(&name)?;
+    let name = data_file_name(&name)?;
     let dir = current_dir(&state)?;
     let _gate = state
         .write_lock
@@ -403,6 +420,26 @@ mod tests {
         // 日期段是形状校验（与浏览器正则同一口径，不校历法）：非数字才算非法，
         // "2026-13-99" 这种形状合规的名字两侧都放行 —— 备份名只由本程序生成，无碍。
         assert_eq!(backup_family("todo-2026-1a-99.txt"), None);
+    }
+
+    #[test]
+    fn data_file_name_只认白名单() {
+        for ok in ["todo.txt", "done.txt", "notes.md", "session-2026-11-15.ndjson"] {
+            assert!(data_file_name(ok).is_ok(), "{ok} 应放行");
+        }
+        // 穿越 / 盘符相对路径 / 旁系名字一律拒绝
+        for bad in [
+            "../todo.txt",
+            "C:todo.txt",
+            "todo.txt.bak",
+            "prefs.json",
+            "session-2026-11-15.ndjson.exe",
+            "session-2026-1a-99.ndjson",
+            "session-.ndjson",
+            "",
+        ] {
+            assert!(data_file_name(bad).is_err(), "{bad} 应拒绝");
+        }
     }
 
     #[test]

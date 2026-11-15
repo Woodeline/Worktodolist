@@ -59,7 +59,7 @@ function SidebarGroup({ prefix, label, items, view, onSelect, dotFor }) {
   );
 }
 
-export default function Sidebar({ store, collapsed = false }) {
+export default function Sidebar({ store, collapsed = false, listMode = 'list', onPickListMode }) {
   const today = dayjs().format('YYYY-MM-DD');
 
   const stats = useMemo(() => sidebarStats(store.todoEntries), [store.todoEntries]);
@@ -75,6 +75,10 @@ export default function Sidebar({ store, collapsed = false }) {
     () => tasksForView(store.todoEntries, 'today', today).length,
     [store.todoEntries, today]
   );
+  const upcomingCount = useMemo(
+    () => tasksForView(store.todoEntries, 'upcoming', today).length,
+    [store.todoEntries, today]
+  );
 
   // 项目色：配过的用配置，没配过的按名字稳定取一个（见 listStyle.js 的说明）。
   const { colors } = useListStyle();
@@ -83,14 +87,29 @@ export default function Sidebar({ store, collapsed = false }) {
     [colors]
   );
 
-  // 四个固定视图各有一个图标：图标不是装饰，它是这四条目在"一眼扫过"时的
-  // 唯一可用线索 —— 中文标签两个字宽窄相近，光靠文字很难快速分流。
-  // 图标略小于文字（文字 13px）：锚点要显眼，但不能压过标签本身。
+  // 日历不再是页眉上的切换控件，而是侧栏五个入口之一（2026-11-15）：
+  // 点「日历」= 把显示模式切到 calendar（偏好照旧落 configStore，窄边覆盖
+  // 语义由 App.pickMode 统一处理）；点其余四个视图则回到列表布局，
+  // 否则"点了「全部」画面没变"会被当成按钮坏了。
+  // 日历条目本身不占 view —— store.view 保持不变，日历照旧按它取数。
+  const isCalMode = listMode === 'calendar';
+  const pickView = (view) => {
+    store.selectView(view);
+    if (isCalMode && onPickListMode) onPickListMode('list');
+  };
+  const pickCalendar = () => {
+    if (onPickListMode) onPickListMode('calendar');
+  };
+
+  // 五个固定入口各有一个图标（2026-11-15 换参考稿图形）：图标不是装饰，
+  // 它是这五条目在"一眼扫过"时的唯一可用线索 —— 中文标签宽窄相近，
+  // 光靠文字很难快速分流。图标略小于文字（文字 13px）：锚点要显眼，
+  // 但不能压过标签本身。
   const item = (view, label, icon, count) => (
     <button
-      className={`nav-item${store.view === view ? ' active' : ''}`}
-      onClick={() => store.selectView(view)}
-      aria-current={store.view === view ? 'true' : undefined}
+      className={'nav-item' + (!isCalMode && store.view === view ? ' active' : '')}
+      onClick={() => pickView(view)}
+      aria-current={!isCalMode && store.view === view ? 'true' : undefined}
     >
       <Icon name={icon} size={16} className="nav-icon" />
       <span className="nav-label">{label}</span>
@@ -101,12 +120,19 @@ export default function Sidebar({ store, collapsed = false }) {
   return (
     <nav className={'sidebar' + (collapsed ? ' is-collapsed' : '')} aria-label="视图">
       <div className="sidebar-group">
-        {item('today', '今天', 'calendar', todayCount)}
-        {item('all', '全部', 'list', allCount)}
-        {item('done', '已完成', 'check-circle', doneCount)}
-      </div>
-      <div className="sidebar-group">
-        {item('inbox', '收集箱', 'inbox', stats.inbox)}
+        {item('today', '今日', 'check-circle', todayCount)}
+        {item('upcoming', '即将到期', 'calendar-clock', upcomingCount)}
+        {item('all', '全部', 'grid', allCount)}
+        <button
+          type="button"
+          className={'nav-item' + (isCalMode ? ' active' : '')}
+          onClick={pickCalendar}
+          aria-current={isCalMode ? 'true' : undefined}
+        >
+          <Icon name="calendar" size={16} className="nav-icon" />
+          <span className="nav-label">日历</span>
+        </button>
+        {item('done', '日志', 'history', doneCount)}
       </div>
       {stats.contexts.length > 0 && (
         <div className="sidebar-group">
@@ -131,12 +157,6 @@ export default function Sidebar({ store, collapsed = false }) {
           />
         </div>
       )}
-      {/* 脚注：把"数据在哪、现在怎么排"写在目录最底下 —— 这两件事
-          决定列表长什么样，却没有任何按钮能表达它们。 */}
-      <div className="side-foot">
-        <span>todo.txt</span>
-        <span>自动排序 · {store.sortMode === 'auto' ? '开' : '关'}</span>
-      </div>
     </nav>
   );
 }

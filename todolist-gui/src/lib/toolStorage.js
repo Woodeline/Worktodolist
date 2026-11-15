@@ -84,30 +84,6 @@ export function saveToolState(id, version = 1, value) {
   }
 }
 
-/** 清掉某个工具的存档。 */
-export function clearToolState(id, version = 1) {
-  try {
-    if (typeof localStorage !== 'undefined') localStorage.removeItem(toolKey(id, version));
-  } catch {
-    // 忽略
-  }
-}
-
-/**
- * 按 `(id, version)` 封一个存取小对象，供工具少写样板。
- * @returns {{id:string, version:number, key:string, load:Function, save:Function, clear:Function}}
- */
-export function toolStorage(id, version = 1, opts = {}) {
-  return {
-    id,
-    version,
-    key: toolKey(id, version),
-    load: () => loadToolState(id, version, opts),
-    save: (value) => saveToolState(id, version, value),
-    clear: () => clearToolState(id, version),
-  };
-}
-
 /* ---------------------------------------------------------------------------
    工具集元数据：最近使用 / 收藏
    ---------------------------------------------------------------------------

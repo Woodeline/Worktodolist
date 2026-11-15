@@ -1,10 +1,10 @@
-// 提议（proposal）—— 工具与对话共用的"先出建议 → 用户确认 → 落盘"模型。
+// 提议（proposal）—— 工具写数据的"先出建议 → 用户确认 → 落盘"模型。
 //
 // 为什么要有它：批量写 todo.txt 是高危操作，不接受一键直接改文件。工具只能
-// 产出**建议**，用户确认之后才走 dispatch（与对话页同一张 ACTIONS 表）。
+// 产出**建议**，用户确认之后才走 dispatch（唯一的 ACTIONS 表）。
 //
 // 提议模型统一为 `{ kind: 'create' | 'edit' | 'batch', items: [...], preview, summary }`：
-//   create  新建：只有草稿字段（与对话页的"修改后新建"是同一个模型）
+//   create  新建：只有草稿字段
 //   edit    改已存在任务的字段（逐条 patch）
 //   batch   一次对多条做同一动作（op 见 todoTools/ops.js）
 // 目前只有 batch 由工具产出，所以本模块只留 makeBatchProposal；

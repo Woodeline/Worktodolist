@@ -11,7 +11,7 @@
 //      达到 RESERVED_SLOT_LIMIT 后自动隐藏——扩展位不变成噪音。
 import { useMemo, useState } from 'react';
 import { GROUPS, riskBadges } from './registry.js';
-import { GROUP_NOTES, GROUP_TONES, RESERVED_SLOT_LIMIT } from './wallConfig.js';
+import { GROUP_NOTES, RESERVED_SLOT_LIMIT } from './wallConfig.js';
 import Icon from '../Icon.jsx';
 import { useContextMenu } from '../../hooks/useContextMenu.jsx';
 
@@ -28,12 +28,10 @@ function haystack(tool) {
    <button> 套 <button> 是非法 HTML。Enter / Space 键盘打开自己实现。
 --------------------------------------------------------------------------- */
 function ToolCard({ tool, isFav, recent, onOpen, onToggleFav, onContextMenu }) {
-  const tone = GROUP_TONES[tool.group];
   const open = () => onOpen(tool.id);
   return (
     <div
       className="tools-card"
-      style={tone ? { '--tone': tone } : undefined}
       role="button"
       tabIndex={0}
       aria-label={`打开 ${tool.name}`}
