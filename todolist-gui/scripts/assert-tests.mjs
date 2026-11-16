@@ -104,6 +104,19 @@ if (run.status !== 0) {
 }
 if (failedTests > 0) {
   console.error('[guard] ✗ 有 ' + failedTests + ' 个失败');
+  // 只报数量等于不给线索：CI 上拿不到本地终端，必须把用例名与首行报错打出来，
+  // 否则「4 个失败」在日志里没有任何下落（2026-11-16 Windows 流水线踩过）。
+  for (const suite of report.testResults || []) {
+    for (const a of suite.assertionResults || []) {
+      if (a.status !== 'failed') continue;
+      const firstLine = String((a.failureMessages || [])[0] || '')
+        .split('\n')
+        .map((s) => s.trim())
+        .find((s) => s && !s.startsWith('❯') && !s.startsWith('at ')) || '(无报错文本)';
+      console.error('        - ' + rel(suite.name) + ' :: ' + a.fullName);
+      console.error('          ' + firstLine.slice(0, 200));
+    }
+  }
   bad = true;
 }
 if (missing.length) {
