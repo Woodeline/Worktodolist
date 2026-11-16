@@ -53,7 +53,8 @@ npm run build           # vite build → dist/（会被 tauri build 内嵌进 ex
 - **JSX 子元素里的注释必须写 `{/* */}`**，写 `//` 会被当成文本节点渲染（曾画进任务行、撑坏布局，而 726 条单测全绿）。
 - 纯函数单测拦不住渲染错误：**改组件要补渲染测试**。
 - 新增说明文档放 `docs/` 对应子目录，命名 `<YYYY-MM-DD>-<主题>.<ext>`，并更新 `docs/README.md` 索引 —— 索引不更新等于没归档。**根目录不放说明文档**（本文件是工具约定文件，属例外，因为编码 Agent 只在仓库根 / 就近目录自动发现它）。
-- 版本号三处同步：`src-tauri/Cargo.toml`、`todolist-gui/package.json`、`src-tauri/tauri.conf.json`。
+- 版本号三处同步：`src-tauri/Cargo.toml`、`todolist-gui/package.json`、`src-tauri/tauri.conf.json`。**实际有五处**：两个 lock 文件（`package-lock.json` 的 root 两行、`Cargo.lock` 的 `worktodolist` 条目）也要一起改，否则 `npm ci` / `cargo` 会自说自话。
+- **换行符由根目录 `.gitattributes` 钉成 LF**（`* text=auto eol=lf`，只有 `cmd`/`bat`/`ps1`/`vbs` 留 CRLF）：一批版式契约测试直接读 `index.css` / `*.jsx` 源码做字符串断言，Windows runner 的 `core.autocrlf` 把文件 checkout 成 CRLF，断言就全部落空。2026-11-16 因此让 v1.5.0 的 Windows 流水线挂了 4 个（macOS 全绿）—— 别删这个文件，也别在测试里靠 `\n` 去断言多行源码时忘了它会生效。
 - **日期 / 时刻字段统一走 `src/components/DateField.jsx`**（值转换纯函数在 `src/lib/dateField.js`）：编辑浮窗 `due`/`rem`、提议弹窗、批量工具的日期操作值共用这一处；QuickAdd 内联 `due:`、中文指令、日历拖拽属不同交互范式，保持原样。**值形状锁死** `due: YYYY-MM-DD` / `rem: YYYY-MM-DDTHH:mm`，不许为加时刻去扩展纯文本标签。中文 locale、周一起始、roving tabindex 由 `@daypicker/react` 提供，外观一律用 `index.css` 令牌覆盖 `.rdp-*`；弹层用 `createPortal` 挂 `body`，避开 `.drawer-body` 的 `overflow-y: auto` 裁切，下方空间不足时翻到字段上方。
 
 ## UI 语言：工作登记簿（2026-11-07 定稿，11-06 那版作废）
