@@ -1,0 +1,23 @@
+# 换行符策略 —— 两条流水线（macOS / Windows）的 checkout 结果必须一致。
+#
+# 2026-11-16 事故：Windows 上 checkout 出 CRLF，而一批测试是直接读源码文本做
+# 版式契约断言的（`index.css` 里有没有 `.pin-tilt { transform: rotate(45deg)`、
+# `BottomNav.jsx` 里某个分支在不在），断言里写的是 `\n`，在 CRLF 下一律落空 ——
+# 同一次提交 macOS 全绿、Windows 挂 4 个。Windows runner 的 core.autocrlf 是
+# 系统配置，项目管不住，所以用本文件把结果钉死。
+* text=auto eol=lf
+
+# Windows 侧要执行的批处理保留 CRLF：cmd.exe 解析带标签 / goto 的 LF 脚本会出岔子
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.vbs text eol=crlf
+
+# 二进制一律不做换行转换（图标、安装包、截图等）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.zip binary
+*.exe binary
+*.msi binary
