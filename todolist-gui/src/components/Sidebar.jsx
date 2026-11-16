@@ -93,7 +93,10 @@ export default function Sidebar({ store, collapsed = false, listMode = 'list', o
   // 点「日历」= 把显示模式切到 calendar（偏好照旧落 configStore，窄边覆盖
   // 语义由 App.pickMode 统一处理）；点其余四个视图则回到列表布局，
   // 否则"点了「全部」画面没变"会被当成按钮坏了。
-  // 日历条目本身不占 view —— store.view 保持不变，日历照旧按它取数。
+  // 日历条目本身不占 view（日历模式下四个视图条目全部熄灭，选中态互斥）。
+  // 日历的取数也早已不看 view（lib/calendar.js#calendarSource 只取「全部」里的未完成，
+  // 见 2026-11-16 二十改）；只是从「日志」切进日历时 App 会把 view 落回「全部」，
+  // 免得面包屑写着日志、格子里却是别的任务。
   const isCalMode = listMode === 'calendar';
   const pickView = (view) => {
     store.selectView(view);

@@ -10,6 +10,7 @@ import {
   childProgress,
   childrenOf,
   depthOf,
+  depthWithin,
   filterCollapsed,
   nestChildren,
   withDescendants,
@@ -100,6 +101,16 @@ describe('nestChildren', () => {
     const entries = T(['甲', '乙', '丙']);
     const n = buildNesting(entries);
     expect(nestChildren(entries, n).map((t) => t.title)).toEqual(['甲', '乙', '丙']);
+  });
+
+  it('三层嵌套：孙辈跟着出场（只推一层会让孙辈整条消失）', () => {
+    const entries = T([
+      '装机 id:aaa111',
+      '拆后盖 id:bbb222 parent:aaa111',
+      '拧螺丝 parent:bbb222',
+    ]);
+    const n = buildNesting(entries);
+    expect(nestChildren(entries, n).map((t) => t.title)).toEqual(['装机', '拆后盖', '拧螺丝']);
   });
 });
 
@@ -196,5 +207,39 @@ describe('withDescendants（父项在本屏时带上后代）', () => {
   it('没有索引 / 空列表时原样返回（不炸）', () => {
     expect(withDescendants([], null)).toEqual([]);
     expect(withDescendants(null, buildNesting([]))).toEqual([]);
+  });
+});
+
+// 2026-11-16（十九改）：渲染层的层级必须只数「本屏也在」的祖先。
+// depthOf 数的是全表层级，nestChildren 却会把父不在本屏的子任务降级成顶层行 ——
+// 两套口径一起用就画出"有缩进、上面却没有父任务"的孤行（搜索 / 分类 / 「今天」）。
+describe('depthWithin（只数本屏祖先）', () => {
+  const entries = T([
+    '装机 id:aaa111 due:2026-10-20',
+    '拆后盖 id:bbb222 parent:aaa111',
+    '拧螺丝 parent:bbb222',
+  ]);
+  const n = buildNesting(entries);
+  const [root, mid, leaf] = entries;
+
+  it('父也在本屏时与 depthOf 一致', () => {
+    const all = new Set(entries.map((e) => e.id));
+    expect(depthWithin(n, mid, all)).toBe(1);
+    expect(depthWithin(n, leaf, all)).toBe(2);
+    expect(depthWithin(n, root, all)).toBe(0);
+  });
+
+  it('父不在本屏 → 归 0（与 nestChildren 的「降级顶层」对齐）', () => {
+    const onlyLeaf = new Set([leaf.id]);
+    expect(nestChildren([leaf], n)[0]).toBe(leaf); // 降级：原样留在原位
+    expect(depthWithin(n, leaf, onlyLeaf)).toBe(0);
+    // 断了一层就整条链不算：孙辈的父不在屏，孙辈也是 0
+    expect(depthWithin(n, leaf, new Set([root.id, leaf.id]))).toBe(0);
+  });
+
+  it('没有索引 / 没有本屏集合时不炸，返回 0', () => {
+    expect(depthWithin(null, leaf, new Set([leaf.id]))).toBe(0);
+    expect(depthWithin(n, null, new Set())).toBe(0);
+    expect(depthWithin(n, leaf, null)).toBe(0);
   });
 });

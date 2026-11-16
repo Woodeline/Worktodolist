@@ -15,7 +15,7 @@ import { monthKey, projectionForMonth, shiftDate } from './lib/calendar.js';
 import { useListMode } from './lib/listMode.js';
 import { noticeState } from './lib/layoutMode.js';
 import { useLayoutMode } from './hooks/useLayoutMode.js';
-import { buildNesting, childProgress, depthOf, filterCollapsed, nestChildren } from './lib/subtasks.js';
+import { buildNesting, childProgress, depthWithin, filterCollapsed, nestChildren } from './lib/subtasks.js';
 import { useRowCollapse } from './hooks/useRowCollapse.js';
 import { buildAppMenuItems } from './lib/appMenu.js';
 import TopBar from './components/TopBar.jsx';
@@ -270,7 +270,10 @@ export function MainList({ store, query, collapsed: collapsedProp, toggleExpand:
       const canExpand = expandable && kids.total > 0 && kidInView;
       const key = t.stableId || t.id;
       return {
-        depth: expandable ? depthOf(nesting, t) : 0,
+        // 层级只数「本屏也在」的祖先：父行不在本屏时 nestChildren 已经把它降级成
+        // 顶层行，这里若仍按全表算层级，就会出现"缩进着、却没有父任务"的孤行
+        // —— 视觉上像挂在前一条任务下面，正是"层级混乱"的来源。
+        depth: expandable ? depthWithin(nesting, t, visibleIds) : 0,
         kids,
         hasChildren: canExpand,
         collapsed: canExpand && collapsed.has(key),
@@ -623,10 +626,11 @@ export default function App() {
   });
   const todayStr = dayjs().format('YYYY-MM-DD');
   // 日历投影：页眉计数与主区渲染共用这一份，"有几条"不会分叉（lib/calendar.js 已单测）。
+  // 只吃 todo.txt 的未完成任务 —— 日志（done.txt）不是日历的数据源（二十改）。
   const calProjection = useMemo(() => {
     if (!isCalendar) return null;
-    return projectionForMonth(store.todoEntries, store.doneEntries, store.view, query, todayStr, calMonth);
-  }, [isCalendar, store.todoEntries, store.doneEntries, store.view, query, todayStr, calMonth]);
+    return projectionForMonth(store.todoEntries, query, todayStr, calMonth);
+  }, [isCalendar, store.todoEntries, query, todayStr, calMonth]);
   // 工具页的只读投影：派生逻辑全在 lib/todoSnapshot.js（纯函数、可单测）。
   // 工具拿到的是它，而不是 store —— "默认只读"因此是技术事实而非口头约定。
   // 设置页的列表外观需要知道有哪些 +项目：与侧栏同源（sidebarStats 是唯一口径），
@@ -671,6 +675,12 @@ export default function App() {
   // 翻月带着选中日一起走（dayjs 对短月自动收敛：1月31 → 2月28），选中日恒在显示月内。
   const navCalMonth = (delta) => setCalDay((d) => dayjs(d).add(delta, 'month').format('YYYY-MM-DD'));
   const calToday = () => setCalDay(dayjs().format('YYYY-MM-DD'));
+  // 日历只有一份数据来源：「全部」里的未完成。日志（done.txt）是已完成的记录，
+  // 不映射到日历（2026-11-16 二十改）。所以从「日志」视图切进日历时，视图一并落回
+  // 「全部」—— 否则面包屑写着「日志」、格子里画的却是别的任务。
+  useEffect(() => {
+    if (isCalendar && store.view === 'done') store.selectView('all');
+  }, [isCalendar, store.view, store.selectView]);
   // 日历里新建 = 打开那一天的浮层并直接进添加态。写入仍是同一条 addTask 链路，
   // todo.txt 里落下的就是一行标准的 `due:YYYY-MM-DD`。
   const createOnDay = (date) => {

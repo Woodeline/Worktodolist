@@ -293,7 +293,8 @@ const MEASURE_FN = `(() => {
     overflowX: document.documentElement.scrollWidth > window.innerWidth + 1,
     sidebarVar: root.getPropertyValue('--sidebar-w').trim(),
     railMax: root.getPropertyValue('--rail-max').trim(),
-    // 外壳行高（2026-11-15 十一改：标题行 44→35、窄屏页签条 44→31）
+    // 外壳行高（2026-11-16 十七改：标题行 / 页签条 / 底栏三行同取 --chrome-row-h）
+    chromeRowVar: root.getPropertyValue('--chrome-row-h').trim(),
     titlebarVar: root.getPropertyValue('--titlebar-h').trim(),
     railRowVar: root.getPropertyValue('--rail-row-h').trim(),
     bnavCount: document.querySelectorAll('.bnav-item').length,
@@ -441,8 +442,8 @@ function assertions(c, m) {
     ok('活动栏为 46px 竖轨', g('tabs')?.w === 46 && (g('tabs')?.h ?? 0) > 300, JSON.stringify(g('tabs')));
     // 页眉左侧化（2026-10-18）：侧栏开关必须在页眉最左，紧贴左内边距
     ok('侧栏开关在页眉最左', (g('panelToggle')?.x ?? 1e9) - (g('topbar')?.x ?? 0) <= 24, `toggle.x=${g('panelToggle')?.x} topbar.x=${g('topbar')?.x}`);
-    // 外壳行高（2026-11-15 十一改）：标题行 44→35、窄屏页签条 44→31
-    ok('标题行 = --titlebar-h(35)', m.titlebarVar === '35px', m.titlebarVar);
+    // 外壳行高（2026-11-16 十七改）：标题行 / 页签条 / 底栏共用 --chrome-row-h(31)
+    ok('标题行 = --chrome-row-h(31)', m.chromeRowVar === '31px', m.chromeRowVar);
     ok('宽屏不显示底部导航', g('bottomnav') == null || g('bottomnav').disp === 'none', JSON.stringify(g('bottomnav')));
   }
 
@@ -460,7 +461,7 @@ function assertions(c, m) {
     // 侧栏也不再翻成横向过滤条：整条 display:none，宽度归零
     ok('窄屏不显示侧栏', g('sidebar') == null || g('sidebar').disp === 'none', JSON.stringify(g('sidebar')));
     ok('侧栏不占高度', (g('sidebar')?.h ?? 0) === 0, `h=${g('sidebar')?.h}`);
-    ok('页签条行高 31（原 44 的 70%）', (g('tabs')?.h ?? 999) <= 34, `h=${g('tabs')?.h} var=${m.railRowVar}`);
+    ok('页签条行高 = --chrome-row-h(31)', (g('tabs')?.h ?? 999) <= 34, `h=${g('tabs')?.h} var=${m.railRowVar}`);
     ok('活动栏转横向（占满宽度）', (g('tabs')?.w ?? 0) > m.docW * 0.9, JSON.stringify(g('tabs')));
     ok('上下文条仍是单行', (g('topbar')?.h ?? 0) >= 30 && (g('topbar')?.h ?? 0) <= 48, `h=${g('topbar')?.h}`);
     ok('rail 占满内容宽', (g('rail')?.w ?? 0) > m.docW * 0.9, `w=${g('rail')?.w} docW=${m.docW}`);
@@ -473,6 +474,9 @@ function assertions(c, m) {
     // 关键：列表滚动区止于导航上缘 —— 清单再多也压不到按钮（结构上不可能重叠）
     ok('列表不与底部导航重叠', (g('rail')?.y ?? 0) + (g('rail')?.h ?? 0) <= (g('bottomnav')?.y ?? 0) + 1, `rail.bottom=${(g('rail')?.y ?? 0) + (g('rail')?.h ?? 0)} nav.y=${g('bottomnav')?.y}`);
     ok('底部导航按钮均分整宽', (g('bnavitem')?.w ?? 0) >= m.docW / 4 - 2, `btn.w=${g('bnavitem')?.w} docW=${m.docW}`);
+    // 三行同高（2026-11-16 十七改）：页签条与底栏都取 --chrome-row-h，实测必须相等
+    ok('底栏与页签条同高', Math.abs((g('tabs')?.h ?? 0) - (g('bottomnav')?.h ?? 0)) <= 1,
+      `tabs.h=${g('tabs')?.h} bnav.h=${g('bottomnav')?.h}`);
   }
 
   // 工具集：目录态卡片网格（宽中档多列、窄小档单列），工作态占满宽度
@@ -534,8 +538,10 @@ function assertions(c, m) {
     // 这两组探测点只存在于列表页；工具页上没有它们，
     // 硬套过来只会产出"假失败"（hit=undefined），所以按视图分流。
     if (isList) {
-      // 2026-11-15：窄屏导航搬进底部条，探底部按钮 —— 整条 48px 高、均分整宽
-      ok('底部导航按钮命中 ≥44', (h.bnavitem?.h ?? 0) >= 44 && (h.bnavitem?.w ?? 0) >= 44, `hit=${JSON.stringify(h.bnavitem)}`);
+      // 2026-11-15：窄屏导航搬进底部条，探底部按钮 —— 均分整宽。
+      // 2026-11-16 十七改：底栏与页签条同为 31px 外壳行，不再硬撑 44
+      // （横向页签条早就按这条走）：命中区就是整枚按钮本身，宽度由均分兜住。
+      ok('底部导航按钮宽 ≥44、占满整条', (h.bnavitem?.w ?? 0) >= 44 && (h.bnavitem?.h ?? 0) >= 28, `hit=${JSON.stringify(h.bnavitem)}`);
       // 复选框只在真有任务行的页面量：日历页只剩网格（任务行住在浮层里），
       // 拿列表的探针去套它会得到 hit=null 的假失败。
       if (g('row') != null) {

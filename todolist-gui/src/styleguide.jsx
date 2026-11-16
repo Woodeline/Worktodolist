@@ -388,11 +388,8 @@ function AppShell({
   const [calDay, setCalDay] = useState(TODAY);
   const calMonth = monthKey(calDay);
   const projection = useMemo(
-    () =>
-      isCalendar
-        ? projectionForMonth(s.todoEntries, s.doneEntries, s.view, liveQuery, TODAY, calMonth)
-        : null,
-    [isCalendar, s.todoEntries, s.doneEntries, s.view, liveQuery, calMonth]
+    () => (isCalendar ? projectionForMonth(s.todoEntries, liveQuery, TODAY, calMonth) : null),
+    [isCalendar, s.todoEntries, liveQuery, calMonth]
   );
   const navMonth = (delta) =>
     setCalDay((d) => dayjs(d).add(delta, 'month').format('YYYY-MM-DD'));
@@ -474,6 +471,9 @@ function AppShell({
 // 日历页要能"真点"：点日期 → 弹当天任务 / 浮层里添加入口 / 勾完成 / 搜索过滤
 // 都落在这里的 useState 上（不写任何文件），这样浏览器交互 QA 才能走完整回路。
 // 响应式 QA 只量首屏几何，与这个舞台无关但共用同一份 DOM 骨架。
+// done=true 的舞台刻意保留 view='done'：产品里 App 会把视图落回「全部」，
+// 这里**不模拟那一步** —— 正好用来证明日历的投影根本不看 view（2026-11-16 二十改，
+// qa-settings 的「日志不进日历」就是在这个舞台上量的）。
 function CalendarStage({ done = false, autoNarrow = false }) {
   const [todo, setTodo] = useState(CAL_TODO);
   const [doneEntries, setDoneEntries] = useState(CAL_DONE);

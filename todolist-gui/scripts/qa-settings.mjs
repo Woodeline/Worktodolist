@@ -453,13 +453,26 @@ async function main() {
     await shot('calendar-dark-1280.png');
   }
 
+  // 2026-11-16 二十改：日历不再投影日志（done.txt 是已完成记录，只按完成日锚定）。
+  // 站在「日志」视图里打开日历，格子里画的必须还是「全部」里的未完成任务，
+  // 而且它们都能拖 —— 当初为日志服务的只读态（.cal-stats-ro / .cal-chip.cal-done）已删除。
   await goto('calendar-done', 1280, 820);
-  const calDone = await evalJs(`(() => ({
-    readonly: !!document.querySelector('.cal-stats-ro'),
-    tray: !!document.querySelector('.cal-tray'),
-    draggable: document.querySelectorAll('.cal-chip[draggable=true], .cal-bar[draggable=true]').length,
-  }))()`);
-  check('已完成视图只读：标了只读、无可拖条目', calDone.readonly && !calDone.tray && calDone.draggable === 0, JSON.stringify(calDone));
+  const calDone = await evalJs(`(() => {
+    const grid = document.querySelector('.cal-grid');
+    return {
+      roBadge: !!document.querySelector('.cal-stats-ro'),
+      doneChips: document.querySelectorAll('.cal-chip.cal-done').length,
+      chips: document.querySelectorAll('.cal-chip').length,
+      draggable: document.querySelectorAll('.cal-chip[draggable=true]').length,
+      tray: !!document.querySelector('.cal-tray'),
+      // 日志演示数据里的标题（完成日就在本月）：真的投影了就会出现在格子里
+      hasLogTitle: /安装 topydo 并跑通三种 UI|编写 topydo 安装配置指南/.test(grid ? grid.textContent : ''),
+    };
+  })()`);
+  check('日志不进日历：日志视图里打开日历仍只画未完成（无只读标、全部可拖、不出现已完成条目）',
+    !calDone.roBadge && !calDone.tray && calDone.doneChips === 0
+      && calDone.chips > 0 && calDone.draggable === calDone.chips && !calDone.hasLogTitle,
+    JSON.stringify(calDone));
 
   // ── 3.5 优先级旗标：真实浏览器里看颜色、量槽宽 ──────────────────────────
   // 单测只能证明类名对，证明不了 computed style / SVG 真的画出来了。

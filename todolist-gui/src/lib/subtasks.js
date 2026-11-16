@@ -91,6 +91,30 @@ export function depthOf(nesting, entry) {
 }
 
 /**
+ * 只数「本屏也在」的祖先层数 —— 渲染用的层级。
+ *
+ * `depthOf` 数的是全表的真实层级，而 `nestChildren` 会把父不在本屏的子任务
+ * 降级成**顶层行**（父不在，就不可能有父前子后的相邻关系）。这两套口径一起用
+ * 就会画出"有缩进、但上面根本没有父任务"的孤行：搜索命中一条子任务、
+ * 分类/标签只圈到子任务、以及父任务今天不到期的「今天」视图，都会出现。
+ * 视觉上它像是挂在前一条任务下面 —— 归属是假的，用户第一反应就是"层级乱了"。
+ *
+ * @param {object} nesting buildNesting 产物
+ * @param {object} entry 要算层级的任务
+ * @param {Set<string>} presentIds 本屏真正铺出来的任务 id
+ */
+export function depthWithin(nesting, entry, presentIds) {
+  if (!nesting || !entry || !presentIds) return 0;
+  let d = 0;
+  let cur = nesting.parentOf.get(entry.id);
+  for (let guard = 0; cur && presentIds.has(cur.id) && guard < 16; guard += 1) {
+    d += 1;
+    cur = nesting.parentOf.get(cur.id);
+  }
+  return d;
+}
+
+/**
  * 把子任务排到它的父任务后面。
  *
  * 两条硬约束：
@@ -120,10 +144,16 @@ export function nestChildren(tasks, nesting) {
   }
 
   const out = [];
+  // 递归出场：孙辈也得跟着走。只推一层的话，三层嵌套里的孙辈会落进 childIds
+  // 却没人把它推出来 —— 直接从头到尾消失（父在、子也在，偏偏孙没了）。
+  const emit = (t, guard = 0) => {
+    out.push(t);
+    if (guard >= 16) return; // 深链兜底；环已在建索引时断开
+    for (const kid of kidsInList.get(t.id) || []) emit(kid, guard + 1);
+  };
   for (const t of list) {
     if (childIds.has(t.id)) continue; // 由它的父带出场
-    out.push(t);
-    for (const kid of kidsInList.get(t.id) || []) out.push(kid);
+    emit(t);
   }
   return out;
 }

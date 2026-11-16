@@ -12,7 +12,7 @@ import {
   viewTasks,
 } from './sortFilter';
 import { parseFile } from './todoParser';
-import { buildNesting } from './subtasks.js';
+import { buildNesting, depthWithin } from './subtasks.js';
 
 const TODAY = '2026-09-30';
 
@@ -237,5 +237,84 @@ describe('子任务在「今天」/「即将到期」里的可见性', () => {
     const g = todayGroups(flat, TODAY);
     expect(g.dueToday.map((t) => t.title)).toEqual(['装机', '单独一条']);
     expect(g.noDate.map((t) => t.title)).toEqual(['拆后盖']);
+  });
+});
+
+// 2026-11-16（十九改）：「今天」里的子任务必须跟着父任务进退。
+// 触发场景（真实数据）：父任务 due 在将来、子任务没有日期 —— isVisibleToday 只认
+// 任务自己的字段，于是子任务自己混进「今天」，带着缩进堆在分组末尾，看着像挂在
+// 最后一条任务下面。现在的规则是子任务跟着祖先链走：父不在本屏，子也不在。
+describe('「今天」的可见性继承（子任务跟着父任务）', () => {
+  const T = (lines) => parseFile(lines.join('\n'));
+
+  it('父任务在将来 → 无日期的子任务不进「今天」，侧栏计数同步', () => {
+    const entries = T([
+      '委托 灰分测定 id:aaa111 due:2026-10-10',
+      '根据海关监管 parent:aaa111',
+      '今天就干这个',
+    ]);
+    const titles = viewTasks(entries, 'today', 'auto', '', TODAY).map((t) => t.title);
+    expect(titles).toEqual(['今天就干这个']);
+    // 侧栏 / 底部导航读的是 tasksForView，两处必须同数（"看得见 1 条、侧栏报 3 条"就是分叉）
+    expect(tasksForView(entries, 'today', TODAY)).toHaveLength(1);
+    // 但它在「全部」里仍然挂在父任务下面 —— 不是消失，只是不该算今天的活
+    expect(viewTasks(entries, 'all', 'auto', '', TODAY).map((t) => t.title)).toEqual([
+      '委托 灰分测定',
+      '根据海关监管',
+      '今天就干这个',
+    ]);
+  });
+
+  it('父任务在「今天」→ 子任务仍然跟随（父子相邻，缺一不可）', () => {
+    const entries = T([
+      '委托 灰分测定 id:aaa111',
+      '根据海关监管 parent:aaa111',
+      '收尾 parent:aaa111 due:2026-09-25',
+    ]);
+    expect(viewTasks(entries, 'today', 'auto', '', TODAY).map((t) => t.title)).toEqual([
+      '委托 灰分测定',
+      '收尾',
+      '根据海关监管',
+    ]);
+  });
+
+  it('子任务自己到期时凭自己进屏（父不在，按顶层行）', () => {
+    const entries = T([
+      '委托 灰分测定 id:aaa111 due:2026-10-10',
+      '根据海关监管 parent:aaa111 due:2026-09-30',
+      '下周的事 parent:aaa111 due:2026-10-09',
+    ]);
+    const vis = viewTasks(entries, 'today', 'auto', '', TODAY);
+    expect(vis.map((t) => t.title)).toEqual(['根据海关监管']);
+    // 父不在本屏 → 渲染层级必须是 0（否则会缩进着挂在别人下面）
+    expect(depthWithin(buildNesting(entries), vis[0], new Set(vis.map((t) => t.id)))).toBe(0);
+  });
+
+  it('孙辈递归跟随：中断一层就整条链不算', () => {
+    const entries = T([
+      '装机 id:aaa111 due:2026-10-10',
+      '拆后盖 id:bbb222 parent:aaa111',
+      '拧螺丝 parent:bbb222',
+    ]);
+    expect(viewTasks(entries, 'today', 'auto', '', TODAY)).toHaveLength(0);
+    // 祖辈进场（父也进了）→ 三代一起
+    const entries2 = T([
+      '装机 id:aaa111',
+      '拆后盖 id:bbb222 parent:aaa111',
+      '拧螺丝 parent:bbb222',
+    ]);
+    expect(viewTasks(entries2, 'today', 'auto', '', TODAY).map((t) => t.title)).toEqual([
+      '装机',
+      '拆后盖',
+      '拧螺丝',
+    ]);
+  });
+
+  it('「即将到期」不受影响：父项在本屏仍然带上后代', () => {
+    const entries = T(['委托 灰分测定 id:aaa111 due:2026-10-10', '根据海关监管 parent:aaa111']);
+    expect(viewTasks(entries, 'upcoming', 'auto', '', TODAY).map((t) => t.title)).toEqual([
+      '委托 灰分测定',
+      '根据海关监管',
+    ]);
   });
 });

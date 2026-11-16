@@ -56,7 +56,7 @@ function makeStore(view, override = {}) {
 
 function render(view = 'all', storeOverride = {}, todoList = TODO) {
   const store = makeStore(view, storeOverride);
-  const projection = projectionForMonth(todoList, DONE, view, '', TODAY, MONTH);
+  const projection = projectionForMonth(todoList, '', TODAY, MONTH);
   return renderToStaticMarkup(
     <ContextMenuProvider>
       <CalendarView
@@ -185,20 +185,28 @@ describe('CalendarView 只剩网格（旧结构不得回流）', () => {
   });
 });
 
-describe('CalendarView 只读态（已完成视图）', () => {
-  it('按完成日期锚定：今天的完成记录落在今天格子里', () => {
+// 2026-11-16 二十改：日志（done.txt）不再是日历的数据源。
+// 站在「日志」视图里也照样只画「全部」里的未完成任务 —— 没有只读态、没有完成记录格子。
+describe('日志不进日历', () => {
+  it('日志视图下也画未完成任务，已完成那条不出现', () => {
     const markup = render('done');
-    expect(markup).toContain('已完成壬');
-    expect(markup).toContain('本月完成');
+    expect(markup).toContain('今天甲'); // TODO 里的未完成项照旧出现在今天格子里
+    expect(markup).not.toContain('已完成壬'); // DONE 里的记录一条都不进格子
+    expect(markup).toContain('本月到期'); // 页头读数仍是「本月到期」
+    expect(markup).not.toContain('本月完成');
   });
 
-  it('收掉全部编辑入口：无托盘、无新建、chip 不可拖', () => {
+  it('已完成条目即使混在传入清单里也不进格子（数据源只认未完成）', () => {
+    const markup = render('all', {}, [...TODO, ...DONE]);
+    expect(markup).not.toContain('已完成壬');
+  });
+
+  it('没有只读痕迹：无只读标、chip 全部可拖', () => {
     const markup = render('done');
-    expect(markup).not.toContain('cal-tray');
-    expect(markup).not.toContain('新建');
-    expect(markup).not.toContain('draggable="true"');
-    expect(markup).toContain('cal-done');
-    expect(markup).toContain('只读');
+    expect(markup).not.toContain('cal-stats-ro');
+    expect(markup).not.toContain('cal-done');
+    expect(markup).toContain('draggable="true"');
+    expect(markup).not.toContain('draggable="false"');
   });
 });
 
@@ -243,15 +251,17 @@ describe('日历当天任务浮层', () => {
     expect(markup).not.toContain('cal-pop-addbtn');
   });
 
-  it('只读（已完成视图）：只有列表，没有任何添加入口', () => {
-    const markup = renderPanel({ tasks, readonly: true });
+  it('浮层不再有只读分支：传什么都会带添加入口（日志不进日历）', () => {
+    const markup = renderPanel({ tasks });
     expect(markup).toContain('task-row');
-    expect(markup).not.toContain('cal-pop-foot');
-    expect(markup).not.toContain('添加任务');
+    expect(markup).toContain('cal-pop-foot');
+    expect(markup).toContain('添加任务');
   });
 
-  it('只读且当天没记录：说清楚是「没有完成记录」', () => {
-    expect(renderPanel({ tasks: [], readonly: true })).toContain('这一天没有完成记录');
+  it('当天没任务：说「这一天没有任务」（不再有「没有完成记录」那种日志口径）', () => {
+    const markup = renderPanel({ tasks: [] });
+    expect(markup).toContain('这一天没有任务');
+    expect(markup).not.toContain('没有完成记录');
   });
 
   it('浮层里的行不参与列表重排（draggable 关闭）', () => {

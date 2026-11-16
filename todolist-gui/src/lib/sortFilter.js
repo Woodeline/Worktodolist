@@ -30,11 +30,50 @@ export function activeTasks(entries) {
   return entries.filter((e) => e.kind === 'task' && !e.completed);
 }
 
-export function tasksForView(entries, view, today) {
+/**
+ * 「今天」的可见性继承：**子任务的日期来自父任务的排期**。
+ *
+ * `isVisibleToday` 只认任务自己的字段（无截止日 = 今天要做），对顶层任务成立，
+ * 对子任务不成立：子任务上没有 due 往往只是因为它把排期交给了父任务。于是
+ * 「父任务下周到期、子任务没有日期」时，子任务会自己混进「今天」，而父任务
+ * 不在这一屏 —— 它带着缩进插进分组末尾，读起来像挂在最后一条任务下面
+ * （真实数据里 7 条子任务整段堆在「出差报告」之下，就是这条）。
+ *
+ * 规则：只有当祖先链上有一条任务也在本屏时，子任务才进来；
+ * 例外是它**自己就到期/逾期**（due <= today）—— 那是凭自己的理由进的屏，
+ * 进来后按顶层行渲染（父不在本屏，见 subtasks.js 的 nestChildren / depthWithin）。
+ *
+ * 这个判断必须放在 tasksForView 里而不是渲染层：侧栏计数、底部导航、↑↓ 顺序
+ * 都读这里，"看得见几条"与"侧栏报几条"才不会分叉。
+ */
+export function todayAdmitted(tasks, nesting, today) {
+  if (!nesting) return tasks || [];
+  const inBase = new Set(tasks.map((t) => t.id));
+  const memo = new Map();
+  const admitted = (t) => {
+    if (memo.has(t.id)) return memo.get(t.id);
+    // 先占位再递归：parentOf 已排掉环（buildNesting 里），这里只留一道深链兜底。
+    memo.set(t.id, false);
+    const parent = nesting.parentOf.get(t.id);
+    let ok;
+    if (!parent) ok = true; // 顶层：自己的字段已经决定过了
+    else if (t.dueDate && t.dueDate <= today) ok = true; // 自己就到期
+    else ok = inBase.has(parent.id) ? admitted(parent) : false;
+    memo.set(t.id, ok);
+    return ok;
+  };
+  return tasks.filter(admitted);
+}
+
+export function tasksForView(entries, view, today, nesting = null) {
   const tasks = entries.filter((e) => e.kind === 'task');
   switch (view) {
     case 'today':
-      return tasks.filter((t) => isVisibleToday(t, today));
+      return todayAdmitted(
+        tasks.filter((t) => isVisibleToday(t, today)),
+        nesting || buildNesting(entries),
+        today
+      );
     case 'upcoming':
       return tasks.filter((t) => isUpcoming(t, today));
     case 'all':
@@ -89,7 +128,7 @@ export function compareUpcoming(a, b) {
 // 主列表与键盘导航共用这一条口径，避免"看得见的顺序"和"上下键走的顺序"分叉。
 export function viewTasks(entries, view, sortMode, query, today) {
   const nesting = buildNesting(entries);
-  const base = tasksForView(entries, view, today);
+  const base = tasksForView(entries, view, today, nesting);
   // 「即将到期」= 有截止日且晚于今天。子任务的截止日往往空着（它回答的是
   // "这事分几步"），于是父项有箭头、点开空空如也 —— 父项在本屏时带上它的后代。
   // 有搜索词时不补：搜索是在收窄，凭空多出没命中的行只会让人怀疑筛选坏了。

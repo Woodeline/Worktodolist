@@ -32,7 +32,9 @@ const FADE_MS = 180;
 // 行内「闪光」时长：重复任务新生行的高亮交接 / 新建行的入场动画。
 // 与 index.css 的 --dur-flash / --dur-3 是同一次动作的两半：定时器负责
 // 「什么时候收回类名」，CSS 负责「这段时间里看得见什么」。
-const SPAWN_FLASH_MS = 700;
+// 2026-11-16 十八改：700 → 1400。交接期间新生行会把读数行常驻展开露出新的 due，
+// 1.4s 才够读完那行字；0.7s 只够看见「闪了一下」，用户读到的却是「没消失」。
+const SPAWN_FLASH_MS = 1400;
 const ENTER_MS = 220;
 // toast 自动消失：普通提示 3.4s（与工具页 toast 同一口径，TOAST_MS）；
 // 带「撤销」的留到 6s —— 撤销是低频高价值动作，值得多给一倍的阅读时间。
@@ -381,8 +383,14 @@ export function useTodoStore() {
       }, FADE_MS);
       pendingCompleteRef.current.set(task.id, timer);
       undoStackRef.current.push(record);
+      // 重复任务的完成有两件事同时发生：这一条进 done.txt，下一条在原地长出来。
+      // 只说「已完成」会让人以为界面没反应（标题 / 优先级 / 位置全同，
+      // 唯一变化的 due 还折在悬停才展开的读数行里）——所以把"下一次"直接说出来。
+      // 明天是最高频的一档，用人话说；其余档位报完整日期，免得「下次 3 天后」要心算。
+      const tomorrow = dayjs(today).add(1, 'day').format('YYYY-MM-DD');
+      const nextWhen = next ? (next.dueDate === tomorrow ? '明天' : ` ${next.dueDate}`) : '';
       showToast(
-        next ? `已完成：${task.title} · 下次 ${next.dueDate}` : `已完成：${task.title}`,
+        next ? `已完成：${task.title} · 已为你排到${nextWhen}` : `已完成：${task.title}`,
         { actionLabel: '撤销', onAction: undo }
       );
     },

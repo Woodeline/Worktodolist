@@ -123,6 +123,22 @@ describe('TaskRow 动效类名', () => {
     expect(render(t, {}, { spawnedIds: [t.id] })).toContain('spawned');
   });
 
+  // 交接高亮若只闪背景，用户读到的仍是「点了一下、没消失、又冒出来」：
+  // 新生行与刚完成那行标题 / 优先级 / 位置全同，唯一变的是折起来的 due。
+  // 所以 spawned 期间必须把读数行展开（与悬停态同一对 opacity / transform）。
+  it('spawned 期间读数行常驻展开 —— 让新的 due 自己说话', () => {
+    const css = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'index.css'), 'utf8');
+    const at = css.indexOf('.task-row.spawned .task-meta {');
+    expect(at).toBeGreaterThan(0);
+    const block = css.slice(at, css.indexOf('}', at));
+    expect(block).toContain('opacity: 1');
+    expect(block).toContain('transform: none');
+    // 标题同时让位（否则读数行会压住标题最后一行）
+    expect(css).toContain('.task-row.spawned .task-head {');
+    // 与悬停规则同特异性 —— 必须排在它之后才生效
+    expect(at).toBeGreaterThan(css.indexOf('.task-row:hover .task-meta'));
+  });
+
   it('刚添加的行带 entering（入场高亮）', () => {
     const t = parseSingleLine('交周报');
     expect(render(t, {}, { enteringIds: [t.id] })).toContain('entering');

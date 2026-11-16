@@ -611,7 +611,7 @@ describe('useTodoStore 行级动效状态', () => {
     expect(s.doneEntries).toHaveLength(0);
   });
 
-  it('完成重复任务：新生行带 spawned 高亮，700ms 后收回', async () => {
+  it('完成重复任务：新生行带 spawned 高亮，1400ms 后收回', async () => {
     const { store, render } = await bootStore({
       'todo.txt': `交周报 due:${TODAY} rec:+1w id:aaa111\n`,
       'done.txt': '',
@@ -623,8 +623,22 @@ describe('useTodoStore 行级动效状态', () => {
     const spawned = s.todoEntries.find((e) => e.id !== T.id);
     expect(spawned).toBeTruthy();
     expect(s.spawnedIds).toContain(spawned.id);
-    await sleep(900); // 越过 SPAWN_FLASH_MS(700ms)
+    // 交接期间要把「排到哪一天」说出来 —— 只说「已完成」会被读成「没反应」：
+    // 新生行与原行标题 / 优先级 / 位置全同，只有折起来的 due 变了。
+    expect(s.toast.message).toContain('已为你排到');
+    expect(s.toast.message).toContain(spawned.dueDate);
+    await sleep(1600); // 越过 SPAWN_FLASH_MS(1400ms)
     expect(render().spawnedIds).not.toContain(spawned.id);
+  });
+
+  it('重复任务排到明天时用「明天」，不逼用户去读日期', async () => {
+    const { store, render } = await bootStore({
+      'todo.txt': `交周报 due:${TODAY} rec:+1d id:aaa111\n`,
+      'done.txt': '',
+    });
+    store.toggleComplete(store.todoEntries[0]);
+    await sleep(220);
+    expect(render().toast.message).toContain('已为你排到明天');
   });
 
   it('新任务：带 entering 入场高亮，220ms 后收回', async () => {

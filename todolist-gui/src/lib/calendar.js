@@ -46,26 +46,24 @@ export function monthGrid(month) {
 }
 
 /**
- * 日历的数据源（2026-11-16 十五改：**不再跟着侧栏视图走**）。
+ * 日历的数据源（2026-11-16 十五改定「不跟侧栏视图走」，二十改定「不碰日志」）。
  *
- * 日历是"按日期看全盘"的镜头，不是列表的另一种排法：侧栏切到「今日」「某分类」
- * 「某标签」时，格子里该有的还是这一天真实存在的任务 —— 跟着筛选走会出现
- * 「同一天昨天有三条、今天切了个分类只剩一条」，日历就没法用来做规划了。
- * 所以：非「已完成」视图一律取 todo 里**全部未完成**任务（t: 阈值同样不参与）。
+ * 日历是"按日期看全盘"的镜头，不是列表的另一种排法，所以只有**一个**来源：
+ * todo.txt 里全部未完成任务（与「全部」列表同一批数据）。两条都别再改回去：
+ *
+ * ① **不跟侧栏视图走**：切到「今日」「某分类」「某标签」时，格子里该有的还是
+ *    这一天真实存在的任务 —— 跟着筛选走会出现"同一天昨天有三条、今天切了个分类
+ *    只剩一条"，日历就没法用来做规划了。
+ * ② **不投影日志**：done.txt 是**已完成**的记录，它锚的是完成日；把完成项画进
+ *    日历会让"这一天要做什么"和"这一天做完了什么"混在同一张格子里，既读不出
+ *    排期，还会把已完成的条目当成将来要做的事。日志只在「日志」页看。
+ *
  * 搜索是有意的临时动作，仍在 projectionForMonth 里生效，不在这层丢掉。
  */
-export function calendarSource(todoEntries, doneEntries, view, _today) {
-  if (view === 'done') {
-    return {
-      tasks: doneEntries.filter((e) => e.kind === 'task'),
-      dateKey: 'completedAt',
-      readonly: true,
-    };
-  }
+export function calendarSource(todoEntries) {
   return {
     tasks: (todoEntries || []).filter((e) => e.kind === 'task' && !e.completed),
     dateKey: 'dueDate',
-    readonly: false,
   };
 }
 
@@ -80,11 +78,6 @@ export function groupByDate(tasks, dateKey) {
   }
   for (const list of map.values()) list.sort(compareAuto);
   return map;
-}
-
-/** 无日期任务（只有 dueDate 口径下才有意义 —— 完成日期缺失的行不进托盘）。 */
-export function undatedTasks(tasks, dateKey) {
-  return tasks.filter((t) => !t[dateKey]).sort(compareAuto);
 }
 
 /**
@@ -106,23 +99,22 @@ export function monthStats(tasks, dateKey, month, today) {
 
 /**
  * 日历投影的唯一入口：主区渲染与页眉计数都走它，两处的"有几条"不会分叉。
- * 返回 { tasks, byDate, undated, dateKey, readonly, stats }。
+ * 返回 { tasks, byDate, dateKey, stats } —— **没有** readonly / undated：
+ * 日历只画「全部」里的未完成任务，既能改期也能新建，不存在只读那一档。
  */
-export function calendarProjection(todoEntries, doneEntries, view, query, today) {
+export function calendarProjection(todoEntries, query, today) {
   const month = monthKey(today);
-  return projectionForMonth(todoEntries, doneEntries, view, query, today, month);
+  return projectionForMonth(todoEntries, query, today, month);
 }
 
 /** 同上，但统计锚定到指定月份（翻月时页眉计数跟着月份走）。 */
-export function projectionForMonth(todoEntries, doneEntries, view, query, today, month) {
-  const src = calendarSource(todoEntries, doneEntries, view, today);
+export function projectionForMonth(todoEntries, query, today, month) {
+  const src = calendarSource(todoEntries);
   const tasks = src.tasks.filter((t) => searchMatch(t, query));
   return {
     tasks,
     byDate: groupByDate(tasks, src.dateKey),
-    undated: src.readonly ? [] : undatedTasks(tasks, src.dateKey),
     dateKey: src.dateKey,
-    readonly: src.readonly,
     stats: monthStats(tasks, src.dateKey, month, today),
   };
 }

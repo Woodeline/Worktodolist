@@ -29,7 +29,6 @@ export function DayPanel({
   date,
   today,
   tasks,
-  readonly = false,
   store,
   query = '',
   adding = false,
@@ -92,42 +91,37 @@ export function DayPanel({
             task={t}
             store={store}
             query={query}
-            readonly={readonly}
             dragDisabled
             minimal
           />
         ))}
-        {tasks.length === 0 && !adding && (
-          <p className="cal-pop-empty">{readonly ? '这一天没有完成记录' : '这一天没有任务'}</p>
-        )}
+        {tasks.length === 0 && !adding && <p className="cal-pop-empty">这一天没有任务</p>}
       </div>
 
-      {!readonly && (
-        <div className="cal-pop-foot">
-          {adding ? (
-            <form className="cal-pop-add" onSubmit={onSubmit}>
-              <Icon name="plus" size={12} />
-              <input
-                ref={inputRef}
-                className="cal-pop-add-input"
-                value={text}
-                onChange={(e) => onTextChange(e.target.value)}
-                placeholder="添加任务，回车创建"
-                aria-label="新任务标题"
-                autoFocus
-              />
-              <button type="submit" className="btn btn-sm" disabled={!text.trim()}>
-                添加
-              </button>
-            </form>
-          ) : (
-            <button type="button" className="cal-pop-addbtn" onClick={onStartAdding}>
-              <Icon name="plus" size={12} />
-              添加任务
+      <div className="cal-pop-foot">
+        {adding ? (
+          <form className="cal-pop-add" onSubmit={onSubmit}>
+            <Icon name="plus" size={12} />
+            <input
+              ref={inputRef}
+              className="cal-pop-add-input"
+              value={text}
+              onChange={(e) => onTextChange(e.target.value)}
+              placeholder="添加任务，回车创建"
+              aria-label="新任务标题"
+              autoFocus
+            />
+            <button type="submit" className="btn btn-sm" disabled={!text.trim()}>
+              添加
             </button>
-          )}
-        </div>
-      )}
+          </form>
+        ) : (
+          <button type="button" className="cal-pop-addbtn" onClick={onStartAdding}>
+            <Icon name="plus" size={12} />
+            添加任务
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -135,7 +129,6 @@ export function DayPanel({
 export default function CalendarDayPopover({
   date,
   tasks,
-  readonly = false,
   store,
   query = '',
   anchor,
@@ -147,7 +140,7 @@ export default function CalendarDayPopover({
   onClose,
 }) {
   const today = dayjs().format('YYYY-MM-DD');
-  const [adding, setAdding] = useState(() => !readonly && (forceAdd || tasks.length === 0));
+  const [adding, setAdding] = useState(() => forceAdd || tasks.length === 0);
   const [text, setText] = useState('');
   // 拖过 / 置顶冻结之后的位置（屏幕坐标）。null = 还没动过，按格子锚点自动落位。
   const [pos, setPos] = useState(null);
@@ -259,7 +252,6 @@ export default function CalendarDayPopover({
       date={date}
       today={today}
       tasks={tasks}
-      readonly={readonly}
       store={store}
       query={query}
       adding={adding}

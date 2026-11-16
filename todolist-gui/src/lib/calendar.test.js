@@ -9,7 +9,6 @@ import {
   monthGrid,
   calendarSource,
   groupByDate,
-  undatedTasks,
   monthStats,
   calendarProjection,
   projectionForMonth,
@@ -102,34 +101,34 @@ describe('数据源映射', () => {
   );
   const done = entries('x 2026-11-07 已完成任务 due:2026-11-06');
 
-  it('today 视图也取全部未完成（日历要看得见未来）', () => {
-    const src = calendarSource(todo, done, 'today', TODAY);
+  // 2026-11-16 二十改：日历只有一份数据来源 —— todo.txt 的未完成任务（=「全部」）。
+  // 视图形参已经不存在了：切什么视图都取同一批，日志更没有第二个口径。
+  it('取全部未完成（日历要看得见未来）', () => {
+    const src = calendarSource(todo);
     expect(src.dateKey).toBe('dueDate');
-    expect(src.readonly).toBe(false);
     expect(src.tasks).toHaveLength(7);
     expect(src.tasks.some((t) => t.dueDate === '2026-12-01')).toBe(true);
   });
 
-  it('all 视图不混入已完成', () => {
-    const src = calendarSource(todo, done, 'all', TODAY);
+  it('不混入已完成', () => {
+    const src = calendarSource(todo);
     expect(src.tasks.every((t) => !t.completed)).toBe(true);
   });
 
-  it('done 视图改按完成日期锚定，且只读', () => {
+  // 二十改的核心：日志（done.txt）不再是日历的数据源。
+  // 过去 done 视图会把已完成按 completedAt 投影成只读格子，现在**没有这条路** ——
+  // 函数签名里连 doneEntries 都没有，传了也不会被读到。
+  it('日志不参与投影：多传一份 doneEntries 也不会出现在日历里', () => {
     const src = calendarSource(todo, done, 'done', TODAY);
-    expect(src.dateKey).toBe('completedAt');
-    expect(src.readonly).toBe(true);
-    expect(src.tasks).toHaveLength(1);
-    expect(src.tasks[0].completedAt).toBe('2026-11-07');
+    expect(src.dateKey).toBe('dueDate');
+    expect(src.tasks).toHaveLength(7);
+    expect(src.tasks.some((t) => t.completed || t.completedAt)).toBe(false);
+    expect(src.readonly).toBeUndefined();
   });
 
-  // 2026-11-16 十五改：日历不再跟着侧栏视图走。
-  // 格子里该有的是"这一天真实存在的事"，切个分类就少一半，日历就没法用来规划。
-  it('分类 / 标签 / 收集箱过滤**不影响**日历（只有「已完成」换口径）', () => {
-    expect(calendarSource(todo, done, '+:回测', TODAY).tasks).toHaveLength(7);
-    expect(calendarSource(todo, done, '@:工作', TODAY).tasks).toHaveLength(7);
-    expect(calendarSource(todo, done, 'inbox', TODAY).tasks).toHaveLength(7);
-    expect(calendarSource(todo, done, 'upcoming', TODAY).tasks).toHaveLength(7);
+  it('空清单 / 缺参不炸', () => {
+    expect(calendarSource().tasks).toEqual([]);
+    expect(calendarSource([]).tasks).toEqual([]);
   });
 });
 
@@ -149,15 +148,13 @@ describe('按日聚合与无日期托盘', () => {
     expect(map.has('2026-11-11')).toBe(false);
   });
 
-  it('无日期任务进托盘，有日期的不进', () => {
-    const und = undatedTasks(tasks, 'dueDate');
-    expect(und.map((t) => t.title)).toEqual(['无日期', '也无日期']);
-  });
-
-  it('完成日期口径下缺失日期的行不进托盘（由调用方置空）', () => {
-    const doneTasks = [T('x 2026-11-07 完成于昨天'), T('x 无完成日期')];
-    const map = groupByDate(doneTasks, 'completedAt');
-    expect(map.get('2026-11-07')).toHaveLength(1);
+  // 无日期托盘（undatedTasks）已随 2026-11-15 的日历改版删除；
+  // 函数本体在二十改时一并清掉 —— 只留"缺失日期不进网格"这条不变式。
+  it('无日期的任务不进网格（托盘已删除，不再有第二个出口）', () => {
+    const map = groupByDate(tasks, 'dueDate');
+    const titles = [...map.values()].flat().map((t) => t.title);
+    expect(titles).not.toContain('无日期');
+    expect(titles).not.toContain('也无日期');
   });
 });
 
@@ -193,26 +190,26 @@ describe('投影入口', () => {
     '无日期杂事'
   );
 
-  it('搜索过滤同时作用于网格与托盘', () => {
-    const p = calendarProjection(todo, [], 'all', '网线', TODAY);
+  it('搜索过滤同时作用于网格与统计', () => {
+    const p = calendarProjection(todo, '网线', TODAY);
     expect(p.tasks).toHaveLength(1);
     expect(p.byDate.get('2026-11-09')).toHaveLength(1);
-    expect(p.undated).toHaveLength(0);
+    expect(p.stats.inMonth).toBe(1);
   });
 
   it('翻月时统计锚定到显示的月份', () => {
-    const p = projectionForMonth(todo, [], 'all', '', TODAY, '2026-12');
+    const p = projectionForMonth(todo, '', TODAY, '2026-12');
     expect(p.stats.inMonth).toBe(0);
-    const nov = projectionForMonth(todo, [], 'all', '', TODAY, '2026-11');
+    const nov = projectionForMonth(todo, '', TODAY, '2026-11');
     expect(nov.stats.inMonth).toBe(3);
   });
 
-  it('只读投影没有托盘', () => {
+  it('投影里没有只读 / 托盘这些字段（日志那条路已整条删除）', () => {
     const done = entries('x 2026-11-07 做完的事');
-    const p = calendarProjection(todo, done, 'done', '', TODAY);
-    expect(p.readonly).toBe(true);
-    expect(p.undated).toEqual([]);
-    expect(p.byDate.get('2026-11-07')).toHaveLength(1);
+    const p = calendarProjection(todo, '', TODAY, 'done');
+    expect(p.readonly).toBeUndefined();
+    expect(p.undated).toBeUndefined();
+    expect(p.byDate.has('2026-11-07')).toBe(false);
   });
 });
 

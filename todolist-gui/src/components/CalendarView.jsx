@@ -1,6 +1,7 @@
 // 日历视图：清单的第二种显示模式（不是第四个页签）。
-// 与列表共用 store 的动作，但**取数不跟侧栏视图走**（见 lib/calendar.js#calendarSource）：
-// 日历是"按日期看全盘"的镜头，切了分类也还是这一天真实存在的事。
+// 与列表共用 store 的动作，但**只有一份数据来源**（见 lib/calendar.js#calendarSource）：
+// 「全部」列表里的未完成任务。侧栏切了分类、或人在「日志」页，日历都照旧画这一批 ——
+// 日历是"按日期看排期、划得动"的镜头，日志（已完成）不是它的数据源。
 //
 // 交互契约（2026-11-16 十五改）：
 //   · 页面上只有日历本体：没有顶部添加框、右侧日详情、无日期托盘。
@@ -13,7 +14,8 @@
 //   · 点邻月的灰格 = 先翻到那个月，再在新格子上把浮层开出来（锚点必须重算）。
 //   · 方向键 ←→ ±1 天、↑↓ ±1 周（全局快捷键）、PageUp/Down ±1 月、Home 回今天；
 //     Enter / 空格 = 打开这一天的浮层。
-//   · 已完成视图按完成日期锚定，整体只读：浮层里没有添加入口，chip 也不可拖。
+//   · 没有只读态：日历里的条目都是未完成的活，都能拖、都能改期（二十改删掉只读分支，
+//     它当初只为「日志按完成日锚定」而存在）。
 import { useEffect, useMemo, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import { displayTitle } from '../lib/displayTitle.js';
@@ -65,7 +67,7 @@ export default function CalendarView({
   // 拖动经过的格子：只用来画落点框，松手 / 取消就清掉。
   const [dropDate, setDropDate] = useState(null);
 
-  const { byDate, readonly, stats } = projection;
+  const { byDate, stats } = projection;
   const tasksById = useMemo(() => {
     const map = new Map();
     for (const t of projection.tasks) map.set(t.id, t);
@@ -252,25 +254,22 @@ export default function CalendarView({
         onToday();
         break;
       case 'create':
-        // 格子是 button：回车在日历里等于「打开这一天」，只读态没有入口但按键要吃下。
-        if (!readonly) openDay(action.date);
+        // 格子是 button：回车在日历里等于「打开这一天」。
+        openDay(action.date);
         break;
       default:
         break;
     }
   };
 
-  // chip 的状态类：只剩「逾期」与「已完成（只读）」两支。
+  // chip 的状态类：只剩「逾期」一支。
   // 「今天」不再给 chip 自己的类 —— 今天由格子里那枚实心日号说清楚了，
   // chip 上再叠一层状态色只会跟优先级底色打架（旧 .now 之所以删掉）。
-  const chipState = (task) => {
-    if (readonly) return ' cal-done';
-    if (task.dueDate && task.dueDate < today) return ' overdue';
-    return '';
-  };
+  // 曾经还有一支「已完成（只读）」的 .cal-done：日志不再进日历（二十改），那支一并删了。
+  const chipState = (task) =>
+    task.dueDate && task.dueDate < today ? ' overdue' : '';
 
   const onChipDragStart = (e, task) => {
-    if (readonly) return;
     setDragChip({ id: task.id, from: task.dueDate });
     // 拖动影像与拖放内容：文本给"拖到浏览器外面"一个合理结果，日历内部只认 id。
     e.dataTransfer.effectAllowed = 'move';
@@ -283,7 +282,7 @@ export default function CalendarView({
   };
 
   const onCellDragOver = (e, date) => {
-    if (!dragChip || readonly) return;
+    if (!dragChip) return;
     // 只有 preventDefault 才会被判成"可放下"，否则 drop 根本不触发。
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
@@ -291,7 +290,7 @@ export default function CalendarView({
   };
 
   const onCellDrop = (e, date) => {
-    if (!dragChip || readonly) return;
+    if (!dragChip) return;
     e.preventDefault();
     const patch = dropReschedule(tasksById.get(dragChip.id), date);
     if (patch) store.updateTask(dragChip.id, patch);
@@ -312,7 +311,7 @@ export default function CalendarView({
         (dragChip && dragChip.id === task.id ? ' is-dragging' : '')
       }
       title={task.title}
-      draggable={!readonly}
+      draggable
       onDragStart={(e) => onChipDragStart(e, task)}
       onDragEnd={onChipDragEnd}
     >
@@ -355,14 +354,13 @@ export default function CalendarView({
         <span className="spacer" />
         <div className="cal-stats">
           <span>
-            {readonly ? '本月完成' : '本月到期'} <b>{stats.inMonth}</b>
+            本月到期 <b>{stats.inMonth}</b>
           </span>
           {stats.overdue > 0 && (
             <span className="cal-stats-overdue">
               逾期 <b>{stats.overdue}</b>
             </span>
           )}
-          {readonly && <span className="cal-stats-ro">只读</span>}
         </div>
       </div>
 
@@ -418,7 +416,7 @@ export default function CalendarView({
                   onFocus={() => {
                     // 焦点进网格 = 离开任务行：清掉行选中，
                     // 全局的空格 / e / 回车才不会隔着网格误伤浮层里的行。
-                    if (!readonly && store.focusedId) store.setFocusedId(null);
+                    if (store.focusedId) store.setFocusedId(null);
                   }}
                 >
                   <span className="cal-daynum">{dayNumLabel(cell)}</span>
@@ -439,7 +437,6 @@ export default function CalendarView({
           key={p.date}
           date={p.date}
           tasks={byDate.get(p.date) || []}
-          readonly={readonly}
           store={store}
           query={query}
           anchor={p.anchor}
