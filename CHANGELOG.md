@@ -1,24 +1,83 @@
 # 更新日志
 
-## 未发布 · 2026-11-16（十六改：chip 左缘墨条回归、浮层行高 70%、弹层不再跳）
+## v1.5.1 · 2026-11-16（全量体检与清理：临时产物 3.3G、两个死模块、三组死样式）
+
+**一句话**：v1.5.0 之后又叠了五轮界面收敛（十三至二十改），本版把它们连同一次**全量体检**一起放出 —— 代码、数据与安全三条红线一条没动，删掉的是**零引用的两个模块、三组再无人用的样式，以及 3.3G 不会再被读到的临时产物**；五处版本号同步到 1.5.1。
+
+### 本轮（全量体检与清理）
+
+**排查范围**：仓库根、`todolist-gui/`（前端 `src/` + `scripts/` 门禁）、`todolist-gui/src-tauri/`（Rust 壳 + 构建缓存）、`.github/workflows/`、`docs/`、`.gitignore` 覆盖情况。
+
+**门禁实跑（全部通过）**
+
+| 命令 | 结果 |
+|---|---|
+| `npm test` | 49 文件 / **781 用例**（清理前 50 / 809 —— 删掉的 `textScore.test.js` 带走 28 例） |
+| `npm run test:ui` | css-check 缺失 0 / 对比度 / 字阶 19/19 / hooks 45 文件 |
+| `npm run build` | 通过，`index-*.js` 384.59 kB（gzip 126.15）、CSS 101.06 kB（gzip 17.39） |
+| `npm run test:guard` | 49 文件 / 781 用例，磁盘与实跑数一致 |
+| `npm run test:settings` | **48/48**（11-15 报告里的 7 条过期断言已在本区间修完，不再是红灯） |
+| `npm run test:responsive` | 36 档 / **603 项**断言，失败 0 |
+| `npm run test:tools` | 73/73 |
+| `npm run test:attack` | 46/46 |
+| `cargo check` / `cargo test` | 无 warning；**13/13** |
+| `npm audit --omit=dev` | **0 漏洞** |
+| `npm audit`（含 dev） | 7 条（3 moderate / 2 high / 2 critical），全在 vite / vitest 链，见下方「未处理」 |
+
+**清理项**
+
+- **临时产物 3.3G**（全部在 `.gitignore` 内，可重新生成）：根 `.tmp/`（61M，QA 截图 + `node-compile-cache`）、`todolist-gui/.tmp/`（278M，69 个哈希目录，vitest 落盘残留）、`todolist-gui/qa-artifacts/`（4.9M 截图）、`todolist-gui/dist/`（0.6M 构建产物）、`src-tauri/target/debug/`（3.0G 开发档编译缓存）。仓库体积 4.7G → **1.4G**；`target/release/` 保留（内含可用的 macOS `.app`）。4 个 `.DS_Store` 删除。
+- **两个零引用模块**：`src/lib/listTypography.js`（111 行，排版偏好 —— 已被 `readingDensity.js` + `listStyle.js` 取代，`applyListTypography` 全仓无人调用）、`src/lib/textScore.js` + `textScore.test.js`（169 行，模糊匹配打分 —— 随语言层退场后只剩自己的测试在引用它）。
+- **三组死样式**：`.tool-group-toggle`（3 条规则 + `.tool-col-in` 网格里那条 `grid-area: caret` + 触屏 44px 清单里的一项）、`.tool-group-caret`（2 条）—— 工具墙的可折叠组头已重写，`RtiCompare` / `BulkPrioTool` 只用 `-head` / `-label` / `-meta` / `-acts`；`.tool-badge.is-ok`（`riskBadges` 的 tone 只有 quiet / warn / danger，没有 ok）。CSS 类名 473 → 470。
+- **复扫确认零残留**：重跑孤儿样式扫描，剩余「源码零引用」只有 `.rdp-*`（`@daypicker` 运行时生成）与 `density-a-*` / `resize-*` / `tool-layout-*` / `prio-*`（模板字符串拼接）—— **真孤儿 0 组**。
+
+**未处理（有意保留，已记在案）**
+
+- `backup/`（11 个文件，含 `index.css.pre-rebase-20261008.css` 与 6 份历史 `todo-*.txt`）与根 `scripts/*.py`（topydo 时代的安装 / 换肤脚本，`docs/` 里仍有引用）—— 是历史资产不是垃圾，删了会断文档链接。
+- 仓库根 `todo.txt` / `done.txt` 仍是 0 字节占位（真实数据在 `~/Documents/todolist/`）。
+- dev 依赖 7 条漏洞要升 vite 7 + vitest 5，属大版本迁移；本地离线应用、不进产物，风险实为低。
+- `src-tauri/target/release/` 1.2G 保留（含 macOS 打包产物），`src-tauri/gen/` 344K 是 Tauri 脚手架生成物。
+
+### 验证
+
+`npm test` 781/781、`test:ui`（CSS 缺失 0 / 运行时拼接缺失 0 / 对比度 / 字阶 19 / hooks 45）、`build`、`test:guard` 49 文件 781 例、`qa-settings` 48/48、`qa-responsive` 36 档 603 项、`qa-tools` 73/73、`qa-independent` 46/46、`cargo check` 无 warning + `cargo test` 13/13、`npm audit --omit=dev` 0 漏洞。版本号五处（`package.json` / `package-lock.json` 根两行 / `Cargo.toml` / `Cargo.lock` 的 `worktodolist` 条目 / `tauri.conf.json`）全部 1.5.1，`cargo check` 未改写锁文件其余部分。
+
+下面是本版区间内（v1.5.0 → v1.5.1）的逐轮改动原文，按日期倒序 —— 保留当时的验证数据与取舍理由，方便回溯每一次判断。
+
+### 2026-11-16（二十改：日志不再映射到日历，日历只画「全部」）
+
+**一句话**：日历从此**只有一份数据来源** —— `todo.txt` 里全部未完成的任务（也就是「全部」列表那一批）。「日志」（`done.txt`）是已完成的记录，**不再按完成日投影到日历**，那一整套只读形态（「本月完成」读数、只读标、灰掉的不可拖 chip、浮层「没有完成记录 / 无添加入口」）一并删除。
+
+#### 改动
+
+- **`lib/calendar.js` 只剩一个来源**：`calendarSource(todoEntries)` 返回 `{ tasks: 未完成, dateKey: 'dueDate' }`。形参里的 `doneEntries` / `view` **直接去掉**（不是加个 if 挡掉）—— 签名本身就是这条边界的护栏，后面谁想再塞日志进来，得先改函数签名。`projectionForMonth` / `calendarProjection` 一并瘦身为 `(todoEntries, query, today[, month])`。
+- **只读那套删除**：投影不再返回 `readonly` / `undated`；`CalendarView` 的 chip 恒可拖、页头恒「本月到期」；`CalendarDayPopover` 只有一种形态（永远带「添加任务」）；`index.css` 删掉 `.cal-stats-ro` 与 `.cal-chip.cal-done`（含窄屏 8px 色块那支），`undatedTasks`（无日期托盘）连函数一起清掉。
+- **从「日志」切进日历，视图落回「全部」**（`App.jsx`）：日历模式下四个视图条目本来就不亮（选中态互斥），但面包屑会写着「日志」、格子里画别的任务，所以进日历时把 `view` 归到 `all`。
+- **门禁同步**：`qa-css-check` 的运行时拼接白名单去掉 `cal-done`；`qa-settings` 的 `calendar-done` 舞台断言改写为「日志视图里打开日历仍只画未完成 —— 无只读标、chip 全部可拖、不出现已完成条目」；`calendar.test.js` / `CalendarView.test.jsx` 的只读与托盘断言换成「日志不参与投影」。
+
+#### 验证
+
+`npm test` 809/809、`test:ui`（CSS 缺失 0 / 运行时拼接缺失 0 / 对比度 / 字阶 19 / hooks 45）、`test:guard` 50 文件 809 用例、`build`、`qa-settings` 48/48（含新的「日志不进日历」）、`qa-responsive` 36 档 603 项全绿。真实数据核对（`Documents/todolist`：todo 36 条未完成 / done 25 条完成）：日历数据源 36 条、其中已完成 0 条，网格里出现已完成标题 0 条；样式指南 `?view=calendar` 与 `?view=calendar-done` 两页的格子内容与读数完全一致（本月到期 13 / 逾期 1）。
+
+### 2026-11-16（十六改：chip 左缘墨条回归、浮层行高 70%、弹层不再跳）
 
 **一句话**：日历格子里的任务条重新长出**左缘那道墨条**，颜色取该档深色（浅红底 + 深红条、浅橙底 + 深橙条……）；「当天任务」浮层里的行**行高收到 70%**，鼠标扫过去也不再整行上下跳一下。
 
-### 改动
+#### 改动
 
 - **左缘墨条回来，且跟底色同族**（`index.css`）：`.cal-chip` 加 `--chip-bar`（按 `prio-*` 取 `--chip-high|mid|low|none-fg`）与 `--chip-bar-w`（2px），由 `.cal-chip::before` 画成 2px 竖条，左缘圆角跟 chip 一致。**没用 `border-left`**（会把文字挤右、且和 `--row-pad` 互相牵制），**也没用 `box-shadow`**（悬停已经占了内描边，两者会互相顶掉）。文字左内距同步加一个条宽 `calc(var(--sp-1) + var(--chip-bar-w))`，标题不会被条压住。已完成 chip（无底色）与窄屏 8px 色块（块本身就是记号）都关掉墨条。
 - **浮层行高 70%**（`.cal-pop .task-row`）：`min-height: calc(var(--row-h) * 0.7)`，32 → 22.4px。不重定义 `--row-h`，密度设置（28/32/38）与设置页样张不受影响。
 - **修「鼠标移上去跳一下」**：`.task-head` 的悬停上移（`translateY(-6px)`，本来是为了给行底读数行让位）在浮层里没有意义 —— 那里 `minimal` 根本不渲染读数行。给 `TaskRow` 加 `.is-minimal` 类，并在浮层范围内把 `.task-head` 的 `transform` 钉成 `none`（含 `:hover` / `:focus-visible` 两个变体）。
 
-### 验证
+#### 验证
 
 `npm test` 795/795（新增 3 例：`is-minimal` 类与读数行不渲染、主列表不带 `is-minimal`、浮层 70% 行高与 `transform: none` 的样式契约；chip 契约改写为「四档墨条取 `-fg` + 伪元素绘制」）、`test:ui`（CSS 缺失 0 / 运行时拼接缺失 0 / 对比度 132 组 0 失败 / 字阶 19 / hooks 45）。浏览器实测：四档墨条 2px、颜色 = 对应 `-fg`（`rgb(140,30,23)` / `rgb(116,69,10)` / `rgb(20,71,127)` / `rgb(61,59,53)`），文字左内距 6px；浮层行 `min-height: 22.4px`、实测行盒 22px、悬停时 `.task-head` 的 `transform` 仍是 `none`；深色主题下墨条与底色明度差 7.2–8.1（清晰可辨）。
 
-## 未发布 · 2026-11-16（十五改：日历 chip 按优先级着色并可拖，浮层可置顶 / 可拖动 / 可多开）
+### 2026-11-16（十五改：日历 chip 按优先级着色并可拖，浮层可置顶 / 可拖动 / 可多开）
 
 **一句话**：日历格子里的任务条**只剩标题 + 一档底色**（高红 / 中橙 / 低蓝 / 无灰，灰比周末格底明显更深），可以**直接拖到别的日期**改期；点开的那块「当天任务」变成**可置顶、可拖动的小窗口**，能同时开好几天的清单并排看；顺手修掉「在浮层里滚动 / 拖滚动条它自己关掉」的 bug，以及列表与「添加任务」之间那条**接缝**。
 
-### 改动
+#### 改动
 
 - **chip 只剩标题 + 底色**（`index.css` 的 `.cal-chip.prio-*`）：新增令牌 `--chip-{high,mid,low,none}-{bg,fg}`（明暗两套），高红 / 中橙 / 低蓝 / 无灰；D~Z 与「无」同灰。项目色点（`.cal-chip-dot`）与左缘墨条（`.cal-chip-bar`）**删除**。窄屏 8px 色块改用 `--flag-*` 的实色，8px 的淡底看不见。
 - **「无」档的灰要与格子分开**（用户点名：周六日格子混色）：浅色 `#d9d5cc`、暗色 `#3b3931`；`qa-contrast.mjs` 加两条「块 vs 格底 ≥1.12」的明度差守卫，外加四档「字 / 底 ≥4.5」。
@@ -31,29 +90,29 @@
 - **日历取数不再跟侧栏视图走**：`calendarSource` 只认「已完成」一支，其余一律取**全部未完成**。切今日 / 分类 / 标签不会再让某一天凭空少几条；搜索仍生效（显式动作）。
 - **样式指南**：`?view=list-all` 加一条「五段读数全有」的样张（每月对账并导出流水），用来核对分段顺序与竖线。
 
-### 验证
+#### 验证
 
 `npm test` 792/792（新增 5 例：视图不影响取数、chip 无点无条、chip 可拖、置顶钮、minimal 行、接缝与底色令牌）、`test:ui`（css-check「缺失 无」、对比度 132 组 0 失败、字阶 19、hooks 45）、`test:guard` 49 文件 / 792 例、`qa-responsive` 36 档 588 项、`qa-settings` 48/48、`npm run build`。浏览器实测：接缝 0px、末行 `border-bottom: 0px`、浮层内滚动不再关、置顶后点外面仍在、两块同屏、chip 拖 11-14 → 11-16 生效。
 
-## 未发布 · 2026-11-16（十四改：读数行分五段、竖线分节、字号统一）
+### 2026-11-16（十四改：读数行分五段、竖线分节、字号统一）
 
 **一句话**：鼠标悬停浮出的读数行从「一长串挤在一起」改成**五段用细竖线切开**——`日期 · 子任务 ｜ 分类 ｜ 标签 ｜ 重复 ｜ 提醒`，**全行统一 11px**（原来后面的信息比日期更小，读起来像注脚）；空着的段连同竖线一起不画。
 
-### 改动
+#### 改动
 
 - **分段顺序与分隔线**（`TaskRow.jsx`）：读数行不再手写一串 `{due}{ctx}{proj}…`，改为先构造 `metaGroups[]`，渲染时 `map` 并**只在两段之间**插 `.meta-sep`（1px × 9px，`--border-strong`）。空段不 push，所以竖线数恒等于「非空段数 − 1」，不会留孤立线头。
 - **字号统一**：`.task-meta` 整行 `font-size: var(--fs-2xs)`，日期与后四段同号；新增 `.meta-field`（内联 flex + `--sp-1` 间隙 + `--muted`）作为分类 / 标签 / 重复 / 提醒的统一外壳，`.is-time` 走 `--font-mono`。旧的 `.rec-chip` 整条删除。
 - **提醒进读数行**：`rem:` 渲染为 🕐 + `MM/DD HH:mm`（导出 `remindLabel`），不再只存在于编辑浮窗里。
 
-### 验证
+#### 验证
 
 `npm test` 792/792（读数行新增 6 例：段序、竖线数＝段数−1、空段无线、提醒格式、无 `rem:` 不出、字号与 `.meta-sep` 样式契约）、`test:ui` 全绿。浏览器实测某行副行 = `2026/12/01 ☰0/1 ｜ 投资 ｜ ●复盘 ｜ ↻每月 ｜ 🕐11/30 09:30`，`sepCount: 4`、`sepBox: 1×9`、`metaFont = dueFont = 11px`。
 
-## 未发布 · 2026-11-16（十三改：读数行报分类 / 标签，子任务补齐三处，快捷按钮加编辑）
+### 2026-11-16（十三改：读数行报分类 / 标签，子任务补齐三处，快捷按钮加编辑）
 
 **一句话**：列表悬停时的读数行**多了分类与标签**（只写名字、不带 `@` / `+`）；「今日」终于有子任务层级、「即将到期」的展开箭头不再点开为空；行内快捷按钮从三枚变**四枚**（多一枚编辑），优先级下拉**收窄一半**，且鼠标移到下拉上时那组按钮**不再消失**；新建框右侧那串语法提示**整块删掉**。
 
-### 改动
+#### 改动
 
 - **读数行（`.task-meta`）**：截止日之后渲染分类（`.meta-ctx`）与标签（`.meta-tag`，前置 6px 色点、`--dot-edge` 描边，与侧栏圆点同源）。**只写名字** —— `@` / `+` 是 todo.txt 的写法，不搬到界面上。每枚 `max-width: 14ch` + 省略，防止把日期挤出行外。
 - **侧栏 / 底栏术语统一**：`+项目` 那组从「列表」改名「标签」（侧栏组名、底部导航菜单的「标签 +」与空态文案、`aria-label`）。「列表」在本应用里专指主区的任务清单，同名两处会让人以为点它回到清单；编辑浮窗早已写「+标签」。
@@ -65,7 +124,7 @@
 - **新建框右侧语法提示删除**：`.quick-add-hint` 的 JSX 与 CSS（含窄屏那条 `display:none`）一并删除。占位文字已经说清这一行做什么，chips 预览照旧。
 - `styleguide.jsx`：舞台的 `openEditor` 从 `noop` 改成真实状态（`editingTask` + `EditDrawer`）—— 原先点「编辑」毫无反应，CDP 验证不了这条链路。
 
-### 验证
+#### 验证
 
 - `npm test` **781 例**（+15）：`withDescendants` 4 条、视图层级 6 条（今天嵌套 / 分组继承 / displayOrder 同源 / 即将到期带后代 / 搜索不补）、读数行 4 条（不带 `@` `+`、色点只给标签、空态不画、子行不画）、新建框提示 1 条（源码级）。
 - `test:ui` 全绿（css-check 无缺失类名 / 对比度 120 组 / 字阶 19 项 / hooks 45 文件）；`test:guard` 49 文件 781 例全跑到；`npm run build` 通过。
