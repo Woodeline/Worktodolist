@@ -3,6 +3,9 @@
 // 组件本身驱动不了（SSR 没有输入事件），所以折叠逻辑放在 quickChips 里，
 // 这里直接驱动它。守的是一条静默失败：chips 超过容器宽度时旧行为是
 // overflow:hidden 裁掉 —— 界面不报错，只是用户看不到解析结果。
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { MAX_QUICK_CHIPS, quickChips } from './QuickAdd.jsx';
 import { parseQuickInput } from '../lib/todoParser.js';
@@ -50,5 +53,21 @@ describe('quickChips（快速添加的 chips 预览）', () => {
     const { all } = quickChips(parseQuickInput('写周报 star:1 foo:bar'));
     expect(all.map((c) => c.label)).toContain('star:1');
     expect(all.map((c) => c.label)).toContain('foo:bar');
+  });
+});
+
+// 2026-11-16：输入框右侧那串「@分类 +项目 due:日期 (A)」已整块删除。
+// 占位文字已经说清这一行做什么，语法说明放在旁边只会让人以为要先学语法。
+// 这个文件不渲染组件（SSR 驱动不了输入事件），所以直接读源码钉住"不许写回来"。
+describe('QuickAdd 不再挂语法提示', () => {
+  const src = readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), 'QuickAdd.jsx'),
+    'utf8'
+  );
+
+  it('源码里不再有语法提示节点与文案', () => {
+    expect(src).not.toContain('quick-add-hint');
+    expect(src).not.toContain('due:日期 (A)');
+    expect(src).not.toContain('@分类 +项目');
   });
 });

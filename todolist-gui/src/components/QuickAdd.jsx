@@ -92,13 +92,9 @@ export default function QuickAdd({ store, inputRef, seed = null, resetKey = 0 })
         onChange={(e) => setText(e.target.value)}
         placeholder="添加任务，回车创建"
       />
-      {/* 语法提示从占位文字里挪到右端：占位文字一长，第一眼就不知道这一行是干什么的。
-          它只在不输入时出现，输入后让位给 chips 预览。 */}
-      {!text && !parsed && (
-        <span className="quick-add-hint" aria-hidden="true">
-          @分类 +项目 due:日期 (A)
-        </span>
-      )}
+      {/* 输入框右端的语法提示已于 2026-11-16 整块移除（@ / + / due: / (A) 那一串）：
+          用户明确不要这行"说明书"—— 占位文字已经说清这一行做什么，
+          旁边再挂一串语法只会让人以为要先学语法才能用。chips 预览仍照常出现。 */}
       {parsed && (
         <div className="chips" data-line={nextLine}>
           {shown.map((c) => (

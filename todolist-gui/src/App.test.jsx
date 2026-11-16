@@ -124,8 +124,12 @@ describe('列表折叠的数据流', () => {
     expect(src).toContain('useRowCollapse()');
     expect(src).toContain('collapsed={collapsed}');
     expect(src).toContain('toggleExpand={toggleExpand}');
-    expect(src).toContain('filterCollapsed(nestChildren(visible, nesting), nesting, collapsed)');
+    // ↑↓ 的走序与主列表同源：nestChildren → filterCollapsed，视图无关。
+    expect(src).toContain('filterCollapsed(nestChildren(visible, nestingForNav), nestingForNav, collapsed)');
     expect(src).toContain('filterCollapsed(nested, nesting, collapsed)');
+    // 「今天」自 2026-11-16 起也有层级：displayOrder 之后同样要滤掉被收起的子行，
+    // 否则 ↑↓ 会走进一条看不见的行。
+    expect(src).toContain('filterCollapsed(ordered, nestingForNav, collapsed)');
     expect(src).not.toContain('notCollapsed');
   });
 });

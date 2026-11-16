@@ -247,8 +247,6 @@ export function MainList({ store, query, collapsed: collapsedProp, toggleExpand:
   );
 
   // 子任务索引：一次建好，行自己不再扫全表。
-  // 「今天」视图刻意不按层级缩进 —— 那个视图先按紧急度分流，父子本来就会被拆到
-  // 不同组，缩进一条没有父在旁边的行只会让人以为界面坏了。
   // 索引要同时吃 todo 与 done：**已完成的子任务也算进度**（2/3 里的 2 就是它们），
   // 只看 todo 的话，子任务一完成就从进度里消失了，分母跟着缩水。
   const nesting = useMemo(
@@ -257,14 +255,19 @@ export function MainList({ store, query, collapsed: collapsedProp, toggleExpand:
   );
   // 编号列已隐藏：不再算行号，也不把它作为 prop 传进行。
   // 排序仍走 viewTasks / nestChildren —— 行号与顺序从来是两条独立链路。
-  // 「今天」视图按紧急度分组，父子本来就不挨着，展开 / 收起在那里没有意义；
-  // 只有带层级的列表才把整行单击接到子列表上。
-  const expandable = store.view !== 'today';
+  // 「今天」自 2026-11-16 起也带层级：子任务挂在父任务下面，可以展开 / 收起
+  // （分组仍按紧急度，见 lib/sortFilter.js 的 todayGroups）。
+  const expandable = store.view !== 'done';
+
+  // 本屏真正铺出来的任务 id（还没算收起）：箭头只在「有子任务落在本屏」时出现。
+  // 只看 kids.total 会画出点开为空的箭头 —— 「即将到期」里子任务没截止日就是这样。
+  const visibleIds = useMemo(() => new Set(visible.map((t) => t.id)), [visible]);
 
   const rowProps = useCallback(
     (t) => {
       const kids = childProgress(nesting, t.stableId);
-      const canExpand = expandable && kids.total > 0;
+      const kidInView = (nesting.byParent.get(t.id) || []).some((k) => visibleIds.has(k.id));
+      const canExpand = expandable && kids.total > 0 && kidInView;
       const key = t.stableId || t.id;
       return {
         depth: expandable ? depthOf(nesting, t) : 0,
@@ -274,7 +277,7 @@ export function MainList({ store, query, collapsed: collapsedProp, toggleExpand:
         onToggleExpand: canExpand ? () => toggleExpand(key) : null,
       };
     },
-    [nesting, expandable, collapsed, toggleExpand]
+    [nesting, expandable, collapsed, toggleExpand, visibleIds]
   );
 
   const rawSection = (store.view === 'all' || store.view === 'inbox') && rawEntries.length > 0;
@@ -315,23 +318,29 @@ export function MainList({ store, query, collapsed: collapsedProp, toggleExpand:
   }
 
   if (store.view === 'today') {
-    const groups = todayGroups(visible, today);
+    // visible 已按「父前子后」排过（viewTasks），分组保持这个相邻关系；
+    // 收起态在这三组里同样生效 —— 否则收起父项后子行仍摊在下面。
+    const groups = todayGroups(visible, today, nesting);
+    const pick = (list) => filterCollapsed(list, nesting, collapsed);
+    const overdue = pick(groups.overdue);
+    const dueToday = pick(groups.dueToday);
+    const noDate = pick(groups.noDate);
     return (
       <div>
-        {groups.overdue.length > 0 && (
+        {overdue.length > 0 && (
           <GroupHead label="逾期" count={groups.overdue.length} tone="overdue" />
         )}
-        {groups.overdue.map((t) => (
+        {overdue.map((t) => (
           <TaskRow key={t.id} task={t} store={store} query={query} {...rowProps(t)} />
         ))}
-        {groups.dueToday.length > 0 && (
+        {dueToday.length > 0 && (
           <GroupHead label="今天到期" count={groups.dueToday.length} />
         )}
-        {groups.dueToday.map((t) => (
+        {dueToday.map((t) => (
           <TaskRow key={t.id} task={t} store={store} query={query} {...rowProps(t)} />
         ))}
-        {groups.noDate.length > 0 && <GroupHead label="无日期" count={groups.noDate.length} />}
-        {groups.noDate.map((t) => (
+        {noDate.length > 0 && <GroupHead label="无日期" count={groups.noDate.length} />}
+        {noDate.map((t) => (
           <TaskRow key={t.id} task={t} store={store} query={query} {...rowProps(t)} />
         ))}
       </div>
@@ -343,7 +352,6 @@ export function MainList({ store, query, collapsed: collapsedProp, toggleExpand:
   // filterCollapsed 只认「父也在这屏」的层级，避免切视图 / 搜索后任务凭空消失。
   const nested = nestChildren(visible, nesting);
   const ordered = filterCollapsed(nested, nesting, collapsed);
-
   return (
     <div>
       <GroupHead
@@ -592,12 +600,15 @@ export default function App() {
   const orderedIds = useMemo(() => {
     if (store.view === 'done') return [];
     const today = dayjs().format('YYYY-MM-DD');
+    const nestingForNav = buildNesting([...store.todoEntries, ...store.doneEntries]);
+    // 「今天」也带层级了（2026-11-16）：收起父项后 ↑↓ 不能再走进被藏起来的子行，
+    // 所以这里和其余视图一样过一遍 filterCollapsed。
     if (store.view === 'today') {
-      return displayOrder(store.todoEntries, store.view, store.sortMode, query, today).map((t) => t.id);
+      const ordered = displayOrder(store.todoEntries, store.view, store.sortMode, query, today);
+      return filterCollapsed(ordered, nestingForNav, collapsed).map((t) => t.id);
     }
     const visible = viewTasks(store.todoEntries, store.view, store.sortMode, query, today);
-    const nesting = buildNesting([...store.todoEntries, ...store.doneEntries]);
-    return filterCollapsed(nestChildren(visible, nesting), nesting, collapsed).map((t) => t.id);
+    return filterCollapsed(nestChildren(visible, nestingForNav), nestingForNav, collapsed).map((t) => t.id);
   }, [store.todoEntries, store.doneEntries, store.view, store.sortMode, query, collapsed]);
   // 页签切换过渡：内容区一次 140ms 的轻淡入。刻意不走「按 key 重挂内容」——
   // 那会把侧栏展开状态一起重置，代价远超收益；这里只让整个

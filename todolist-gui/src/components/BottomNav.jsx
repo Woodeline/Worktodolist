@@ -9,7 +9,7 @@ import Icon from './Icon.jsx';
 //
 // 桌面端导航就是左侧目录；窄屏（≤768）目录没有容身之处，于是：
 //   · 「今日 / 即将到期 / 全部」三枚视图按钮落到窗口底边，固定常驻；
-//   · 「标签」是第四枚 —— 分类（@）与列表（+）收进它的上弹菜单，点一下按标签筛。
+//   · 「标签」是第四枚 —— 分类（@）与标签（+）收进它的上弹菜单，点一下按标签筛。
 //     **它不叫「列表」**：这个应用里"列表"已经指主区的任务清单，
 //     同名两处会让人以为点它是回到清单。
 //
@@ -28,14 +28,14 @@ const isLabelView = (view) => view.startsWith('@:') || view.startsWith('+:');
  *
  * @param {{contexts:Array<{name:string,count:number}>, projects:Array<{name:string,count:number}>}} stats
  * @param {string} view 当前视图（`@:名` / `+:名` 表示已按标签筛）
- * @param {(name:string)=>string} dotFor 列表圆点取色
+ * @param {(name:string)=>string} dotFor 标签圆点取色
  * @param {(view:string)=>void} pickView 选中回调
  */
 export function buildLabelMenu(stats, view, dotFor, pickView) {
   const row = (prefix, { name }) => ({
     type: 'item',
     label: name,
-    // 只有 +列表 带圆点：@分类 在侧栏里也没有对应物，两处口径必须一致。
+    // 只有 +标签 带圆点：@分类 在侧栏里也没有对应物，两处口径必须一致。
     mark:
       prefix === '+' ? (
         <span className="nav-dot" style={{ background: dotFor(name) }} />
@@ -58,12 +58,12 @@ export function buildLabelMenu(stats, view, dotFor, pickView) {
     stats.contexts.forEach((c) => items.push(row('@', c)));
   }
   if (stats.projects.length > 0) {
-    items.push({ type: 'sep' }, { type: 'header', label: '列表 +' });
+    items.push({ type: 'sep' }, { type: 'header', label: '标签 +' });
     stats.projects.forEach((p) => items.push(row('+', p)));
   }
   // 空态也要有个交代：菜单弹出来一片空白会被当成没点中。
   if (stats.contexts.length === 0 && stats.projects.length === 0) {
-    items.push({ type: 'sep' }, { type: 'item', label: '还没有分类或列表', disabled: true });
+    items.push({ type: 'sep' }, { type: 'item', label: '还没有分类或标签', disabled: true });
   }
   return items;
 }
@@ -133,7 +133,7 @@ export default function BottomNav({ store, listMode = 'list', onPickListMode }) 
         onClick={openLabels}
         aria-haspopup="menu"
         aria-current={onLabelView ? 'true' : undefined}
-        aria-label="标签：按分类或列表筛选"
+        aria-label="标签：按分类或标签筛选"
         title="标签"
       >
         <Icon name="tag" size={18} />

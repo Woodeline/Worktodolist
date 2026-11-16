@@ -5,7 +5,15 @@
 // 三种都不抛异常，只表现为"我的任务不见了" —— 所以每一条都写成断言。
 import { describe, expect, it } from 'vitest';
 import { parseFile } from './todoParser.js';
-import { buildNesting, childProgress, childrenOf, depthOf, filterCollapsed, nestChildren } from './subtasks.js';
+import {
+  buildNesting,
+  childProgress,
+  childrenOf,
+  depthOf,
+  filterCollapsed,
+  nestChildren,
+  withDescendants,
+} from './subtasks.js';
 
 const T = (lines) => parseFile(lines.join('\n'));
 
@@ -152,5 +160,41 @@ describe('childProgress', () => {
     const n = buildNesting(T(['装机 id:aaa111']));
     expect(childProgress(n, 'aaa111')).toEqual({ done: 0, total: 0 });
     expect(childProgress(n, null)).toEqual({ done: 0, total: 0 });
+  });
+});
+
+// 2026-11-16：「即将到期」里父项有箭头、点开却空的根因 —— 视图过滤器只认
+// 任务自己的 due:，子任务（往往没日期）根本没进这一屏。withDescendants 把它们补进来。
+describe('withDescendants（父项在本屏时带上后代）', () => {
+  it('补上不在列表里的子任务，原有顺序不变', () => {
+    const entries = T(['装机 id:aaa111 due:2026-10-20', '拆后盖 parent:aaa111', '买硅脂 parent:aaa111']);
+    const n = buildNesting(entries);
+    const parent = entries[0];
+    const out = withDescendants([parent], n);
+    expect(out.map((t) => t.title)).toEqual(['装机', '拆后盖', '买硅脂']);
+  });
+
+  it('递归补到孙辈（不限一层）', () => {
+    const entries = T([
+      '装机 id:aaa111 due:2026-10-20',
+      '拆后盖 id:bbb222 parent:aaa111',
+      '拧螺丝 parent:bbb222',
+    ]);
+    const n = buildNesting(entries);
+    const out = withDescendants([entries[0]], n).map((t) => t.title);
+    expect(out).toEqual(['装机', '拆后盖', '拧螺丝']);
+  });
+
+  it('已经在列表里的子任务不重复追加', () => {
+    const entries = T(['装机 id:aaa111 due:2026-10-20', '拆后盖 parent:aaa111 due:2026-10-21']);
+    const n = buildNesting(entries);
+    const out = withDescendants([entries[0], entries[1]], n);
+    expect(out).toHaveLength(2);
+    expect(new Set(out.map((t) => t.id)).size).toBe(2);
+  });
+
+  it('没有索引 / 空列表时原样返回（不炸）', () => {
+    expect(withDescendants([], null)).toEqual([]);
+    expect(withDescendants(null, buildNesting([]))).toEqual([]);
   });
 });

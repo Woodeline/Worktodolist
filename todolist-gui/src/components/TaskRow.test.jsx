@@ -65,20 +65,22 @@ describe('TaskRow 子任务展示', () => {
 });
 
 describe('TaskRow 重复标记', () => {
-  it('带 rec: 的任务显示 ↻，且规则写进 title', () => {
+  it('带 rec: 的任务显示 ↻ 和规则正文，完整表达式也写进 title', () => {
     const t = parseSingleLine('交周报 rec:mon,thu');
     const markup = render(t);
-    expect(markup).toContain('rec-chip');
-    // 完整规则只放在悬停提示里：列表是用来扫的，不该挤掉日期的位置
+    expect(markup).toContain('meta-field');
+    // 2026-11-16 十四改：段间加了竖线之后，一枚孤零的 ↻ 夹在两条线中间读不出是什么，
+    // 所以规则正文也上屏（describeRecurrence 本来就是中文短语）。
+    expect(markup).toContain('每周一、四');
     expect(markup).toContain('重复：每周一、四');
   });
 
   it('不带 rec: 的任务没有重复标记', () => {
-    expect(render(parseSingleLine('交周报'))).not.toContain('rec-chip');
+    expect(render(parseSingleLine('交周报'))).not.toContain('meta-field');
   });
 
   it('认不出的 rec: 也不显示标记（它已经降级成普通标签）', () => {
-    expect(render(parseSingleLine('交周报 rec:每周一'))).not.toContain('rec-chip');
+    expect(render(parseSingleLine('交周报 rec:每周一'))).not.toContain('meta-field');
   });
 });
 
@@ -150,11 +152,13 @@ describe('TaskRow 拖拽落点与快捷按钮', () => {
     expect(markup).not.toContain('drop-before');
   });
 
-  it('可编辑行带三个快捷按钮（星标 / 今天 / 删除）', () => {
+  it('可编辑行带四个快捷按钮（编辑 / 旗标 / 今天 / 删除）', () => {
     const t = parseSingleLine('交周报');
     const markup = render(t);
     expect(markup).toContain('row-quick');
-    expect(markup.match(/row-quick-btn/g)).toHaveLength(3);
+    expect(markup.match(/row-quick-btn/g)).toHaveLength(4);
+    // 编辑钮排在最左：点它 = 打开这一条的编辑浮窗（与双击等价）。
+    expect(markup).toContain('aria-label="编辑任务"');
   });
 
   it('只读行（done.txt）没有快捷按钮', () => {
@@ -411,7 +415,7 @@ describe('TaskRow 子任务行：独立版式（2026-11-15）', () => {
       { noteIds: new Set(['kid001']) }
     );
     expect(markup).not.toContain('2026/12/01');
-    expect(markup).not.toContain('rec-chip');
+    expect(markup).not.toContain('meta-field');
     expect(markup).not.toContain('note-chip');
   });
 
@@ -527,5 +531,116 @@ describe('慢速双击的行内编辑', () => {
     expect(src).toContain('setInlineEditing(true)');
     expect(src).toContain('onClick={handleRowClick}');
     expect(src).not.toContain('onDoubleClick={');
+  });
+});
+
+// 2026-11-16：读数行报归属。用户要求「悬停时把分类和标签也一起显示，
+// 但不要出现 @ / + 字符」—— 那两个前缀是 todo.txt 的写法，不是界面读数。
+describe('TaskRow 读数行里的分类与标签', () => {
+  it('分类与标签都出现在读数行，且不带 @ / + 前缀', () => {
+    const t = parseSingleLine('交周报 @工作 +回测 due:2026-10-05');
+    const markup = render(t);
+    const meta = markup.slice(markup.indexOf('task-meta'));
+    expect(meta).toContain('>工作<');
+    expect(meta).toContain('>回测<');
+    expect(meta).not.toContain('@工作');
+    expect(meta).not.toContain('+回测');
+  });
+
+  it('标签带一枚色点、分类不带（两类靠记号分开，不靠字符）', () => {
+    const markup = render(parseSingleLine('交周报 @工作 +回测'));
+    expect((markup.match(/meta-dot/g) || [])).toHaveLength(1);
+    expect(markup).toContain('class="meta-tag"');
+    expect(markup).toContain('class="meta-ctx"');
+  });
+
+  it('没有分类 / 标签时一个都不画（不留空壳）', () => {
+    const markup = render(parseSingleLine('交周报'));
+    expect(markup).not.toContain('meta-ctx');
+    expect(markup).not.toContain('meta-tag');
+  });
+
+  it('子任务行不渲染读数行，因此也不出现分类 / 标签', () => {
+    const t = parseSingleLine('拆后盖 @工作 +回测 parent:aaa111');
+    const markup = render(t, { depth: 1 });
+    expect(markup).not.toContain('meta-ctx');
+    expect(markup).not.toContain('meta-tag');
+  });
+});
+
+// 2026-11-16 十四改：读数行分段。用户的要求是「顺序：日期、子任务 ｜ 分类 ｜ 标签 ｜
+// 重复 ｜ 提醒，中间有分隔符号」，且所有读数统一到日期那一档字号。
+// 分段是纯排布 —— 少一段就少一道线，空行不能剩一条孤零零的竖线。
+describe('TaskRow 读数行分段（日期·子任务 │ 分类 │ 标签 │ 重复 │ 提醒）', () => {
+  const full = () =>
+    parseSingleLine('交周报 @工作 +回测 due:2026-10-19 rem:2026-10-18T15:00 rec:mon,thu');
+
+  it('六段按固定顺序出场', () => {
+    const meta = render(full(), { kids: { done: 1, total: 3 } });
+    const order = ['2026/10/19', '1/3', '工作', '回测', '每周一、四', '10/18 15:00'].map((s) =>
+      meta.indexOf(s)
+    );
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  it('段间竖线的数量恒为「段数 − 1」', () => {
+    const meta = render(full(), { kids: { done: 1, total: 3 } });
+    // 五段：① 日期·子任务 ② 分类 ③ 标签 ④ 重复 ⑤ 提醒 —— 日期与子任务同段。
+    expect((meta.match(/class="meta-sep"/g) || [])).toHaveLength(4);
+    // 只有一段时没有竖线，两段时一根
+    expect((render(parseSingleLine('交周报 due:2026-10-19')).match(/meta-sep/g) || [])).toHaveLength(0);
+    expect(
+      (render(parseSingleLine('交周报 due:2026-10-19 @工作')).match(/meta-sep/g) || [])
+    ).toHaveLength(1);
+  });
+
+  it('空读数行一个记号都不剩（不留空壳竖线）', () => {
+    const markup = render(parseSingleLine('交周报'));
+    expect(markup).toContain('class="task-meta"');
+    expect(markup).not.toContain('meta-sep');
+  });
+
+  it('提醒读数：只留「MM/DD HH:mm」，完整时刻在 title 里', () => {
+    const markup = render(parseSingleLine('交周报 rem:2026-10-23T15:00'));
+    expect(markup).toContain('10/23 15:00');
+    expect(markup).toContain('提醒：2026-10-23 15:00');
+    // 时刻是读数，走等宽（与日期同一支字体）
+    expect(markup).toContain('meta-field is-time');
+  });
+
+  it('没有 rem: 的任务不报提醒', () => {
+    expect(render(parseSingleLine('交周报 due:2026-10-23'))).not.toContain('is-time');
+  });
+
+  it('读数行只有一档字号：.task-meta 自己定 --fs-2xs，分类标签不再按正文 14px 混排', () => {
+    const css = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'index.css'),
+      'utf8'
+    );
+    const rule = css.slice(css.indexOf('.task-meta {'));
+    const block = rule.slice(0, rule.indexOf('}'));
+    expect(block).toContain('font-size: var(--fs-2xs)');
+    // 竖线是结构记号，用分组标题那条 --border-strong，不编码状态
+    expect(css).toContain('.meta-sep {');
+    expect(css).toContain('background: var(--border-strong)');
+  });
+});
+
+// 2026-11-16 十六改：日历浮层里的行（minimal）。那里没有读数行可让位，
+// 所以根上带 is-minimal、悬停不上移；行高由 .cal-pop .task-row 收到 70%。
+describe('TaskRow · 日历浮层的精简行（minimal）', () => {
+  it('根元素带 is-minimal，读数行与快捷按钮都不渲染', () => {
+    const markup = render(parseSingleLine(`交周报 due:2026-10-19 rem:2026-10-19T09:00`), {
+      minimal: true,
+    });
+    expect(markup).toContain('is-minimal');
+    expect(markup).not.toContain('class="task-meta"');
+    expect(markup).not.toContain('row-quick');
+    expect(markup).toContain('交周报');
+  });
+
+  it('不加 minimal 时没有 is-minimal（主列表不受影响）', () => {
+    expect(render(parseSingleLine('交周报'))).not.toContain('is-minimal');
   });
 });

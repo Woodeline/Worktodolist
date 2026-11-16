@@ -76,6 +76,20 @@
   --flag-mid: #b5700c;
   --flag-low: #15509b;
 
+  /* --- 日历 chip 底色（2026-11-16 十五改）：格子里只留标题，档位改由**底色**编码 ——
+         高红 / 中橙 / 低蓝 / 无灰。这是一次明确的例外：颜色平时只编码状态，
+         但格子里没有字号 / 记号可用的余地，四档只能靠色相分开（与旗标同源）。
+         「无」的灰必须比日期格底色（surface / 周末 surface-2 / 跨月 bg）明显更深，
+         否则周六日格子里的 chip 会和格子融成一片 —— 这是本轮修的具体问题。 --- */
+  --chip-high-bg: #f7e4e1;
+  --chip-high-fg: #8c1e17;
+  --chip-mid-bg: #f8ecd3;
+  --chip-mid-fg: #74450a;
+  --chip-low-bg: #e4ecf9;
+  --chip-low-fg: #14477f;
+  --chip-none-bg: #d9d5cc;
+  --chip-none-fg: #3d3b35;
+
   /* --- 强调色：墨绿。只表「今天 / 选中 / 完成 / 焦点」；
          对 surface / bg / accent-soft 均 ≥4.5:1，与 danger 红、warn 琥珀拉开色相 --- */
   --accent: #1e6b4f;
@@ -329,6 +343,16 @@
   --flag-high: #f0968d;
   --flag-mid: #e8ad68;
   --flag-low: #86b6f0;
+  /* 日历 chip 底色（暗色版）：同色相压暗，文字提亮；「无」压到比 surface-2 更亮一档，
+     暗底上才分得清格子与 chip。 */
+  --chip-high-bg: #3c221f;
+  --chip-high-fg: #f3a49b;
+  --chip-mid-bg: #362c18;
+  --chip-mid-fg: #e6c286;
+  --chip-low-bg: #1d2b3d;
+  --chip-low-fg: #9cc3f2;
+  --chip-none-bg: #3b3931;
+  --chip-none-fg: #cfccc2;
   --accent: #6cc59c;
   --accent-hover: #82d1ac;
   --accent-fg: #0d1f17;
@@ -1163,16 +1187,8 @@ code {
   opacity: 1;
 }
 
-/* 语法提示：等宽小字，贴着右端。它不是按钮，所以不上底色、不加边框。 */
-.quick-add-hint {
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-  font-size: var(--fs-2xs);
-  color: var(--muted);
-  white-space: nowrap;
-  padding-right: var(--sp-1);
-  user-select: none;
-}
+/* 语法提示（.quick-add-hint）已于 2026-11-16 整块删除：用户明确不要输入框右侧
+   那串「@分类 +项目 due:日期 (A)」。占位文字已经说清这一行做什么，chips 预览照旧。 */
 
 /* --- 写入行：一句话落成 todo.txt 里的一行。
        行号槽 + 等宽原文，右侧与输入区之间一根发丝线。
@@ -1773,6 +1789,14 @@ code {
   pointer-events: auto;
 }
 
+/* 优先级下拉开着时把快捷按钮钉住（2026-11-16）：菜单是挂在 body 上的浮层，
+   鼠标一移过去就离开本行，`:hover` 立刻失效、按钮当场消失 —— 人还在挑档位，
+   "浮窗"却先跑了。关掉菜单（选完 / Esc / 点外面）撤掉这个类，两者一起收。 */
+.task-row.is-quick-pinned .row-quick {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .row-quick-btn {
   display: grid;
   place-items: center;
@@ -2074,6 +2098,10 @@ code {
   align-items: center;
   gap: var(--sp-2);
   min-width: 0;
+  /* 读数行只有一档字号（2026-11-16 十四改）：日期 / 分类 / 标签 / 重复 / 提醒
+     全部对齐这一档，不再让分类标签按正文字号（14px）混进来 ——
+     同一行里两种字号，扫下来像两段不相干的信息。 */
+  font-size: var(--fs-2xs);
   line-height: 1;
   white-space: nowrap;
   overflow: hidden;
@@ -2104,6 +2132,72 @@ code {
   .task-head {
     transform: translateY(calc(var(--meta-lift) * -1));
   }
+}
+
+/* --- 读数行里的归属（2026-11-16） ---
+   分类与标签进读数行后，只写名字：@ / + 是 todo.txt 的写法，不是界面读数。
+   两类靠一枚 6px 色点分开（标签带点、分类不带），与侧栏 / 面包屑 / 日历同一套色板。
+   名字都可能很长，所以每一枚都自带省略：读数行是 nowrap + overflow:hidden 的，
+   不让单个数标签把日期挤出行外。 */
+.meta-ctx,
+.meta-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.meta-tag {
+  color: var(--text-2);
+}
+
+.meta-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  /* 与侧栏圆点同一条描边：压在浅底上不糊边界。 */
+  box-shadow: 0 0 0 1px var(--dot-edge);
+}
+
+/* 段与段之间的那道竖线（2026-11-16 十四改）：
+   读数行按「时标 │ 分类 │ 标签 │ 重复 │ 提醒」分段，段间一道 1px 竖线。
+   与分组标题左缘那枚竖记号同源（同一条 --border-strong），但更细更短 ——
+   11px 的读数行里再画 3px 宽的色条就成了装饰，会跟优先级旗标抢眼。
+   它是结构记号，不编码状态，所以不跟着逾期 / 优先级换色。 */
+.meta-sep {
+  flex-shrink: 0;
+  inline-size: 1px;
+  block-size: 9px;
+  border-radius: 1px;
+  background: var(--border-strong);
+}
+
+/* 带记号的读数（重复 / 提醒）：图标 + 一个字一个字的短语。
+   以前「重复」只有一枚孤零的 ↻、规则藏在 title 里；加了分段竖线之后，
+   两条竖线中间夹一枚无字图标读不出是什么，所以把规则本身写出来。 */
+.meta-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex-shrink: 0;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* 时刻是读数，走等宽（与日期同一支字体）；中文短语仍归界面字体。 */
+.meta-field.is-time {
+  font-family: var(--font-mono);
+}
+
+.meta-field .icon {
+  flex-shrink: 0;
 }
 
 /* --- 子任务 --- */
@@ -2200,16 +2294,8 @@ code {
   flex-shrink: 0;
 }
 
-/* 重复标记：↻ 一个字符，颜色压到最低 —— 它只是"这条会自动再来"的提示，
-   不该和优先级 / 截止日抢注意力。 */
-.rec-chip {
-  display: inline-flex;
-  align-items: center;
-  font-size: var(--fs-2xs);
-  color: var(--muted);
-  line-height: 1;
-  flex-shrink: 0;
-}
+/* 重复标记：2026-11-16 十四改起并入 .meta-field —— 一枚 ↻ 后面带上规则正文
+   （每周 / 每个工作日），不再只是图标。旧的胶囊样式已整条删除，别引回来。 */
 
 /* 编辑浮窗里的子任务区块 */
 .field-subtasks {
@@ -2603,7 +2689,12 @@ mark {
   font-weight: 600;
 }
 
-/* --- 任务 chip：列表行在格子里的缩略形态（读数，不是按钮） --- */
+/* --- 任务 chip：列表行在格子里的缩略形态 ---
+   2026-11-16 十五改：整块底色表达档位（高红 / 中橙 / 低蓝 / 无灰，令牌见 §1 的
+   --chip-*-bg / -fg）；十六改把**左缘墨条**请回来，颜色取该档的深色（-fg），
+   于是「同一条 chip 只有一档色」——底色是淡的那层、墨条是深的那层。
+   项目色点仍然不画（格子里 11px 装不下三种记号）。
+   可拖（拖到别的格子 = 改 due），所以悬停给一层内描边 + 抓手光标，读成"这条能抓"。 */
 .cal-chips {
   display: flex;
   flex-direction: column;
@@ -2613,18 +2704,36 @@ mark {
 }
 
 .cal-chip {
+  /* 墨条宽度与颜色：颜色由下面四档各自覆盖，默认跟「无」同档。
+     用伪元素而不是 border-left —— border 会挤动文字，box-shadow 又会跟悬停的内描边打架。 */
+  --chip-bar: var(--chip-none-fg);
+  --chip-bar-w: 2px;
+  position: relative;
   display: flex;
   align-items: center;
-  gap: var(--sp-1);
   flex-shrink: 0;
   min-width: 0;
-  padding: 0 var(--sp-1) 0 0;
-  border: 1px solid transparent;
+  padding-block: 0;
+  padding-inline: calc(var(--sp-1) + var(--chip-bar-w)) var(--sp-1);
+  border: 0;
   border-radius: var(--r-xs);
-  background: var(--surface-2);
+  background: var(--chip-none-bg);
   font-size: var(--fs-2xs);
   line-height: 16px;
-  color: var(--text);
+  color: var(--chip-none-fg);
+  cursor: grab;
+  transition: box-shadow var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
+}
+
+.cal-chip::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: var(--chip-bar-w);
+  border-start-start-radius: var(--r-xs);
+  border-end-start-radius: var(--r-xs);
+  background: var(--chip-bar);
 }
 
 .cal-chip-text {
@@ -2634,37 +2743,46 @@ mark {
   white-space: nowrap;
 }
 
-/* 项目色点：与侧栏 / 面包屑同一套色板，日历里也认得出是哪个列表的事 */
-.cal-chip-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: var(--r-pill);
-  flex-shrink: 0;
-  box-shadow: 0 0 0 1px var(--dot-edge);
+/* 四档 = 四块底色 + 四条同族深色墨条。D~Z（prio-other）跟「无」同一档灰。 */
+.cal-chip.prio-high {
+  --chip-bar: var(--chip-high-fg);
+  background: var(--chip-high-bg);
+  color: var(--chip-high-fg);
+}
+.cal-chip.prio-mid {
+  --chip-bar: var(--chip-mid-fg);
+  background: var(--chip-mid-bg);
+  color: var(--chip-mid-fg);
+}
+.cal-chip.prio-low {
+  --chip-bar: var(--chip-low-fg);
+  background: var(--chip-low-bg);
+  color: var(--chip-low-fg);
+}
+.cal-chip.prio-none,
+.cal-chip.prio-other {
+  --chip-bar: var(--chip-none-fg);
+  background: var(--chip-none-bg);
+  color: var(--chip-none-fg);
 }
 
-/* 档位由 chip 左缘的墨条表达（高＝实墨 / 中＝灰 / 低＝浅 / 无＝透明），
-   四档与列表同一套 prio-* 类名。不再用 8px 方块 —— 格子里方块 + 色点 + 文字
-   挤在 11px 里会糊成一团；一条贴边竖线既省地方又一眼分出轻重。
-   窄屏退化成纯色块时才会重新用档位类（见响应式段）。 */
-.cal-chip-bar {
-  width: 2.5px;
-  align-self: stretch;
-  border-radius: var(--r-xs);
-  background: transparent;
-  flex-shrink: 0;
+/* 悬停 / 抓手：拖动是这一格唯一的"改期"手势，得先让它看起来能抓。
+   内描边不改底色 —— 改底色会把优先级色读成"鼠标一过就换了档"。 */
+.cal-chip:hover {
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 
-.cal-chip.prio-high .cal-chip-bar { background: var(--prio-strong-bg); }
-.cal-chip.prio-mid .cal-chip-bar { background: var(--control-line); }
-.cal-chip.prio-low .cal-chip-bar { background: var(--border-strong); }
-
-/* 状态色必须压过优先级色，所以放在后面 */
-.cal-chip.now {
-  background: var(--accent-soft);
-  color: var(--accent);
+.cal-chip:active {
+  cursor: grabbing;
 }
 
+.cal-chip.is-dragging {
+  opacity: 0.45;
+  cursor: grabbing;
+}
+
+/* 状态色压过档位色：逾期仍是整块唯一的状态色（放在档位规则之后）。
+   「今天」不再给 chip 上底 —— 今天已经由日号的实心墨绿块说清楚了。 */
 .cal-chip.overdue {
   color: var(--danger);
 }
@@ -2672,7 +2790,26 @@ mark {
 .cal-chip.cal-done {
   background: transparent;
   color: var(--muted);
+  box-shadow: none;
   cursor: default;
+}
+
+/* 已完成的 chip 没有底色，墨条也跟着撤 —— 留着会像"这条还有优先级"。 */
+.cal-chip.cal-done::before {
+  content: none;
+}
+
+/* 拖动经过的格子 = 落点：2px 内框说"松手就落这儿"。
+   拖动期间"选中"那套框与浅底暂时让位 —— 两块绿框同时亮着，谁是要落的地方读不出来。 */
+.cal-cell.is-drop,
+.cal-cell.is-drop:hover {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.cal-grid.is-dragging .cal-cell.is-selected:not(.is-drop) {
+  background: var(--surface);
+  box-shadow: none;
 }
 
 .cal-more {
@@ -2707,6 +2844,25 @@ mark {
   flex-shrink: 0;
   padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3);
   border-bottom: 1px solid var(--border);
+  /* 标题栏兼作拖拽把手（2026-11-16）：抓手光标说明"这块能拖走"。
+     touch-action: none 让触屏 / 触控板上的拖动不被滚动吃掉。 */
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.cal-pop.is-dragging .cal-pop-head {
+  cursor: grabbing;
+}
+
+/* 置顶 / 拖动过的那一块：位置已经跟格子脱钩，值得在视觉上说一句"它是钉住的"。
+   只用一条 accent-line 外框，不做底色 —— 底色会跟"选中 / 今天"抢语义。 */
+.cal-pop.is-pinned {
+  box-shadow: var(--sh-3), 0 0 0 1px var(--accent-line);
+}
+
+.cal-pop.is-dragging {
+  box-shadow: var(--sh-3), 0 0 0 2px var(--accent);
 }
 
 .cal-pop-title {
@@ -2727,18 +2883,33 @@ mark {
   color: var(--muted);
 }
 
-/* 关闭钮压到 24 见方：头部只有 8px 上下留白，28px 的按钮会把标题行撑高一档。 */
-.cal-pop-close {
+/* 关闭钮压到 24 见方：头部只有 8px 上下留白，28px 的按钮会把标题行撑高一档。
+   置顶钮同一档尺寸（两颗并排，右缘对齐）。 */
+.cal-pop-close,
+.cal-pop-pin {
   width: 24px;
   height: 24px;
   flex-shrink: 0;
 }
 
+/* 置顶态用 accent 标一下：图钉本身已换成实心，颜色再点一次题。 */
+.cal-pop-pin.is-on {
+  color: var(--accent);
+}
+
+/* 列表区：**上下不留白**（2026-11-16 十五改）。
+   旧版 padding 是 sp-1 0，末行自带 1px 下边框 —— 于是"末行线 / 4px 空白 / 页脚线"
+   叠成两条线夹一条缝，看起来像页脚没接上。现在末行不画线，页脚那条顶边就是
+   列表与「添加任务」之间唯一的分隔。 */
 .cal-pop-rows {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--sp-1) 0;
+  padding: var(--sp-1) 0 0;
+}
+
+.cal-pop-rows > .task-row:last-child {
+  border-bottom: 0;
 }
 
 /* 浮层比右栏窄，横向留白压一档：**在行上重定义 --row-pad**，
@@ -2747,6 +2918,21 @@ mark {
   --row-pad: var(--sp-3);
   padding-block: 0;
   gap: var(--sp-3);
+  /* 行高收到主列表的 70%（2026-11-16 十六改）：浮层是一块贴着格子的临时清单，
+     同一屏要放下一天的全部任务，32px 一行的节奏在这里太松。
+     用 min-height 顶着算，不重定义 --row-h —— 那个变量是全站行距的唯一真相源，
+     在这里覆盖它会连带改掉密度设置与样张。 */
+  min-height: calc(var(--row-h) * 0.7);
+}
+
+/* 浮层里的行**没有读数行**（minimal 不渲染 .task-meta），所以标题不需要让位 ——
+   而 .task-head 的悬停上移是全站规则，照搬过来就会「鼠标一过整行跳一下」。
+   这里显式取消：源码序在 .task-row:hover .task-head 之后、特异性相同，所以能压住。 */
+.cal-pop .task-head,
+.task-row.is-minimal .task-head,
+.cal-pop .task-row:hover .task-head,
+.cal-pop .task-row:focus-visible .task-head {
+  transform: none;
 }
 
 .cal-pop-empty {
@@ -5670,6 +5856,17 @@ mark {
   outline: none;
 }
 
+/* 紧凑档（2026-11-16）：宽度收到标准档的一半，给「高 / 中 / 低 / 无」这种
+   四枚短标签的菜单用。标准 184px 是按「复制任务文本」「下周一（…）」这类长标签
+   定的，四枚小旗撑着那么大一块纸，看着像漏了内容。 */
+.ctx-menu.is-compact {
+  min-width: 92px;
+}
+
+.ctx-menu.is-compact .ctx-menu-item {
+  padding: 0 var(--sp-1);
+}
+
 .ctx-menu-row {
   position: relative;
 }
@@ -6307,11 +6504,6 @@ mark {
     min-width: 0;
   }
 
-  /* 窄屏上这一行要留给输入框本身，语法提示收起 */
-  .quick-add-hint {
-    display: none;
-  }
-
   .ctx-btn {
     padding: 0 6px;
   }
@@ -6346,44 +6538,40 @@ mark {
     gap: 2px;
   }
 
-  /* 窄屏把 chip 压成 8px 色块，形状装不下 —— 改用同一条中性明度梯度表达四档。
-     过去这里只认 p-A / p-C，B 和「无」一起落回默认灰，层次少了一半。 */
+  /* 窄屏把 chip 压成 8px 色块，标题装不下 —— 底色仍是那四档，只是换成
+     更实的一档（8px 的淡色块在格子里几乎看不见）。标题在浮层里看，信息没丢。 */
   .cal-chip {
     width: 8px;
     height: 8px;
     padding: 0;
-    gap: 0;
     border: 0;
     border-radius: 2px;
-    background: transparent;
-    box-shadow: inset 0 0 0 1px var(--prio-empty-line);
-  }
-
-  .cal-chip.prio-high { background: var(--text); box-shadow: none; }
-  .cal-chip.prio-mid { background: var(--control-line); box-shadow: none; }
-  .cal-chip.prio-low { background: var(--muted); box-shadow: none; }
-  .cal-chip.prio-none { background: transparent; }
-  .cal-chip.prio-other { background: var(--border-strong); box-shadow: none; }
-
-  .cal-chip-bar,
-  .cal-chip-text,
-  .cal-chip-dot {
-    display: none;
-  }
-
-  .cal-chip.now {
-    background: var(--accent);
+    background: var(--chip-none-bg);
     box-shadow: none;
+    cursor: default;
+  }
+
+  /* 8px 的块本身就是记号，再塞一条 2px 墨条只剩脏边。 */
+  .cal-chip::before {
+    content: none;
+  }
+
+  .cal-chip.prio-high { background: var(--flag-high); }
+  .cal-chip.prio-mid { background: var(--flag-mid); }
+  .cal-chip.prio-low { background: var(--flag-low); }
+  .cal-chip.prio-none { background: var(--chip-none-bg); }
+  .cal-chip.prio-other { background: var(--border-strong); }
+
+  .cal-chip-text {
+    display: none;
   }
 
   .cal-chip.overdue {
     background: var(--danger);
-    box-shadow: none;
   }
 
   .cal-chip.cal-done {
     background: var(--border-strong);
-    box-shadow: none;
   }
 
   .cal-more {

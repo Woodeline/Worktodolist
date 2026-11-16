@@ -97,13 +97,13 @@ describe('「标签」上弹菜单的数据', () => {
     expect(items[0]).toMatchObject({ type: 'item', label: '不按标签筛选', checked: true });
   });
 
-  it('分类在前、列表在后，各带一个分组标题', () => {
+  it('分类在前、标签在后，各带一个分组标题', () => {
     const items = buildLabelMenu(stats, 'all', dot, () => {});
     const labels = items.filter((i) => i.type === 'header').map((i) => i.label);
-    expect(labels).toEqual(['分类 @', '列表 +']);
+    expect(labels).toEqual(['分类 @', '标签 +']);
   });
 
-  it('只有 +列表 带色点：@分类 不是列表', () => {
+  it('只有 +标签 带色点：@分类 不是标签', () => {
     const items = buildLabelMenu(stats, 'all', dot, () => {});
     const office = items.find((i) => i.label === '办公室');
     const invest = items.find((i) => i.label === '投资');

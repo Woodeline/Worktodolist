@@ -102,7 +102,7 @@ describe('数据源映射', () => {
   );
   const done = entries('x 2026-11-07 已完成任务 due:2026-11-06');
 
-  it('today 视图放宽为全部未完成（日历要看得见未来）', () => {
+  it('today 视图也取全部未完成（日历要看得见未来）', () => {
     const src = calendarSource(todo, done, 'today', TODAY);
     expect(src.dateKey).toBe('dueDate');
     expect(src.readonly).toBe(false);
@@ -123,11 +123,13 @@ describe('数据源映射', () => {
     expect(src.tasks[0].completedAt).toBe('2026-11-07');
   });
 
-  it('项目 / 分类 / 收集箱过滤与侧栏同口径', () => {
-    expect(calendarSource(todo, done, '+:回测', TODAY).tasks).toHaveLength(1);
-    expect(calendarSource(todo, done, '@:工作', TODAY).tasks).toHaveLength(1);
-    // 收集箱 = 无分类：7 条里只有 @工作 那条被排除
-    expect(calendarSource(todo, done, 'inbox', TODAY).tasks).toHaveLength(6);
+  // 2026-11-16 十五改：日历不再跟着侧栏视图走。
+  // 格子里该有的是"这一天真实存在的事"，切个分类就少一半，日历就没法用来规划。
+  it('分类 / 标签 / 收集箱过滤**不影响**日历（只有「已完成」换口径）', () => {
+    expect(calendarSource(todo, done, '+:回测', TODAY).tasks).toHaveLength(7);
+    expect(calendarSource(todo, done, '@:工作', TODAY).tasks).toHaveLength(7);
+    expect(calendarSource(todo, done, 'inbox', TODAY).tasks).toHaveLength(7);
+    expect(calendarSource(todo, done, 'upcoming', TODAY).tasks).toHaveLength(7);
   });
 });
 

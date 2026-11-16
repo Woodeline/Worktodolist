@@ -79,10 +79,10 @@ const RUNTIME_VALUES = [
   'prio-high', 'prio-mid', 'prio-low', 'prio-none', 'prio-other',
   'row-overdue', 'row-readonly',
   // 日历格子：cls 数组 join(' ')，静态扫描看不见（in-month 走默认样式，无规则）
-  'cal-cell', 'out-month', 'is-weekend', 'is-today', 'is-selected', 'is-open',
-  // 日历 chip 状态：chipState() 返回 ' cal-done' / ' overdue' / ' now'
-  // 三个都要列，否则删掉 .cal-chip.overdue / .cal-chip.now 的规则门禁也不会红。
-  'cal-done', 'overdue', 'now',
+  'cal-cell', 'out-month', 'is-weekend', 'is-today', 'is-selected', 'is-open', 'is-drop',
+  // 日历 chip 状态：chipState() 返回 ' cal-done' / ' overdue'，两支都要有 CSS 规则。
+  // 'now' 已于 2026-11-16 十五改删除（今天由日号的实心块表达，chip 不再叠状态色）。
+  'cal-done', 'overdue',
   // 跨日区间条（cal-range-* / cal-bar-*）与 is-resizing 已随 2026-11-15 的
   // 「任务只在单日显示」一起删除，白名单里也不该再留着它们的名字。
   // 阅读密度字号样张：`density-a density-a-${t.id}` 拼出三档，静态扫描只见前缀

@@ -48,10 +48,12 @@ describe('Sidebar 列表圆点', () => {
     expect(markup).toContain('办公室');
   });
 
-  it('侧栏的项目分组标题是「列表」', () => {
+  it('侧栏的标签分组标题是「标签」（与编辑浮窗的「+标签」同一口径）', () => {
     const store = makeStore('写周报 +投资');
     const markup = renderToStaticMarkup(<Sidebar store={store} />);
-    expect(markup).toContain('列表');
+    expect(markup).toContain('>标签<');
+    // 「列表」在本应用里专指主区的任务清单，不能再拿来当 +项目的组名。
+    expect(markup).not.toContain('>列表<');
   });
 
   it('圆点颜色与 defaultColorId 一致（没配过色时走名字散列）', () => {

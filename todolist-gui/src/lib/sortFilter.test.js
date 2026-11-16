@@ -12,6 +12,7 @@ import {
   viewTasks,
 } from './sortFilter';
 import { parseFile } from './todoParser';
+import { buildNesting } from './subtasks.js';
 
 const TODAY = '2026-09-30';
 
@@ -185,5 +186,56 @@ describe('列表显示顺序（键盘上下移动的口径）', () => {
     expect(titles).toEqual([]); // 这批任务的标题都不含“任务”
     const hit = displayOrder(entries, 'all', 'manual', '日期', TODAY).map((t) => t.title);
     expect(hit).toEqual(['无日期']);
+  });
+});
+
+// 2026-11-16：子任务在「今天」「即将到期」两个视图里的行为（bug 修复的钉子）。
+// 「今天」过去刻意不建层级（父子被拆到不同分组、缩进没意义），结果是那里
+// 连展开箭头都没有；「即将到期」反过来：箭头有（childProgress 数全部子任务），
+// 点开却是空的（nestChildren 只认本屏可见的子任务）。
+describe('子任务在「今天」/「即将到期」里的可见性', () => {
+  const T = (lines) => parseFile(lines.join('\n'));
+  // 买硬盘带一个未来的阈值日期：这是"今天看不见、但父项在「即将到期」里"的
+  // 典型形态 —— 也正是「有箭头、点开为空」的那条真实数据。
+  const entries = T([
+    '装机 id:aaa111 due:2026-09-30',      // 今天到期
+    '拆后盖 parent:aaa111',                // 子任务，无截止日 → 今天落在「无日期」
+    '备份 id:bbb222 due:2026-10-05',      // 将来到期
+    '买硬盘 parent:bbb222 t:2026-10-05',   // 子任务，阈值未到 → 今天不出现
+    '单独一条 due:2026-09-30',
+  ]);
+
+  it('「今天」也保留父前子后：子任务紧随父任务', () => {
+    const titles = viewTasks(entries, 'today', 'auto', '', TODAY).map((t) => t.title);
+    expect(titles).toEqual(['装机', '拆后盖', '单独一条']);
+  });
+
+  it('「今天」分组里子任务跟着父任务走，不会被拆到「无日期」组', () => {
+    const nested = viewTasks(entries, 'today', 'auto', '', TODAY);
+    const g = todayGroups(nested, TODAY, buildNesting(entries));
+    expect(g.dueToday.map((t) => t.title)).toEqual(['装机', '拆后盖', '单独一条']);
+    expect(g.noDate).toEqual([]);
+  });
+
+  it('「今天」的 displayOrder 与分组后的顺序一致（键盘 ↑↓ 与渲染同源）', () => {
+    const ordered = displayOrder(entries, 'today', 'auto', '', TODAY).map((t) => t.title);
+    expect(ordered).toEqual(['装机', '拆后盖', '单独一条']);
+  });
+
+  it('「即将到期」把父项的后代一并带上（否则箭头点开是空的）', () => {
+    const titles = viewTasks(entries, 'upcoming', 'auto', '', TODAY).map((t) => t.title);
+    expect(titles).toEqual(['备份', '买硬盘']);
+  });
+
+  it('「即将到期」搜索时不补后代（搜索是在收窄，不能凭空多行）', () => {
+    const titles = viewTasks(entries, 'upcoming', 'auto', '备份', TODAY).map((t) => t.title);
+    expect(titles).toEqual(['备份']);
+  });
+
+  it('todayGroups 不传 nesting 时保持老行为（父在前、子按自己的日期归组）', () => {
+    const flat = tasksForView(entries, 'today', TODAY);
+    const g = todayGroups(flat, TODAY);
+    expect(g.dueToday.map((t) => t.title)).toEqual(['装机', '单独一条']);
+    expect(g.noDate.map((t) => t.title)).toEqual(['拆后盖']);
   });
 });

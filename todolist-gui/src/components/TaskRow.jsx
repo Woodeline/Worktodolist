@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import { isOverdue, PRIORITY_LABELS } from '../lib/sortFilter';
 import { describeRecurrence } from '../lib/recurrence';
 import { classifyRowClick } from '../lib/clickTiming.js';
 import { displayTitle } from '../lib/displayTitle.js';
 import { PRIORITY_STEPS } from '../lib/priority.js';
+import { colorHex, resolveColorId, useListStyle } from '../lib/listStyle.js';
 import { useContextMenu } from '../hooks/useContextMenu.jsx';
 import PriorityMark from './PriorityMark.jsx';
 import InlineTitleEditor from './InlineTitleEditor.jsx';
@@ -41,6 +42,12 @@ export function dueLabel(due) {
   return dayjs(due).format('YYYY/MM/DD');
 }
 
+// 提醒读数：rem: 的形状是 YYYY-MM-DDTHH:mm。读数行里省掉年份 —— 提醒都落在
+// 近期，年份是纯噪声；完整时刻仍留在 title 里（悬停可核对）。
+export function remindLabel(remindAt) {
+  return dayjs(remindAt).format('MM/DD HH:mm');
+}
+
 // 下周一（不含今天）：周末口径锁定周六，所以这里从"下一个周一"起算
 function nextMonday() {
   const d = dayjs();
@@ -67,6 +74,7 @@ export default function TaskRow({
   hasChildren = false,
   collapsed = false,
   onToggleExpand = null,
+  minimal = false,
 }) {
   const today = dayjs().format('YYYY-MM-DD');
   const isChild = depth > 0;
@@ -100,6 +108,13 @@ export default function TaskRow({
   // 慢速双击 → 就在这一行里改标题。上一次点击的行与时刻只放 ref：
   // 它不参与渲染，进 state 只会让每行多点一次无谓的重绘。
   const [inlineEditing, setInlineEditing] = useState(false);
+  // 优先级下拉开着的时候，行内快捷按钮要**钉住**：菜单是挂在 body 层的浮层，
+  // 鼠标一旦移过去就离开了这一行，`:hover` 立刻失效、按钮当场消失 ——
+  // 用户还在挑档位，"浮窗"却先跑了。关闭时（选完 / Esc / 点外面）一起收。
+  const [quickPinned, setQuickPinned] = useState(false);
+  // 项目色点与侧栏 / 面包屑 / 日历 chip 同一套色板：标签只写名字，
+  // 靠这枚小圆点跟「分类」区分开（用户明确要求不要 @ + 字符）。
+  const { colors } = useListStyle();
 
   // 读数行默认收起（index.css 的 .task-meta），悬停 / 键盘聚焦才展开。
   // **没有例外**：逾期行、带红旗的高优先级行、以及两者兼有的行，
@@ -179,8 +194,11 @@ export default function TaskRow({
 
   // 旗标 = 优先级的唯一记号：点它弹出「高 / 中 / 低 / 无」四色小旗。
   // 用同一个上下文菜单渲染器（键盘 ↑↓ / Enter / Esc 全部现成），不另造弹层。
+  // compact = 四项短标签的专用窄版（宽度是标准菜单的一半）——
+  // 标准宽度按「编辑…」「复制任务文本」这类长标签定的，四枚小旗撑那么大只会显得空。
   const openPriorityPicker = (e) => {
     const r = e.currentTarget.getBoundingClientRect();
+    setQuickPinned(true);
     openAt(
       r.left - 8,
       r.bottom + 4,
@@ -190,7 +208,8 @@ export default function TaskRow({
         mark: <PriorityMark priority={step.letter} variant="flag" />,
         checked: (task.priority || null) === step.letter,
         onClick: () => store.updateTask(task.id, { priority: step.letter }),
-      }))
+      })),
+      { variant: 'compact', onClose: () => setQuickPinned(false) }
     );
   };
 
@@ -268,6 +287,105 @@ export default function TaskRow({
     ]);
   };
 
+  /* 读数行分段（2026-11-16 十四改）：顺序固定为
+       日期 · 子任务 │ 分类 │ 标签 │ 重复 │ 提醒
+     段间一道 1px 竖线，段内只留 8px 间隙 —— 「同属一件事」与「换了一类信息」
+     靠间距 + 竖线两级区分。**空段整段不画**（连它前面那道线一起），
+     所以一条什么读数都没有的行，这一格仍然是空的（不会剩一条孤零零的竖线）。
+
+     备注角标跟着第一段走：它是「这条后面还有字」的记号，不是一类读数，
+     单独占一段会让人以为多了一种属性。 */
+  const metaGroups = [];
+  const stampNodes = [];
+  if (!hideDue && task.dueDate) {
+    // 颜色只编码状态：逾期 = 红，其余一律弱化墨色（今天不再是第二支强调色）。
+    stampNodes.push(
+      <span key="due" className={'due' + (overdue ? ' overdue' : '')}>
+        {dueLabel(task.dueDate)}
+      </span>
+    );
+  }
+  if (task.completedAt) {
+    stampNodes.push(
+      <span key="done" className="due">
+        {dayjs(task.completedAt).format('YYYY/MM/DD')} 完成
+      </span>
+    );
+  }
+  /* 子任务进度：父任务行才显示。它是"这一堆事做到哪了"的唯一线索 ——
+     否则要展开才知道下面三条完成了两条。展开 / 收起不在这里，交给行尾那枚三角箭头。 */
+  if (kids && kids.total > 0) {
+    stampNodes.push(
+      <span key="sub" className="sub-count" title={`${kids.done} / ${kids.total} 个子任务已完成`}>
+        <Icon name="list-tree" size={12} />
+        {kids.done}/{kids.total}
+      </span>
+    );
+  }
+  if (task.stableId && store.noteIds && store.noteIds.has(task.stableId)) {
+    // 备注角标：只表示"这条后面还有字"。备注是要点进去看的，列表上多显示一个字都会挤压标题。
+    stampNodes.push(
+      <span key="note" className="note-chip" title="有备注（双击任务查看）">
+        <Icon name="pencil" size={12} />
+      </span>
+    );
+  }
+  if (stampNodes.length) metaGroups.push({ key: 'stamp', nodes: stampNodes });
+
+  // 分类：只写名字，不写 @ —— 那是 todo.txt 的写法，不是界面读数。
+  if (task.contexts && task.contexts.length > 0) {
+    metaGroups.push({
+      key: 'ctx',
+      nodes: task.contexts.map((c) => (
+        <span key={`ctx-${c}`} className="meta-ctx" title={`分类：${c}`}>
+          {c}
+        </span>
+      )),
+    });
+  }
+  // 标签：一枚色点（与侧栏 / 面包屑 / 日历同一套色板）把两类分开，不写 +。
+  if (task.projects && task.projects.length > 0) {
+    metaGroups.push({
+      key: 'proj',
+      nodes: task.projects.map((p) => (
+        <span key={`proj-${p}`} className="meta-tag" title={`标签：${p}`}>
+          <i
+            className="meta-dot"
+            aria-hidden="true"
+            style={{ background: colorHex(resolveColorId(p, colors)) }}
+          />
+          {p}
+        </span>
+      )),
+    });
+  }
+  // 重复：以前只有一枚 ↻（规则藏在 title 里）。加了分段之后一枚孤零图标夹在
+  // 两条竖线中间读不出是什么，所以把规则本身写出来 —— describeRecurrence 已经是
+  // 中文短语（每周 / 每个工作日 / 每周一、周四），完整表达式仍留在 title 里。
+  if (task.recurrence) {
+    metaGroups.push({
+      key: 'rec',
+      nodes: [
+        <span key="rec" className="meta-field" title={`重复：${describeRecurrence(task.recurrence)}`}>
+          <Icon name="rotate-cw" size={12} />
+          {describeRecurrence(task.recurrence)}
+        </span>,
+      ],
+    });
+  }
+  // 提醒：rem: 是一直有数据、但列表里从来没报过的一项。
+  if (task.remindAt) {
+    metaGroups.push({
+      key: 'rem',
+      nodes: [
+        <span key="rem" className="meta-field is-time" title={`提醒：${dayjs(task.remindAt).format('YYYY-MM-DD HH:mm')}`}>
+          <Icon name="clock" size={12} />
+          {remindLabel(task.remindAt)}
+        </span>,
+      ],
+    });
+  }
+
   return (
     <div
       className={[
@@ -284,6 +402,8 @@ export default function TaskRow({
         selected ? 'selected' : '',
         readonly ? 'row-readonly' : '',
         isChild ? 'is-child' : '',
+        minimal ? 'is-minimal' : '',
+        quickPinned ? 'is-quick-pinned' : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -369,39 +489,20 @@ export default function TaskRow({
           </span>
           {/* 读数行只在真有东西时出现；全空的行走「一行的行」也不会多出一截空白。
               默认收起、悬停展开 —— 收放只发生在这一格（见 index.css 的 .task-meta），
-              行外框不动，所以下面的行不会被顶着走。 */}
-          <span className="task-meta">
-            {!hideDue && task.dueDate ? (
-              // 颜色只编码状态：逾期 = 红，其余一律弱化墨色（今天不再是第二支强调色）。
-              <span className={'due' + (overdue ? ' overdue' : '')}>{dueLabel(task.dueDate)}</span>
-            ) : null}
-            {task.completedAt ? (
-              <span className="due">{dayjs(task.completedAt).format('YYYY/MM/DD')} 完成</span>
-            ) : null}
-            {/* 子任务进度：父任务行才显示。它是"这一堆事做到哪了"的唯一线索 ——
-                否则要展开才知道下面三条完成了两条。数字前面一枚 list-tree 记号，
-                与参考稿一致；展开 / 收起不在这里，交给行尾那枚三角箭头。 */}
-            {kids && kids.total > 0 ? (
-              <span className="sub-count" title={`${kids.done} / ${kids.total} 个子任务已完成`}>
-                <Icon name="list-tree" size={12} />
-                {kids.done}/{kids.total}
-              </span>
-            ) : null}
-            {/* @分类 徽章不再渲染：数据仍在 task.contexts / task.raw / 编辑浮窗里 */}
-            {task.stableId && store.noteIds && store.noteIds.has(task.stableId) ? (
-              // 备注角标：只表示“这条后面还有字”。备注是要点进去看的，
-              // 列表上多显示一个字都会挤压标题。
-              <span className="note-chip" title="有备注（双击任务查看）">
-                <Icon name="pencil" size={12} />
-              </span>
-            ) : null}
-            {task.recurrence ? (
-              // 重复标记：一个 ↻ 就够，完整规则（"每周一、周四"）放在 title 里悬停看。
-              <span className="rec-chip" title={`重复：${describeRecurrence(task.recurrence)}`}>
-                <Icon name="rotate-cw" size={12} />
-              </span>
-            ) : null}
-          </span>
+              行外框不动，所以下面的行不会被顶着走。
+              分段顺序与竖线见上面 metaGroups 的构造注释。
+              minimal（日历弹出框）：整行只留"哪件事"，日期 / 分类 / 标签 / 重复 /
+              提醒一概不画 —— 这一行的日期就是它所在的那一天，再报一次是噪声。 */}
+          {minimal ? null : (
+            <span className="task-meta">
+              {metaGroups.map((group, i) => (
+                <Fragment key={group.key}>
+                  {i > 0 ? <span className="meta-sep" aria-hidden="true" /> : null}
+                  {group.nodes}
+                </Fragment>
+              ))}
+            </span>
+          )}
         </span>
       )}
 
@@ -427,9 +528,21 @@ export default function TaskRow({
           键盘用户不走这条路（快捷键 + 右键菜单已全覆盖），所以不进 Tab 序列。
           第一枚旗标打开的是优先级四色下拉（旗标 = 优先级）。
           **子任务行不渲染它**：子任务悬停不弹任何东西（浮层会让本来就短的一行
-          显得更碎），要改就走双击主任务进浮窗的子任务区，或右键菜单。 */}
-      {!readonly && !isChild && (
+          显得更碎），要改就走双击主任务进浮窗的子任务区，或右键菜单。
+          **日历弹出框里也不渲染**（minimal）：那里是一块贴着格子的临时清单，
+          鼠标划过就浮一排按钮会盖住相邻行、还会把浮层读成"另一个界面"。 */}
+      {!readonly && !isChild && !minimal && (
         <span className="row-quick" role="group" aria-label="快捷操作">
+          <button
+            type="button"
+            className="row-quick-btn"
+            tabIndex={-1}
+            title="编辑（双击任务也行）"
+            aria-label="编辑任务"
+            onClick={() => store.openEditor(task.id)}
+          >
+            <Icon name="pencil" size={16} />
+          </button>
           <button
             type="button"
             className="row-quick-btn"

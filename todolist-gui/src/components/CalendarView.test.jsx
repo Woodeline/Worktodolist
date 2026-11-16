@@ -5,6 +5,9 @@
 // 2026-11-15 改版后日历只剩网格：右栏日详情、无日期托盘、跨日区间条都已删除，
 // 对应断言改成"这些结构**不再出现**"（防止旧结构在重构里悄悄回流）。
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
 import dayjs from 'dayjs';
 import CalendarView from './CalendarView.jsx';
@@ -110,10 +113,10 @@ describe('CalendarView 月网格', () => {
 });
 
 describe('CalendarView 任务 chip', () => {
-  it('任务按 due 日期落格，优先级带档位类与左缘墨条', () => {
+  it('任务按 due 日期落格，优先级带档位类（底色就是档位）', () => {
     const markup = render();
-    expect(markup).toContain('cal-chip prio-high now');
-    expect(markup).toContain('cal-chip-bar');
+    expect(markup).toContain('cal-chip prio-high');
+    expect(markup).toContain('cal-chip-text');
     expect(markup).toContain('今天甲');
   });
 
@@ -134,14 +137,19 @@ describe('CalendarView 任务 chip', () => {
     expect(markup).toContain('+1');
   });
 
-  it('有项目的 chip 带列表色点（与侧栏同一套色板）', () => {
+  // 2026-11-16 十六改：格子里仍只有标题（DOM 层面），优先级由「整块底色 + 左缘同族深色墨条」
+  // 两层表达；墨条是 .cal-chip::before，不占 DOM 节点，所以这里只验「没有多余 span」。
+  it('chip 的 DOM 里只有一个标题，没有色点节点', () => {
     const markup = render('all', {}, [parseSingleLine(`带项目 due:${TODAY} +回测`)]);
-    expect(markup).toContain('cal-chip-dot');
-    expect(markup).toMatch(/cal-chip-dot" style="background:#[0-9A-Fa-f]{6}"/);
+    expect(markup).not.toContain('cal-chip-dot');
+    expect(markup).toContain('<span class="cal-chip-text">带项目</span>');
+    // 一条 chip 里只有那一个 span（墨条是伪元素，不占节点）
+    const chip = markup.match(/<span class="cal-chip[^"]*">[\s\S]*?<\/span>/)[0];
+    expect((chip.match(/<span /g) || [])).toHaveLength(1);
   });
 
-  it('chip 不可拖：任务不跨越日期，也没有改期手势', () => {
-    expect(render()).not.toContain('draggable="true"');
+  it('chip 可拖：拖到别的格子就是改期', () => {
+    expect(render()).toContain('draggable="true"');
   });
 });
 
@@ -251,5 +259,104 @@ describe('日历当天任务浮层', () => {
     const rows = markup.match(/<div[^>]*class="task-row[^"]*"[^>]*>/g) || [];
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) expect(row).toContain('draggable="false"');
+  });
+});
+
+// 2026-11-16 十五改：浮层成了"可置顶 + 可拖 + 可多开"的小窗口。
+// 置顶与拖拽的运行时行为（点外面不关、同时开两块）在浏览器里验；
+// 这里钉住的是展示层契约与样式契约 —— 那两处失效同样是静默的。
+describe('日历浮层：置顶 / 拖拽 / 只报标题', () => {
+  const tasks = [parseSingleLine(`(A) 今天甲 due:${TODAY} @工作 +回测`)];
+  const store = makeStore('all');
+  const renderPanel = (props = {}) =>
+    renderToStaticMarkup(
+      <ContextMenuProvider>
+        <DayPanel
+          date={TODAY}
+          today={TODAY}
+          tasks={[]}
+          store={store}
+          style={{ top: 0, left: 0 }}
+          onTextChange={() => {}}
+          onSubmit={() => {}}
+          onStartAdding={() => {}}
+          onClose={() => {}}
+          {...props}
+        />
+      </ContextMenuProvider>
+    );
+
+  it('右上角有置顶钮：未置顶是描边、置顶是实心 + aria-pressed', () => {
+    const off = renderPanel({ tasks });
+    expect(off).toContain('cal-pop-pin');
+    expect(off).toContain('aria-pressed="false"');
+    expect(off).toContain('fill="none"');
+    const on = renderPanel({ tasks, pinned: true });
+    expect(on).toContain('cal-pop-pin is-on');
+    expect(on).toContain('aria-pressed="true"');
+    expect(on).toContain('cal-pop is-pinned');
+    expect(on).toContain('fill="currentColor"');
+  });
+
+  it('列表行只报标题：没有读数行（日期/分类/标签/重复/提醒都不画）', () => {
+    const markup = renderPanel({ tasks });
+    expect(markup).not.toContain('task-meta');
+    expect(markup).not.toContain('meta-ctx');
+    expect(markup).not.toContain('meta-tag');
+  });
+
+  it('列表行不挂悬停快捷按钮（浮出来的按钮会盖住相邻行）', () => {
+    expect(renderPanel({ tasks })).not.toContain('row-quick');
+  });
+
+  it('样式契约：末行不画下边框、行区不留底白，页脚那条顶边才是唯一分隔', () => {
+    const css = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'index.css'),
+      'utf8'
+    );
+    const rowBlock = css.slice(css.indexOf('.cal-pop-rows {'));
+    expect(rowBlock.slice(0, rowBlock.indexOf('}'))).toContain('padding: var(--sp-1) 0 0');
+    expect(css).toContain('.cal-pop-rows > .task-row:last-child');
+    // 标题栏是拖拽把手
+    const headBlock = css.slice(css.indexOf('.cal-pop-head {'));
+    expect(headBlock.slice(0, headBlock.indexOf('}'))).toContain('cursor: grab');
+  });
+
+  it('样式契约：chip 底色按四档取令牌，左缘墨条取同档深色', () => {
+    const css = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'index.css'),
+      'utf8'
+    );
+    // 四档底色 + 四档墨条：同一条 chip 只有一档色（淡的做底、深的做条）
+    expect(css).toContain('--chip-bar: var(--chip-high-fg);');
+    expect(css).toContain('--chip-bar: var(--chip-mid-fg);');
+    expect(css).toContain('--chip-bar: var(--chip-low-fg);');
+    expect(css).toContain('--chip-bar: var(--chip-none-fg);');
+    expect(css).toContain('background: var(--chip-high-bg);');
+    expect(css).toContain('background: var(--chip-mid-bg);');
+    expect(css).toContain('background: var(--chip-low-bg);');
+    expect(css).toContain('background: var(--chip-none-bg);');
+    expect(css).toContain('--chip-none-bg:');
+    // 墨条是伪元素画的，不是 DOM 节点（项目色点确实不再存在）
+    expect(css).toContain('.cal-chip::before');
+    expect(css).toContain('inline-size: var(--chip-bar-w);');
+    expect(css).toContain('background: var(--chip-bar);');
+    expect(css).not.toContain('.cal-chip-dot');
+    expect(css).not.toContain('.cal-chip-bar');
+  });
+
+  // 2026-11-16 十六改：浮层行不再悬停上移（那里没有读数行可让位，上移只剩"跳一下"），
+  // 行高收到主列表的 70%。
+  it('样式契约：浮层行高 70%，且悬停不位移', () => {
+    const css = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'index.css'),
+      'utf8'
+    );
+    const block = css.slice(css.indexOf('.cal-pop .task-row {'));
+    expect(block.slice(0, block.indexOf('}'))).toContain('min-height: calc(var(--row-h) * 0.7)');
+    // 位移被压住：.task-head 在浮层里恒为 transform: none
+    expect(css).toContain('.cal-pop .task-row:hover .task-head');
+    const noneBlock = css.slice(css.indexOf('.cal-pop .task-head,'));
+    expect(noneBlock.slice(0, noneBlock.indexOf('}'))).toContain('transform: none');
   });
 });

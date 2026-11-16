@@ -137,6 +137,16 @@ const PAIRS = [
   ['prio-strong-fg', 'prio-strong-bg', 4.5, '高优先级反白字 / 实心徽章底'],
   ['prio-strong-bg', 'surface', 3, '高优先级实心徽章 / 卡片（图形边界）'],
   ['control-line', 'surface-2', 3, '中优先级徽章描边 / 日历 chip 底'],
+  // 日历 chip 底色（2026-11-16 十五改）：格子里只剩标题，档位改由整块底色表达，
+  // 所以四个「字 / 底」组合都按正文口径 ≥4.5 锁住。
+  ['chip-high-fg', 'chip-high-bg', 4.5, 'chip·高（红）文字 / 底色'],
+  ['chip-mid-fg', 'chip-mid-bg', 4.5, 'chip·中（橙）文字 / 底色'],
+  ['chip-low-fg', 'chip-low-bg', 4.5, 'chip·低（蓝）文字 / 底色'],
+  ['chip-none-fg', 'chip-none-bg', 4.5, 'chip·无（灰）文字 / 底色'],
+  // 「无」档的灰必须与日期格底色分得开 —— 这是用户点名的周末格混色问题。
+  // 相邻色块的区分度看的是明度差，不看 4.5 那种正文比值，所以下限取 1.12。
+  ['chip-none-bg', 'surface', 1.12, 'chip·无 底色 / 普通格底（块与格必须两层）'],
+  ['chip-none-bg', 'surface-2', 1.12, 'chip·无 底色 / 周末格底（混色问题）'],
 ];
 
 // 装饰性发丝线：只划区域、不承担"控件是否存在"的信息，WCAG 无硬性要求。

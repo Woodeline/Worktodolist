@@ -102,6 +102,17 @@ const TODO_ENTRIES = [
   // 上面那批日期全落在 9~10 月、一律逾期（逾期行常驻展开），
   // 只照它们看会以为"日期行永远在"。
   T('t13', '结算上月交易流水', { dueDate: '2027-01-05' }),
+  // 读数行五段全有的样张（2026-11-16 十四改）：日期·子任务 │ 分类 │ 标签 │ 重复 │ 提醒。
+  // 上面几条各缺一两段 —— 分段的顺序与竖线间距只有一条全属性行核对得出来。
+  T('t14', '每月对账并导出流水', {
+    stableId: 'par014',
+    dueDate: '2026-12-01',
+    contexts: ['投资'],
+    projects: ['复盘'],
+    recurrence: '+1m',
+    remindAt: '2026-11-30T09:30',
+  }),
+  T('t15', '导出 11 月流水', { parentId: 'par014' }),
   { id: 'r1', kind: 'raw', raw: '这一行解析不了 ::: 保持原样不动' },
 ];
 
@@ -342,7 +353,21 @@ function AppShell({
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState(base.search);
   const [sortMode, setSortMode] = useState(base.sortMode);
-  const s = { ...base, search, setSearch, sortMode, setSortMode };
+  // 编辑浮窗在舞台里也要能真打开：行内「编辑」按钮、双击任务都走 store.openEditor。
+  // 之前 makeStore 的 openEditor 是 noop —— 点了毫无反应，CDP 也就验证不了
+  // 「编辑钮到底通不通」，只能靠猜。这里补一份真实状态（仍不写盘）。
+  const [editingTask, setEditingTask] = useState(store.editingTask || null);
+  const stageEntries = [...base.todoEntries, ...base.doneEntries];
+  const s = {
+    ...base,
+    search,
+    setSearch,
+    sortMode,
+    setSortMode,
+    editingTask,
+    openEditor: (id) => setEditingTask(stageEntries.find((t) => t.id === id) || null),
+    closeEditor: () => setEditingTask(null),
+  };
   const isList = tab === 'list';
   // 舞台默认强制日历（qa-responsive 的 8 个日历档靠它回归窄屏降级本身）。
   // 只有 calendar-autonarrow 视图打开自动降级，用来在浏览器里验证新行为与截图。

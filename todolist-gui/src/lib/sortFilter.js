@@ -1,5 +1,5 @@
 // 视图过滤 / 排序 / 搜索 / 统计（纯函数，日期用 YYYY-MM-DD 字符串比较）
-import { buildNesting, nestChildren } from './subtasks.js';
+import { buildNesting, nestChildren, withDescendants } from './subtasks.js';
 
 export const PRIORITY_LABELS = { A: '高', B: '中', C: '低' };
 
@@ -88,17 +88,23 @@ export function compareUpcoming(a, b) {
 // 当前视图下、经搜索过滤与排序后的任务列表（「今天」视图尚未分组）。
 // 主列表与键盘导航共用这一条口径，避免"看得见的顺序"和"上下键走的顺序"分叉。
 export function viewTasks(entries, view, sortMode, query, today) {
+  const nesting = buildNesting(entries);
   const base = tasksForView(entries, view, today);
-  const filtered = base.filter((t) => searchMatch(t, query));
+  // 「即将到期」= 有截止日且晚于今天。子任务的截止日往往空着（它回答的是
+  // "这事分几步"），于是父项有箭头、点开空空如也 —— 父项在本屏时带上它的后代。
+  // 有搜索词时不补：搜索是在收窄，凭空多出没命中的行只会让人怀疑筛选坏了。
+  const pool = view === 'upcoming' && !query ? withDescendants(base, nesting) : base;
+  const filtered = pool.filter((t) => searchMatch(t, query));
   const sorted =
     view === 'upcoming'
       ? [...filtered].sort(compareUpcoming)
       : sortTasks(filtered, sortMode);
-  // 「今天」视图按日期分组，父子本来就会被拆到不同组 —— 那正是这个视图的语义
-  // （先按紧急度分流，而不是先按归属聚拢），所以只有其余视图做嵌套。
-  // 两种情况下渲染与键盘导航都走 viewTasks 这一条路径，顺序不会分叉。
-  if (view === 'today' || view === 'done') return sorted;
-  return nestChildren(sorted, buildNesting(entries));
+  // 2026-11-16 起「今天」也做嵌套：子任务要能挂在父任务下面展开 / 收起。
+  // 分组仍按紧急度走，但组内保持「父前子后」，且子任务跟随父任务所在的分组
+  // （见 todayGroups 的 group 继承）—— 否则父在「今天到期」、子落「无日期」，
+  // 展开出来的行跑到别的分组去，看着像什么都没发生。
+  if (view === 'done') return sorted;
+  return nestChildren(sorted, nesting);
 }
 
 // 列表自上而下的显示顺序：今天视图按「逾期 → 今日到期 → 无日期」分组，
@@ -106,21 +112,33 @@ export function viewTasks(entries, view, sortMode, query, today) {
 export function displayOrder(entries, view, sortMode, query, today) {
   const tasks = viewTasks(entries, view, sortMode, query, today);
   if (view === 'today') {
-    const g = todayGroups(tasks, today);
+    const g = todayGroups(tasks, today, buildNesting(entries));
     return [...g.overdue, ...g.dueToday, ...g.noDate];
   }
   return tasks;
 }
 
-// 今天视图分组：逾期 / 今日到期 / 无日期
-export function todayGroups(tasks, today) {
+// 今天视图分组：逾期 / 今日到期 / 无日期。
+//
+// nesting 可选：给了就让子任务跟着**父任务所在的分组**走。父子被拆到两个分组时，
+// 展开父项会"什么都没出现"（子行在另一组里），这正是这一层继承要挡住的事。
+export function todayGroups(tasks, today, nesting = null) {
   const overdue = [];
   const dueToday = [];
   const noDate = [];
+  const groupOf = new Map(); // 任务 id → 它落在哪个数组
   for (const t of tasks) {
-    if (t.dueDate && t.dueDate < today) overdue.push(t);
-    else if (t.dueDate === today) dueToday.push(t);
-    else noDate.push(t);
+    const parent = nesting ? nesting.parentOf.get(t.id) : null;
+    const inherited = parent ? groupOf.get(parent.id) : null;
+    if (inherited) {
+      inherited.push(t);
+      groupOf.set(t.id, inherited);
+      continue;
+    }
+    const target =
+      t.dueDate && t.dueDate < today ? overdue : t.dueDate === today ? dueToday : noDate;
+    target.push(t);
+    groupOf.set(t.id, target);
   }
   return { overdue, dueToday, noDate };
 }

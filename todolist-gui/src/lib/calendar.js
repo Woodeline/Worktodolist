@@ -1,7 +1,7 @@
 // 日历视图：把清单按日期摊开的纯投影（无 DOM、无 store，node 环境可直接单测）。
 // 日期一律 YYYY-MM-DD 字符串、月份一律 YYYY-MM —— 与 sortFilter 同一条字典序比较口径。
 import dayjs from 'dayjs';
-import { compareAuto, searchMatch, tasksForView } from './sortFilter';
+import { compareAuto, searchMatch } from './sortFilter';
 
 // 周一首列（中文周惯例，与 TaskRow.nextMonday 的口径一致）。
 export const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
@@ -46,13 +46,15 @@ export function monthGrid(month) {
 }
 
 /**
- * 日历的数据源：与侧栏共用 tasksForView 的过滤口径，只有两处刻意的例外 ——
- * ① 「今天」视图是紧急度过滤（只留 due<=今天），会把未来日期全部清空；
- *    日历天生是"按日期规划"的镜头，所以 today 在日历里放宽为全部未完成。
- * ② 「已完成」视图改按**完成日期**锚定（done.txt 只读），看"每天做完了什么"。
- * t:（阈值日期）不参与：日历就是用来提前看未来任务的，阈值只约束"今天"视图。
+ * 日历的数据源（2026-11-16 十五改：**不再跟着侧栏视图走**）。
+ *
+ * 日历是"按日期看全盘"的镜头，不是列表的另一种排法：侧栏切到「今日」「某分类」
+ * 「某标签」时，格子里该有的还是这一天真实存在的任务 —— 跟着筛选走会出现
+ * 「同一天昨天有三条、今天切了个分类只剩一条」，日历就没法用来做规划了。
+ * 所以：非「已完成」视图一律取 todo 里**全部未完成**任务（t: 阈值同样不参与）。
+ * 搜索是有意的临时动作，仍在 projectionForMonth 里生效，不在这层丢掉。
  */
-export function calendarSource(todoEntries, doneEntries, view, today) {
+export function calendarSource(todoEntries, doneEntries, view, _today) {
   if (view === 'done') {
     return {
       tasks: doneEntries.filter((e) => e.kind === 'task'),
@@ -60,9 +62,8 @@ export function calendarSource(todoEntries, doneEntries, view, today) {
       readonly: true,
     };
   }
-  const listView = view === 'today' ? 'all' : view;
   return {
-    tasks: tasksForView(todoEntries, listView, today).filter((t) => !t.completed),
+    tasks: (todoEntries || []).filter((e) => e.kind === 'task' && !e.completed),
     dateKey: 'dueDate',
     readonly: false,
   };

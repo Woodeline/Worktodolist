@@ -129,6 +129,39 @@ export function nestChildren(tasks, nesting) {
 }
 
 /**
+ * 把"本屏任务的后代"一并补进来（递归，不限一层）。
+ *
+ * 为什么需要：视图过滤器只认任务自己的字段。「即将到期」= 有截止日且晚于今天，
+ * 于是「父任务下周到期、子任务没有截止日」时，父项画出展开箭头、点开却空的 ——
+ * 子任务根本没进这一屏。`childProgress` 数的是**全部**子任务，箭头据此出现，
+ * 展开却是按**本屏可见**的层级铺开的，两套口径不一致就会露这个空档。
+ *
+ * 用在这里的语义是：父项既然在这一屏，它的子任务就跟着进这一屏
+ * （子任务回答的是"这事分几步"，不是"哪天到期"）。
+ *
+ * @param {Array} tasks 当前视图已过滤 / 排序的任务
+ * @param {object} nesting buildNesting 的产物
+ * @returns {Array} 原任务 + 缺的后代（顺序不重要，随后还会走 nestChildren）
+ */
+export function withDescendants(tasks, nesting) {
+  if (!nesting) return tasks || [];
+  const list = tasks || [];
+  const have = new Set(list.map((t) => t.id));
+  const out = [...list];
+  const queue = [...list];
+  for (let i = 0; i < queue.length && i < 4096; i += 1) {
+    const kids = nesting.byParent.get(queue[i].id) || [];
+    for (const kid of kids) {
+      if (have.has(kid.id)) continue;
+      have.add(kid.id);
+      out.push(kid);
+      queue.push(kid);
+    }
+  }
+  return out;
+}
+
+/**
  * 收起父项时把它的后代一起撤掉。
  *
  * 只认「父行也在当前这批可见行里」的层级关系：父不在本屏时 nestChildren

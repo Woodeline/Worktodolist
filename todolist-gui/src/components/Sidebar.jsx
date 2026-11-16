@@ -4,14 +4,16 @@ import { sidebarStats, tasksForView } from '../lib/sortFilter';
 import { colorHex, resolveColorId, useListStyle } from '../lib/listStyle.js';
 import Icon from './Icon.jsx';
 
-// 可展开的分组（分类 / 项目）。
+// 可展开的分组（分类 / 标签）。
 //
-// 只做两层：分组行（「分类」/「项目」）→ 组内的具体名称（投资 / 硬件…）。
+// 只做两层：分组行（「分类」/「标签」）→ 组内的具体名称（投资 / 硬件…）。
 // 点具体名称 = 把右侧主列表过滤到该项；**不在侧栏里往下摊任务行** ——
 // 任务列表归右侧主区，侧栏保持"一眼可扫的目录"。
-// 分类与项目共用这一个组件，因此两处的字体、箭头、缩进完全一致。
-// 只有项目带圆点（dotFor）：提醒事项里"列表"是靠颜色一眼分流的，
-// 分类（@）没有对应物，保持纯文字才不会让人以为它是另一种列表。
+// 分类与标签共用这一个组件，因此两处的字体、箭头、缩进完全一致。
+// 只有标签带圆点（dotFor）：任务靠颜色一眼分流，
+// 分类（@）没有对应物，保持纯文字才不会让人以为它是另一种标签。
+// 2026-11-16：组的标题由「列表」改为「标签」—— 与编辑浮窗的「+标签」字段、
+// 底部导航的「标签」菜单同一口径（"列表"在本应用里专指主区的任务清单）。
 function SidebarGroup({ prefix, label, items, view, onSelect, dotFor }) {
   // 默认展开：首屏直接看到具体分类 / 项目，不必先点一下。
   const [open, setOpen] = useState(true);
@@ -149,7 +151,7 @@ export default function Sidebar({ store, collapsed = false, listMode = 'list', o
         <div className="sidebar-group">
           <SidebarGroup
             prefix="+"
-            label="列表"
+            label="标签"
             items={stats.projects}
             view={store.view}
             onSelect={store.selectView}

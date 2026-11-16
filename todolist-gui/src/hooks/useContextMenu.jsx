@@ -72,11 +72,17 @@ export function copyMenu(getText) {
 }
 
 export function ContextMenuProvider({ children }) {
-  const [menu, setMenu] = useState(null); // { x, y, items }
+  const [menu, setMenu] = useState(null); // { x, y, items, place, variant }
   // 菜单会抢走焦点（键盘导航需要），关掉之后要把焦点还给原来的控件
   const prevFocusRef = useRef(null);
+  // 打开方可以登记一个「关掉了」的回调（例：行内快捷按钮要跟着一起收）。
+  // 用 ref 而不是塞进 menu 对象里：closeMenu 是空依赖的 useCallback，
+  // 每次重建会让所有菜单列表重挂一次。
+  const dismissRef = useRef(null);
 
   const closeMenu = useCallback((restoreFocus = true) => {
+    const dismissed = dismissRef.current;
+    dismissRef.current = null;
     setMenu(null);
     const el = prevFocusRef.current;
     prevFocusRef.current = null;
@@ -86,15 +92,20 @@ export function ContextMenuProvider({ children }) {
       // 等菜单卸载完再还焦点，否则会被移除节点的默认焦点处理覆盖掉
       setTimeout(() => el.focus({ preventScroll: true }), 0);
     }
+    if (dismissed) dismissed();
   }, []);
 
   // opts.place='above'：把 y 当作触发控件的上缘，菜单从下往上弹（窗口底部的按钮用）。
+  // opts.variant='compact'：四项以内的短标签菜单，宽度收到标准档的一半。
+  // opts.onClose：菜单关闭时（选完 / Esc / 点外面 / 滚动）回调一次。
   const openAt = useCallback((x, y, items, opts) => {
     if (!items || items.length === 0) return;
     const place = opts && opts.place === 'above' ? 'above' : null;
+    const variant = opts && opts.variant === 'compact' ? 'compact' : null;
+    dismissRef.current = opts && typeof opts.onClose === 'function' ? opts.onClose : null;
     setMenu((cur) => {
       if (!cur && typeof document !== 'undefined') prevFocusRef.current = document.activeElement;
-      return { x, y, items, place };
+      return { x, y, items, place, variant };
     });
   }, []);
 
@@ -196,7 +207,14 @@ export function ContextMenuProvider({ children }) {
     <MenuContext.Provider value={value}>
       {children}
       {menu && (
-        <ContextMenu x={menu.x} y={menu.y} items={menu.items} place={menu.place} onClose={closeMenu} />
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          items={menu.items}
+          place={menu.place}
+          variant={menu.variant}
+          onClose={closeMenu}
+        />
       )}
     </MenuContext.Provider>
   );

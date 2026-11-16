@@ -68,7 +68,7 @@ function Submenu({ items, onClose, onBack }) {
   );
 }
 
-function MenuList({ items, onClose, onBack }) {
+function MenuList({ items, onClose, onBack, variant }) {
   // 初始不高亮任何项 —— 系统菜单打开时就是"什么都不选"，
   // 第一次按方向键或鼠标移入才产生选中项（避免误按 Enter 触发首项）。
   const [active, setActive] = useState(-1);
@@ -132,7 +132,13 @@ function MenuList({ items, onClose, onBack }) {
   };
 
   return (
-    <div className="ctx-menu" role="menu" ref={ref} tabIndex={-1} onKeyDown={onKeyDown}>
+    <div
+      className={'ctx-menu' + (variant === 'compact' ? ' is-compact' : '')}
+      role="menu"
+      ref={ref}
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+    >
       {items.map((it, i) => {
         if (it.type === 'sep') return <div key={`sep-${i}`} className="ctx-menu-sep" role="separator" />;
         if (it.type === 'header') {
@@ -188,7 +194,8 @@ function MenuList({ items, onClose, onBack }) {
 
 // x/y 是屏幕坐标；菜单超出视口时先量后放，避免"贴边被截断"。
 // place='above'：y 按"锚点上缘"解释，菜单从下往上弹（窗口底部的按钮用）。
-export default function ContextMenu({ x, y, items, onClose, place }) {
+// variant='compact'：宽度收到标准档的一半（四项以内的短标签菜单用，见 index.css）。
+export default function ContextMenu({ x, y, items, onClose, place, variant }) {
   const boxRef = useRef(null);
   const [pos, setPos] = useState(null);
 
@@ -205,7 +212,7 @@ export default function ContextMenu({ x, y, items, onClose, place }) {
         place === 'above' ? 'above' : 'below'
       )
     );
-  }, [x, y, items, place]);
+  }, [x, y, items, place, variant]);
 
   // 菜单必须自己拿到焦点：否则方向键 / Enter 会漏给全局快捷键，
   // 菜单看起来能用、键盘却毫无反应。
@@ -236,7 +243,7 @@ export default function ContextMenu({ x, y, items, onClose, place }) {
         visibility: pos ? 'visible' : 'hidden',
       }}
     >
-      <MenuList items={items} onClose={onClose} />
+      <MenuList items={items} onClose={onClose} variant={variant} />
     </div>
   );
 }
