@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { RECURRENCE_CHOICES, describeRecurrence } from '../lib/recurrence';
 import { computeTagMenuPlacement } from '../lib/placement.js';
 import { PRIORITY_LABELS, sidebarStats } from '../lib/sortFilter';
+import { priorityClass } from '../lib/priority';
 import { buildNesting, childrenOf } from '../lib/subtasks.js';
 import { nextInTrap, pickRestoreTarget, queryFocusable } from '../lib/focusTrap.js';
 import DateField from './DateField.jsx';
@@ -490,15 +491,17 @@ function EditForm({ task, store }) {
               <span>优先级</span>
               <div className="priority-picker">
                 <button
-                  className={form.priority === '' ? 'sel' : ''}
+                  type="button"
+                  className={'prio-none' + (form.priority === '' ? ' sel' : '')}
                   onClick={() => setForm((f) => ({ ...f, priority: '' }))}
                 >
                   无
                 </button>
                 {priorities.map((p) => (
                   <button
+                    type="button"
                     key={p}
-                    className={form.priority === p ? 'sel' : ''}
+                    className={priorityClass(p) + (form.priority === p ? ' sel' : '')}
                     onClick={() => setForm((f) => ({ ...f, priority: p }))}
                   >
                     {PRIORITY_LABELS[p] || p}
@@ -555,6 +558,9 @@ function EditForm({ task, store }) {
             />
           </div>
 
+          {/* 子任务与上方标签、下方备注各一道分隔：三组动作不是同一件事。 */}
+          <div className="field-sep" role="separator" />
+
           <SubtaskField store={store} task={task} />
 
           {/* 子任务与备注之间一道分隔：两组动作不是同一件事。 */}
@@ -566,7 +572,7 @@ function EditForm({ task, store }) {
               className="note-edit-btn"
               onClick={() => setEditingNote((v) => !v)}
             >
-              <Icon name={editingNote ? 'check' : 'pencil'} size={12} />
+              {editingNote ? <Icon name="check" size={12} /> : null}
               {editingNote ? '完成' : form.note ? '编辑备注' : '添加备注'}
             </button>
             {editingNote ? (

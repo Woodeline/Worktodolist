@@ -19,6 +19,19 @@ import EditDrawer from './EditDrawer.jsx';
 import { ContextMenuProvider } from '../hooks/useContextMenu.jsx';
 import { parseSingleLine } from '../lib/todoParser.js';
 
+const here = path.dirname(fileURLToPath(import.meta.url));
+const css = readFileSync(path.join(here, '..', 'index.css'), 'utf8');
+const drawerSrc = readFileSync(path.join(here, 'EditDrawer.jsx'), 'utf8');
+
+// 只取某条规则的花括号内部：这些版式契约是字符串合同，改坏了要能被单测抓住。
+function cssRule(selector) {
+  const start = css.indexOf(selector + ' {');
+  if (start === -1) return '';
+  const bodyStart = start + selector.length + 2;
+  const end = css.indexOf('}', bodyStart);
+  return end === -1 ? '' : css.slice(bodyStart, end);
+}
+
 function makeStore(task, override = {}) {
   return {
     editingTask: task,
@@ -161,16 +174,125 @@ describe('EditDrawer 渲染', () => {
     expect(picker).not.toContain('<svg');
   });
 
-  it('子任务区与备注按钮之间有分割线，进度线与读数同一行', () => {
+  it('子任务上下各有一道分割线，进度线与读数同一行', () => {
     const parent = parseSingleLine('写周报 id:aaa111');
     const kid = parseSingleLine('拆后盖 parent:aaa111 id:bbb222');
     const markup = render(makeStore(parent, { todoEntries: [parent, kid] }));
     expect(markup).toContain('subtask-head');
     expect(markup).toContain('subtask-progress');
-    expect(markup).toContain('field-sep');
+    expect((markup.match(/class="field-sep"/g) || [])).toHaveLength(2);
     expect(markup).toContain('添加备注');
-    expect(markup.indexOf('subtask-head')).toBeLessThan(markup.indexOf('field-sep'));
-    expect(markup.indexOf('field-sep')).toBeLessThan(markup.indexOf('note-edit-btn'));
+    // 上线在子任务区之前，下线在「添加子任务」之后、备注按钮之前。
+    const first = markup.indexOf('field-sep');
+    const second = markup.indexOf('field-sep', markup.indexOf('subtask-add'));
+    expect(first).toBeGreaterThan(-1);
+    expect(second).toBeGreaterThan(-1);
+    expect(first).toBeLessThan(markup.indexOf('subtask-head'));
+    expect(second).toBeGreaterThan(markup.indexOf('subtask-add'));
+    expect(second).toBeLessThan(markup.indexOf('note-edit-btn'));
+  });
+});
+
+describe('编辑浮窗：2026-11-17 十条 UI 契约', () => {
+  it('标题降一档并取消粗体，文字起点与字段左缘对齐', () => {
+    const title = cssRule('.drawer-title-input');
+    expect(title).toContain('font-size: var(--fs-md)');
+    expect(title).toContain('font-weight: var(--fw-body)');
+    // 标题输入框不再自带 8px 内缩，头部 / 主体 / 底栏统一吃 --row-pad
+    expect(title).toContain('padding: var(--sp-1) 0');
+    expect(cssRule('.drawer-header')).toContain('var(--row-pad)');
+    expect(cssRule('.drawer-body')).toContain('var(--row-pad)');
+    expect(cssRule('.drawer-actions')).toContain('var(--row-pad)');
+  });
+
+  it('宽度只认 --edit-window-w，内容的 min-content 不再把窗口撑宽', () => {
+    const win = cssRule('.edit-window');
+    expect(win).toContain('width: var(--edit-window-w)');
+    expect(win).toContain('min-width: 0');
+    expect(win).toContain('flex: 0 0 var(--edit-window-w)');
+  });
+
+  it('除标题外统一到优先级选项的 13px', () => {
+    expect(css).toContain('.edit-window .field { font-size: var(--fs-sm); }');
+    expect(css).toContain('.edit-window .field input:not([type="checkbox"])');
+    expect(css).toContain('.edit-window .date-field-btn { font-size: var(--fs-sm); }');
+    expect(cssRule('.note-edit-btn')).toContain('font-size: var(--fs-sm)');
+    expect(cssRule('.field-subtasks-label')).toContain('font-size: var(--fs-sm)');
+    expect(cssRule('.edit-window .subtask-add input')).toContain('font-size: var(--fs-sm)');
+    expect(cssRule('.edit-window .subtask-add .btn')).toContain('font-size: var(--fs-sm)');
+  });
+
+  it('备注按钮去掉铅笔图标，高度 +20%，展开后间距翻倍', () => {
+    const store = makeStore(parseSingleLine('写周报 id:aaa111'));
+    const markup = render(store);
+    const noteBtn = (markup.match(/<button[^>]*note-edit-btn[\s\S]*?<\/button>/) || [''])[0];
+    expect(noteBtn).toContain('添加备注');
+    expect(noteBtn).not.toContain('<svg');
+    expect(drawerSrc).not.toContain("'pencil'");
+    expect(cssRule('.note-edit-btn')).toContain('height: calc(var(--h-control) * 0.94)');
+    expect(cssRule('.edit-window .field-note')).toContain('gap: var(--sp-2)');
+  });
+
+  it('底栏容器 -30%、按钮 -20%，触屏 44px 兜底被更高特异性的 min-height 压住', () => {
+    expect(css).toContain('--drawer-actions-h: calc(');
+    expect(css).toContain('--drawer-action-h: calc(');
+    expect(cssRule('.drawer-actions')).toContain('height: var(--drawer-actions-h)');
+    const btn = cssRule('.drawer-actions .btn');
+    expect(btn).toContain('height: var(--drawer-action-h)');
+    expect(btn).toContain('min-height: var(--drawer-action-h)');
+  });
+
+  it('分类 / 标签是一体化输入框：边框归容器，箭头是容器内的无边框图标钮', () => {
+    const box = cssRule('.tag-input');
+    expect(box).toContain('height: var(--h-control-lg)');
+    expect(box).toContain('border: 1px solid var(--control-line)');
+    expect(box).toContain('overflow: hidden');
+    expect(css).toContain('.tag-input:focus-within');
+    const toggle = cssRule('.tag-toggle');
+    expect(toggle).toContain('border: 0');
+    expect(toggle).toContain('width: var(--h-control)');
+    expect(toggle).toContain('height: 100%');
+  });
+
+  it('子任务复选框是 16px 圆环，行高 26 / 行内编辑 24，点开不再把浮窗顶高', () => {
+    expect(cssRule('.subtask-list li')).toContain('min-height: 26px');
+    const cb = cssRule('.subtask-list .checkbox');
+    expect(cb).toContain('width: 16px');
+    expect(cb).toContain('height: 16px');
+    expect(cb).toContain('border-radius: var(--r-pill)');
+    expect(cssRule('.subtask-list .checkbox.checked')).toContain('background: var(--accent)');
+    expect(cssRule('.edit-window .subtask-list .subtask-title-input')).toContain('height: 24px');
+    expect(cssRule('.field-subtasks')).toContain('margin-top: 0');
+  });
+
+  it('优先级四档的选中色取列表旗帜令牌，无档保持中性', () => {
+    for (const [cls, token, ink] of [
+      ['high', '--flag-high', '--flag-high'],
+      ['mid', '--flag-mid', '--flag-mid-ink'],
+      ['low', '--flag-low', '--flag-low'],
+    ]) {
+      const body = cssRule(`.priority-picker button.sel.prio-${cls}`);
+      expect(body).toContain(`border-color: var(--flag-${cls})`);
+      expect(body).toContain(`background: var(--flag-${cls}-soft)`);
+      expect(body).toContain(`color: var(${ink})`);
+      expect(css).toContain(`--flag-${cls}-soft:`);
+    }
+    expect(css).toContain('--flag-mid-ink:');
+    const none = cssRule('.priority-picker button.sel.prio-none');
+    expect(none).toContain('border-color: var(--border-strong)');
+    expect(none).toContain('background: var(--surface-2)');
+    expect(none).toContain('color: var(--text)');
+  });
+
+  it('优先级按钮带 prio-* 类，选中高 / 中 / 低不再走 accent 绿', () => {
+    const high = render(makeStore(parseSingleLine('(A) 写周报 id:aaa111')));
+    const picker = (high.match(/<div class="priority-picker">([\s\S]*?)<\/div>/) || [])[1] || '';
+    expect(picker).toContain('prio-high sel');
+    for (const cls of ['prio-none', 'prio-high', 'prio-mid', 'prio-low']) {
+      expect(picker).toContain(cls);
+    }
+    const none = render(makeStore(parseSingleLine('写周报 id:aaa111')));
+    expect(none).toContain('prio-none sel');
   });
 });
 

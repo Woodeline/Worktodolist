@@ -92,6 +92,16 @@ describe('页眉：只留「我在哪」', () => {
     expect(html).toContain('class="nav-dot"');
     expect(html).not.toContain('项目过滤');
   });
+
+  it('分类 / 标签视图只留汉字：@ 与 + 不再跟着进面包屑', () => {
+    for (const view of ['@:材料开发', '+:材料开发']) {
+      const html = bar({ store: { view } });
+      const crumb = (html.match(/<div class="crumb"[\s\S]*?<\/div>/) || [''])[0];
+      expect(crumb).toContain('<b>材料开发</b>');
+      expect(crumb).not.toContain('@材料开发');
+      expect(crumb).not.toContain('+材料开发');
+    }
+  });
 });
 
 describe('页眉：左「开关 + 视图」/ 右「搜索 + 排序」', () => {

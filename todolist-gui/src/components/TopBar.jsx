@@ -12,8 +12,9 @@ const VIEW_TITLES = {
 };
 
 export function viewTitle(view) {
-  if (view.startsWith('@:')) return '@' + view.slice(2);
-  if (view.startsWith('+:')) return '+' + view.slice(2);
+  // 2026-11-17：分类 / 标签视图只报名字。@ 与 + 是 todo.txt 的写法，
+  // 不该跟着进面包屑（侧栏与底部导航点过来时尤其明显）。
+  if (view.startsWith('@:') || view.startsWith('+:')) return view.slice(2);
   return VIEW_TITLES[view] || '全部';
 }
 

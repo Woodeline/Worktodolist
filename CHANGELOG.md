@@ -1,5 +1,28 @@
 # 更新日志
 
+## 未发布 · 2026-11-17（编辑浮窗十条 UI 优化）
+
+**一句话**：按用户最新十条要求收编辑浮窗的版式与配色。标题降一档去粗、左缘与页面行对齐、宽度锁死；除标题外统一 13px；备注去图标并加高、底栏收矮；分类 / 标签改一体化输入框；子任务复选框重画、行高与行内编辑对齐；优先级四档改用列表旗色；面包屑去掉 `@` / `+` 前缀。
+
+### 编辑浮窗
+
+- **标题与左缘**：`.drawer-title-input` 从 16px / 600 改为 14px / 400，水平内边距归零；`.drawer-header` / `.drawer-body` / `.drawer-actions` 的左右内边距统一到 `--row-pad`。宽边 20、≤1080 为 16、≤480 为 12，标题文字、字段标签、底栏按钮落在同一条左缘上，也和列表行同一条线。
+- **宽度锁死**：`.edit-window` 补 `min-width: 0` 与 `flex: 0 0 var(--edit-window-w)`。此前它作为 `.modal` 的 flex item 会按内容 min-content 撑宽，长标题 / 长标签时窗口从 392 长到 460 以上；现在宽度只认 392，`max-width:100%` 仅在物理放不下的极窄视口兜底。520 宽下长标题实测窗口仍为 392，390 宽下降级为 358 且无横向滚动。
+- **字体统一**：除标题外全部 13px，作用域收在 `.edit-window`，字段标签 / 输入 / select / 日期 / 备注 / 子任务读数与添加行同一号；提议弹窗等复用 `.field` 的地方不受影响。
+- **备注**：去掉铅笔图标（编辑态保留 check）；按钮从 22px 增到 26.3px（+20%），字体 13px；`.edit-window .field-note` 改 flex 后 gap 8px（原 4px 的 2 倍）。裸 `.field-note` 会被后面的 `.field { display:block }` 盖掉，选择器必须带浮窗前缀。
+- **底栏**：`.drawer-actions` 固定高 39.9px（旧 57px，少 30%），按钮 25.6px（旧 32px，少 20%）；`.drawer-actions .btn` 同时写 min-height，压过粗指针的 44px 兜底。左右内边距改 `--row-pad`，按钮横向 padding 保持 12px。
+- **分类 / 标签**：`.tag-input` 成为唯一带边框、圆角和底色的 32px 容器；内部 input 去边框、透明、占满剩余宽度，`.tag-toggle` 变成容器内 28px 宽的无边框图标钮，hover 浮 `--surface-2`，展开时 accent 着色。`focus-within` 的焦点环画在容器上。
+- **子任务**：`.subtask-list li` 最小高 26px；`.subtask-list .checkbox` 补 16px 圆环、1.5px 边框、hover accent、选中实心 accent + mask 对勾；行内编辑降到 24px，选择器带 `.edit-window` 前缀压过 `.field input` 的 32px 全局高度，点开前后行高都是 26px，浮窗不再跳动。子任务区上方新增一道 `.field-sep`，与下方原有分隔线一起把这一组框住；`.field-subtasks` 的 margin-top 归零，避免线后再叠 8px。
+- **优先级配色**：按钮加 `priorityClass()` 产出的 `prio-*` 类；选中档高红 / 中橙 / 低蓝，边框与字取 `--flag-high|mid|low` 实色，底取新增的 `--flag-*-soft` 明暗两套；「无」用 `--border-strong` + `--text` + `--surface-2` 中性；D~Z 走 `prio-other`。选中态不再一律 accent 绿。
+
+### 面包屑
+
+- `TopBar` 的 `viewTitle` 对 `@:` / `+:` 改成只返回 `view.slice(2)`。侧栏与窄边底部导航点分类 / 标签时，顶部标题只留汉字，`@` 与 `+` 不再出现；项目色点仍由 `listName` 负责，不受影响。
+
+### 验证
+
+`npm test` 804/804（50 文件，新增 10 例，覆盖标题 / 宽度 / 字号 / 备注 / 底栏 / 标签 / 子任务 / 优先级 / 分隔线 / 面包屑）、`test:guard` 50 文件 / 804 例、`test:ui` 144 组 0 失败（新增 6 组优先级选中态对比度）、`npm run build`、`test:responsive` 37 档 / 665 项、`test:settings` 48/48、`test:tools` 73/73、`test:attack` 46/46。浏览器 CDP 实测 600 宽标题 14/400、左缘 121 与字段标签同 x；底栏 39.89、按钮 25.59、备注 26.31；子任务行与行内编辑均 26；备注 gap 8；520 宽长标题窗口仍 392，390 宽无横向溢出；明暗两套高 / 中 / 低选中色与列表旗一致，中档文字压深一档后对淡底 4.82:1。
+
 ## 未发布 · 2026-11-17（行分隔线柔化）
 
 **一句话**：主行分隔线从 `--border` 换成淡约 30% 的 `--row-line`，下面加 2px 柔光晕开；子任务行再淡一档到 `--row-line-child`，1x 下几乎看不见，只留换行暗示。

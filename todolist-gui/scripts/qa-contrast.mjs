@@ -101,6 +101,14 @@ const PAIRS = [
   ['flag-high', 'surface', 3, '旗标·高（红）/ 卡片'],
   ['flag-mid', 'surface', 3, '旗标·中（橙）/ 卡片'],
   ['flag-low', 'surface', 3, '旗标·低（蓝）/ 卡片'],
+  // 编辑浮窗优先级选中态（2026-11-17）：字 / 淡底按正文 4.5，边框 / 淡底按图形 3。
+  // 中档实色在白底上只有 3.8，所以文字另取 --flag-mid-ink（同色相压深一档）。
+  ['flag-high', 'flag-high-soft', 4.5, '优先级选中·高字 / 淡底'],
+  ['flag-mid-ink', 'flag-mid-soft', 4.5, '优先级选中·中字 / 淡底'],
+  ['flag-low', 'flag-low-soft', 4.5, '优先级选中·低字 / 淡底'],
+  ['flag-high', 'flag-high-soft', 3, '优先级选中·高边框 / 淡底'],
+  ['flag-mid', 'flag-mid-soft', 3, '优先级选中·中边框 / 淡底'],
+  ['flag-low', 'flag-low-soft', 3, '优先级选中·低边框 / 淡底'],
   ['ok', 'ok-soft', 4.5, '成功文字 / 成功浅底'],
   ['ok', 'surface', 4.5, '成功文字 / 卡片'],
   ['mark-fg', 'mark-bg', 4.5, '搜索高亮文字 / 高亮底'],
