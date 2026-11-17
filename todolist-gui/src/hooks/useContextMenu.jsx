@@ -51,26 +51,6 @@ export function inputMenu(getInput) {
   ];
 }
 
-// 只读文本（任务行、快照项）的菜单：复制当前选中的内容。
-export function copyMenu(getText) {
-  return [
-    {
-      type: 'item',
-      label: '复制',
-      accel: 'Ctrl+C',
-      onClick: () => {
-        const text = typeof getText === 'function' ? getText() : getText;
-        if (!text) return;
-        const sel = typeof window !== 'undefined' ? window.getSelection() : null;
-        const picked = sel && String(sel).trim() ? String(sel) : text;
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(picked).catch(() => {});
-        }
-      },
-    },
-  ];
-}
-
 export function ContextMenuProvider({ children }) {
   const [menu, setMenu] = useState(null); // { x, y, items, place, variant }
   // 菜单会抢走焦点（键盘导航需要），关掉之后要把焦点还给原来的控件

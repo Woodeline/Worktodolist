@@ -84,11 +84,11 @@ npm run build:app          # 只构建 exe（等价于 tauri build --no-bundle�
 | 目录 | 内容 |
 |---|---|
 | [`docs/guide/`](docs/guide) | 使用说明、topydo 安装配置 |
-| [`docs/design/`](docs/design) | UI 重定调设计方案、工具集路线图 |
-| [`docs/delivery/`](docs/delivery) | 工具集 P1–P3 交付与实施说明 |
-| [`docs/plan/`](docs/plan) | 产品优化方案、工具集扩展规划 |
+| [`docs/design/`](docs/design) | 现行 UI 语言定义稿、字体排版方案 |
+| [`docs/delivery/`](docs/delivery) | 阶段性体检与修复落地记录 |
+| [`docs/plan/`](docs/plan) | 产品优化方案、界面精简方案 |
 
-命名规范、新增文档的放置规则、以及已移除文档的清单，都写在 [`docs/README.md`](docs/README.md) 里。
+命名规范、新增文档的放置规则、以及「文档跟着版本走」的归档口径，都写在 [`docs/README.md`](docs/README.md) 里。
 
 前端保留「浏览器双模式」（`isTauri()` 为假时走 File System Access），
 理由只有一个：`npm run dev` 与 vitest 需要一个浏览器环境。仓库**不**再分发浏览器版。

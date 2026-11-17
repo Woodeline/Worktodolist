@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@daypicker/react": "^10.0.2",
+    "dayjs": "^1.11.13",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
@@ -39,7 +40,6 @@
   "devDependencies": {
     "@tauri-apps/cli": "^2",
     "@vitejs/plugin-react": "^4.3.4",
-    "dayjs": "^1.11.13",
     "vite": "^5.4.11",
     "vitest": "^2.1.8"
   }

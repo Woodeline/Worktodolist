@@ -770,7 +770,7 @@ pipx uninstall topydo
 </tr>
 </tbody>
 </table>
-<p><strong>关于全局命令</strong>：在 <code>C:\Users\王佐成\bin</code> 放了两个转发脚本指向 venv 里的 <code>topydo.exe</code>，并把该目录<strong>追加</strong>到了用户级 PATH（<code>HKCU\Environment\Path</code>，原值已备份到 <code>scripts/path_backup.txt</code>）。</p>
+<p><strong>关于全局命令</strong>：在 <code>C:\Users\王佐成\bin</code> 放了两个转发脚本指向 venv 里的 <code>topydo.exe</code>，并把该目录<strong>追加</strong>到了用户级 PATH（<code>HKCU\Environment\Path</code>，原值由 <code>scripts/add_bin_to_user_path.py</code> 在运行时备份到同目录的 <code>path_backup.txt</code>，属本机生成物，不入库）。</p>
 <blockquote>
 <p>⚠️ <strong>踩坑记录</strong>：起初以为 <code>C:\Users\王佐成\bin</code> 已在 PATH 中（当前会话的 PATH 里确实有它），但读注册表发现那只是会话级注入 —— <strong>持久化的用户 PATH 里并没有这一条</strong>，自己新开终端会报"不是内部或外部命令"。已追加补齐，写入时保留了原有的 <code>REG_EXPAND_SZ</code> 类型，确保 <code>%USERPROFILE%</code> 之类的变量仍能正常展开。</p>
 </blockquote>
@@ -801,7 +801,7 @@ topydo help &lt;子命令&gt;      # 查看某子命令用法
 rm -f  &quot;C:/Users/王佐成/bin/topydo&quot; &quot;C:/Users/王佐成/bin/topydo.cmd&quot;
 rm -f  &quot;C:/Users/王佐成/.topydo&quot; &quot;C:/Users/王佐成/.topydo_columns&quot;
 rm -f  &quot;C:/Users/王佐成/Desktop/topydo 启动器.bat&quot;
-# 从用户 PATH 中移除 C:\Users\王佐成\bin（原值见 scripts/path_backup.txt）
+# 从用户 PATH 中移除 C:\Users\王佐成\bin（原值见安装时生成的 scripts/path_backup.txt）
 #   PowerShell: [Environment]::SetEnvironmentVariable(&quot;Path&quot;, &quot;&lt;path_backup.txt 里的原始值&gt;&quot;, &quot;User&quot;)
 # todo.txt / done.txt 是你的数据，按需保留或删除：
 # rm -f &quot;C:/Users/王佐成/WorkBuddy/todolist/todo.txt&quot; &quot;C:/Users/王佐成/WorkBuddy/todolist/done.txt&quot;
