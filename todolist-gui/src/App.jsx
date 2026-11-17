@@ -5,7 +5,8 @@ import { useNativeShell } from './hooks/useNativeShell';
 import { useAlwaysOnTop } from './hooks/useAlwaysOnTop';
 import { useTheme } from './hooks/useTheme';
 import { THEME_ICONS, THEME_LABELS, THEME_MODES } from './lib/theme.js';
-import { hostPlatform, isTauri, usesCustomTitlebar } from './lib/runtime.js';
+import { hostPlatform, isTauri, hideToTray, usesCustomTitlebar } from './lib/runtime.js';
+import { resolveEscape } from './lib/escape.js';
 import { useTodoSnapshot } from './hooks/useTodoSnapshot';
 import useDebounce from './hooks/useDebounce';
 import useHotkeys from './hooks/useHotkeys';
@@ -895,13 +896,21 @@ export default function App() {
       if (store.focusedId) store.openEditor(store.focusedId);
     },
     onEscape: () => {
-      if (store.editingTask) {
-        store.closeEditor();
-      } else {
-        if (searchOpen) setSearchOpen(false);
-        if (store.search) store.setSearch('');
+      const action = resolveEscape({
+        editing: Boolean(store.editingTask),
+        conflict: Boolean(store.conflict),
+        searchOpen,
+        search: store.search,
+        focusedId: store.focusedId,
+      });
+      if (action === 'close-editor') store.closeEditor();
+      else if (action === 'close-search') {
+        // 与旧行为一致：一次 Esc 把搜索框、关键词和选中行一起收掉，
+        // 不要拆成两次 —— 那样第一次按下去会像「没关干净」。
+        closeSearch();
         store.setFocusedId(null);
-      }
+      } else if (action === 'clear-selection') store.setFocusedId(null);
+      else if (action === 'hide-to-tray') hideToTray(store.saveNow);
     },
     onUndo: store.undo,
   });

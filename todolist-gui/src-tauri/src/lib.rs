@@ -96,6 +96,18 @@ fn app_quit(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+/// 把主窗口藏到托盘（前端 Esc 的最后一层，2026-11-17）。
+///
+/// 与关窗握手刻意分开：这条路不设 quitting、不销毁窗口，进程与前端状态都还在，
+/// 前端会先刷盘再调这里。窗口只 `hide()`，与 `complete_close` 的「不退出」分支同一动作，
+/// 托盘左键 / 单实例 / macOS Reopen 都仍能把窗口唤回。
+#[tauri::command]
+fn app_hide_to_tray(app: tauri::AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.hide();
+    }
+}
+
 /// 恢复主窗口：显示、取消最小化、切到前台。托盘左键与单实例回调共用。
 fn show_main_window(app: &tauri::AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
@@ -227,6 +239,7 @@ pub fn run() {
             reminder::notify,
             app_confirm_close,
             app_quit,
+            app_hide_to_tray,
             app_set_always_on_top,
         ])
         .setup(move |app| {

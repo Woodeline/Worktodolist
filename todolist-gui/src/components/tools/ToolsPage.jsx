@@ -24,6 +24,7 @@ import { dispatch } from '../../lib/actions.js';
 import { proposalToIntent } from '../../lib/proposals.js';
 import { logToolEvent } from '../../lib/toolEvents.js';
 import { loadToolMeta, saveToolMeta, toggleFavorite, touchMru } from '../../lib/toolStorage.js';
+import { hideToTray } from '../../lib/runtime.js';
 
 // 懒加载组件必须保持稳定的标识，否则每次渲染 React 都会当成新组件、重新挂载
 // （状态全丢）。所以按 id 缓存，绝不在渲染里现调 lazy()。
@@ -50,6 +51,9 @@ export default function ToolsPage({ snapshot, store, request }) {
 
   const paneRef = useRef(null);
   const consumedSeq = useRef(0);
+  // Esc 在墙态要把窗口藏到托盘；刷盘函数从最新一次渲染拿，不让 store 进依赖表。
+  const saveNowRef = useRef(null);
+  saveNowRef.current = store && store.saveNow;
 
   const active = useMemo(() => findTool(activeId) || null, [activeId]);
   const Active = active ? lazyFor(active) : null;
@@ -160,9 +164,8 @@ export default function ToolsPage({ snapshot, store, request }) {
     if (store && store.showToast) store.showToast(result ? result.reply : '已完成');
   }, [pending, busy, store, snapshot, active, logEvent]);
 
-  /* --- Esc 回墙：只在工作态生效；表单聚焦与模态打开时不拦截 --- */
+  /* --- Esc 逐层退出：工作态先回墙；已经在墙上时隐藏到托盘（2026-11-17） --- */
   useEffect(() => {
-    if (mode !== 'tool') return;
     const onKey = (e) => {
       if (e.key !== 'Escape') return;
       if (pending) return; // 提议确认框自己收尾，别被一层 Esc 连关两层
@@ -176,7 +179,12 @@ export default function ToolsPage({ snapshot, store, request }) {
       ) {
         return;
       }
-      setMode('wall');
+      if (mode === 'tool') {
+        e.stopPropagation();
+        setMode('wall');
+        return;
+      }
+      hideToTray(saveNowRef.current);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

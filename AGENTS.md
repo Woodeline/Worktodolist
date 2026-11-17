@@ -51,6 +51,7 @@ npm run build           # vite build → dist/（会被 tauri build 内嵌进 ex
 - `qa-settings.mjs` 的分组清单是**严格顺序等式**（现为七节：列表外观 / 阅读密度 / 显示模式 / 数据 / 全局 / 列表页 / 日历），页头说明必须含「只读」（只读说的是三节快捷键速查）。「数据」节是页面上唯一带真动作的地方。
 - **Hooks 数量每次渲染必须恒定**：不要在提前 `return null` 之后调 Hook；条件渲染拆子组件，初始态用 `useState(() => …)`。`main.jsx` 的 `AppBoundary` 不许摘。
 - **JSX 子元素里的注释必须写 `{/* */}`**，写 `//` 会被当成文本节点渲染（曾画进任务行、撑坏布局，而 726 条单测全绿）。
+- **Esc 是逐层退出**（2026-11-17）：编辑浮窗 / 日期弹层 / 右键菜单 / 日历浮层 / 设置页 / 工具工作态各自先消费；列表页与工具墙退到最外层才 `hideToTray(store.saveNow)`（Rust `app_hide_to_tray`，先刷盘再 `hide()`，与关窗托盘的收尾同一动作）。冲突弹窗是阻塞层，Esc 不藏窗。浏览器模式整体空转，不产生 IPC。
 - 纯函数单测拦不住渲染错误：**改组件要补渲染测试**。
 - 新增说明文档放 `docs/` 对应子目录，命名 `<YYYY-MM-DD>-<主题>.<ext>`，并更新 `docs/README.md` 索引 —— 索引不更新等于没归档。**根目录不放说明文档**（本文件是工具约定文件，属例外，因为编码 Agent 只在仓库根 / 就近目录自动发现它）。
 - 版本号三处同步：`src-tauri/Cargo.toml`、`todolist-gui/package.json`、`src-tauri/tauri.conf.json`。**实际有五处**：两个 lock 文件（`package-lock.json` 的 root 两行、`Cargo.lock` 的 `worktodolist` 条目）也要一起改，否则 `npm ci` / `cargo` 会自说自话。

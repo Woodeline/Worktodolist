@@ -61,3 +61,25 @@ export async function listen(event, handler) {
   if (!g || !g.event || typeof g.event.listen !== 'function') return () => {};
   return g.event.listen(event, handler);
 }
+
+/**
+ * 把主窗口隐藏到托盘（Esc 的最后一层，2026-11-17）。
+ *
+ * 先尽量把防抖窗口里的改动刷盘，再隐藏：藏起来之后用户可能很久都不回来，
+ * 不能指望 200ms 的保存定时器还按时跑。刷盘失败也照样隐藏，否则快捷键像失灵。
+ * 不在壳内（npm run dev / 单元测试）时什么都不做，返回 false。
+ */
+export async function hideToTray(saveNow) {
+  if (!isTauri()) return false;
+  try {
+    if (typeof saveNow === 'function') await saveNow();
+  } catch {
+    // 尽力而为：保存失败不该把「藏窗」这个动作也拦住
+  }
+  try {
+    await invoke('app_hide_to_tray');
+    return true;
+  } catch {
+    return false;
+  }
+}

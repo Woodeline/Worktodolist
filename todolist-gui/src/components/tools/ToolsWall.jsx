@@ -185,7 +185,11 @@ export default function ToolsWall({ tools, meta, onOpen, onToggleFav }) {
             aria-label="搜索工具"
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Escape') setQuery('');
+              if (e.key === 'Escape') {
+                // 这一层只清搜索词；别继续冒泡到外壳的「Esc 藏窗」。
+                e.stopPropagation();
+                setQuery('');
+              }
             }}
           />
         </div>
