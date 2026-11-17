@@ -94,6 +94,8 @@ const PROBES = {
   calHead: '.cal-head',
   // 快录框只在列表页存在：日历页拿它做"已移除"的反证
   quickAdd: '.quick-add',
+  quickAddBar: '.quick-add-bar',
+  firstGroup: '.task-list > .group-title',
 };
 
 // 三档视口 + 断点边界。width 是**视口**宽度（媒体查询看的就是这个）。
@@ -106,6 +108,9 @@ const CASES = [
   { name: 'mid-769', w: 769, h: 800, view: 'list', tier: 'mid', note: '断点上方 1px，侧栏仍竖向' },
   { name: 'narrow-768', w: 768, h: 900, view: 'list', tier: 'narrow', note: '断点线上，侧栏转横向条' },
   { name: 'narrow-600', w: 600, h: 900, view: 'list', tier: 'narrow' },
+  // 窄边「全部」视图：组头的一键展开 / 收起只在有可展开父项时出现，
+  // 几何之外还要点一下，确认它真的收起 / 摊开子行（2026-11-17）。
+  { name: 'narrow-600-all', w: 600, h: 900, view: 'list-all', tier: 'narrow', toggleAll: true, note: '窄边全部视图：组头一键展开 / 收起' },
   { name: 'mobile-480', w: 480, h: 844, view: 'list', tier: 'narrow', note: '断点线上，字号再降一档' },
   { name: 'mobile-479', w: 479, h: 844, view: 'list', tier: 'small', note: '断点下方，--fs-2xl 应变小' },
   { name: 'mobile-390', w: 390, h: 844, view: 'list', tier: 'small', note: 'iPhone 14 逻辑宽度' },
@@ -308,6 +313,18 @@ const MEASURE_FN = `(() => {
   };
   for (const [k, sel] of Object.entries(PROBES)) out[k] = pick(sel);
 
+  // 快录条上下留白（2026-11-17）：上段只看条自身 padding-top，
+  // 下段 = 条 padding-bottom + 首个分组头 padding-top（两段一起让 30%）。
+  const qaBar = document.querySelector('.quick-add-bar');
+  const firstGroup = document.querySelector('.task-list > .group-title');
+  out.quickAddPad = qaBar
+    ? {
+        top: getComputedStyle(qaBar).paddingTop,
+        bottom: getComputedStyle(qaBar).paddingBottom,
+      }
+    : null;
+  out.firstGroupPadTop = firstGroup ? getComputedStyle(firstGroup).paddingTop : null;
+
   // 卡片墙的网格列数：auto-fill 的实际列数只能从计算样式读
   // （split 后是 "318.3px 318.3px …" 这样的 used value）
   const cardsEl = document.querySelector('.tools-cards');
@@ -363,6 +380,31 @@ const MEASURE_FN = `(() => {
   return JSON.stringify(out);
 })()`;
 
+// 组头一键展开 / 收起（2026-11-17）：按钮的实际效果只能靠点击验证。
+// 返回收起前 / 点一次 / 再点一次三个快照，子行数由调用方断言。
+async function probeToggleAll(cdp, sessionId) {
+  const evalJs = async (expression) => {
+    const { result, exceptionDetails } = await cdp.send('Runtime.evaluate', {
+      expression,
+      returnByValue: true,
+    }, sessionId, 15000);
+    if (exceptionDetails) throw new Error(exceptionDetails.exception?.description || exceptionDetails.text);
+    return result.value;
+  };
+  const snapshot = async () => JSON.parse(await evalJs(`JSON.stringify({
+    kids: document.querySelectorAll('.task-row.is-child').length,
+    label: document.querySelector('.group-toggle')?.getAttribute('aria-label') || null,
+  })`));
+  const before = await snapshot();
+  await evalJs(`document.querySelector('.group-toggle')?.click(); true`);
+  await sleep(250);
+  const collapsed = await snapshot();
+  await evalJs(`document.querySelector('.group-toggle')?.click(); true`);
+  await sleep(250);
+  const expanded = await snapshot();
+  return { before, collapsed, expanded };
+}
+
 async function runCase(cdp, sessionId, c, wantShot) {
   const media = [
     { name: 'prefers-color-scheme', value: c.dark ? 'dark' : 'light' },
@@ -395,6 +437,10 @@ async function runCase(cdp, sessionId, c, wantShot) {
   }, sessionId, 15000);
   if (exceptionDetails) throw new Error('页面内度量抛错: ' + (exceptionDetails.exception?.description || exceptionDetails.text));
   const metrics = JSON.parse(result.value);
+
+  // 组头一键展开 / 收起：几何量不出「点一下真的收起了子行」，
+  // 所以单独点两次（收起 → 展开）并数 .task-row.is-child 的行数。
+  if (c.toggleAll) metrics.toggleAll = await probeToggleAll(cdp, sessionId);
 
   // 截图失败不该让整轮实测失败
   let shot = null;
@@ -430,6 +476,31 @@ function assertions(c, m) {
   const isCal = m.calGrid != null;
 
   ok('无横向溢出', !m.overflowX, `docW=${m.docW} vw=${m.vw}`);
+
+  // 快录条上下留白（2026-11-17）：窄边上面 8→6（-25%），下面两段合计 20→14（-30%）。
+  // 只量 padding 的实数，不量"看起来"的间距 —— 后者会随字体与 stage 外壳漂移。
+  if (isList && !isCal && m.quickAddPad) {
+    const top = parseFloat(m.quickAddPad?.top ?? '');
+    const bottom = parseFloat(m.quickAddPad?.bottom ?? '');
+    const firstTop = parseFloat(m.firstGroupPadTop ?? '');
+    const wantTop = c.tier === 'narrow' || c.tier === 'small' ? 6 : 8;
+    ok(`快录条上留白 = ${wantTop}px`, Math.abs(top - wantTop) <= 0.6, `top=${m.quickAddPad?.top}`);
+    ok('快录条下留白合计 = 14px（原 20 的 70%）', Math.abs(bottom + firstTop - 14) <= 0.6,
+      `bottom=${m.quickAddPad?.bottom} + firstGroupTop=${m.firstGroupPadTop}`);
+  }
+
+  // 组头一键展开 / 收起（2026-11-17）：按钮不止要在，点下去还得真的收 / 放子行。
+  if (m.toggleAll) {
+    const t = m.toggleAll;
+    ok('组头一键钮默认报「收起全部子任务」', t.before?.label === '收起全部子任务',
+      `label=${t.before?.label} kids=${t.before?.kids}`);
+    ok('点一次收起全部子行，并翻成「展开全部子任务」',
+      (t.before?.kids ?? 0) > 0 && t.collapsed?.kids === 0 && t.collapsed?.label === '展开全部子任务',
+      `before=${t.before?.kids} after=${t.collapsed?.kids} label=${t.collapsed?.label}`);
+    ok('再点一次恢复全部子行',
+      t.expanded?.kids === t.before?.kids && t.expanded?.label === '收起全部子任务',
+      `expanded=${t.expanded?.kids} before=${t.before?.kids}`);
+  }
 
   if (isList && c.tier === 'wide') {
     ok('侧栏为竖向列', g('sidebar')?.disp === 'flex' || g('sidebar')?.dir === 'column', JSON.stringify({ disp: g('sidebar')?.disp, dir: g('sidebar')?.dir }));
@@ -474,8 +545,8 @@ function assertions(c, m) {
     // 关键：列表滚动区止于导航上缘 —— 清单再多也压不到按钮（结构上不可能重叠）
     ok('列表不与底部导航重叠', (g('rail')?.y ?? 0) + (g('rail')?.h ?? 0) <= (g('bottomnav')?.y ?? 0) + 1, `rail.bottom=${(g('rail')?.y ?? 0) + (g('rail')?.h ?? 0)} nav.y=${g('bottomnav')?.y}`);
     ok('底部导航按钮均分整宽', (g('bnavitem')?.w ?? 0) >= m.docW / 4 - 2, `btn.w=${g('bnavitem')?.w} docW=${m.docW}`);
-    // 三行同高（2026-11-16 十七改）：页签条与底栏都取 --chrome-row-h，实测必须相等
-    ok('底栏与页签条同高', Math.abs((g('tabs')?.h ?? 0) - (g('bottomnav')?.h ?? 0)) <= 1,
+    // 底栏高跟着页签条走：2026-11-17 用户要求底栏比页签条高 20%（31 → 37.2）。
+    ok('底栏 = 页签条 × 1.2（增高 20%）', Math.abs((g('bottomnav')?.h ?? 0) - (g('tabs')?.h ?? 0) * 1.2) <= 1,
       `tabs.h=${g('tabs')?.h} bnav.h=${g('bottomnav')?.h}`);
   }
 
@@ -539,7 +610,7 @@ function assertions(c, m) {
     // 硬套过来只会产出"假失败"（hit=undefined），所以按视图分流。
     if (isList) {
       // 2026-11-15：窄屏导航搬进底部条，探底部按钮 —— 均分整宽。
-      // 2026-11-16 十七改：底栏与页签条同为 31px 外壳行，不再硬撑 44
+      // 2026-11-16 十七改：底栏不再硬撑 44；2026-11-17 起按页签条的 1.2 倍走（37.2）
       // （横向页签条早就按这条走）：命中区就是整枚按钮本身，宽度由均分兜住。
       ok('底部导航按钮宽 ≥44、占满整条', (h.bnavitem?.w ?? 0) >= 44 && (h.bnavitem?.h ?? 0) >= 28, `hit=${JSON.stringify(h.bnavitem)}`);
       // 复选框只在真有任务行的页面量：日历页只剩网格（任务行住在浮层里），

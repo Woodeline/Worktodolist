@@ -221,9 +221,11 @@
   /* 窄屏（≤768）活动栏翻成横向页签条；按钮比行高矮 1px，留给选中条 / 边框。 */
   --rail-row-h: var(--chrome-row-h);
   --rail-tab-size: calc(var(--chrome-row-h) - 1px);
-  /* 窄屏底部导航条：四枚按钮均分整宽，条高即按钮高。不另做 44 的触屏兜底 ——
-     它和横向页签条是一对（那条也按 31 走），两条同档才对齐，见文末 coarse 段。 */
-  --bottomnav-h: var(--chrome-row-h);
+  /* 窄窗底部导航条：四枚按钮均分整宽，条高即按钮高。不另做 44 的触屏兜底 ——
+     它和横向页签条是一对（那条也按 31 走）。2026-11-17：用户要求底部导航
+     比页签条再高 20%，于是 31 × 1.2 = 37.2；两条不再同高，但都从
+     --chrome-row-h 派生，改一档仍然全跟。 */
+  --bottomnav-h: calc(var(--chrome-row-h) * 1.2);
   --mac-lights-w: 92px; /* 红绿灯 16 起排，屏幕实测止于 ~76；右边留 16 给面包屑 */
   /* Windows 自绘窗控：悬停/按下用半透明墨（随主题反转），关闭键沿用 Fluent
      系统红（平台约定，不跟主题换色相）。白字对 #c42b1c 实测 5.66:1。 */
@@ -236,6 +238,13 @@
   --ctxbar-h: 36px;
   --ctx-btn-h: 26px; /* 上下文条按钮的统一步长：图标钮、模式开关轨道都按它对齐 */
   --quickadd-h: 38px; /* 快录条高度：单一真相源，别处不再手写 38 */
+  /* 快录条上下留白（2026-11-17）：上面是条到页签条的距离，下面是条到首个
+     分组头文字的净空。下面那 20px 由两段合成 —— 条的 8 + 组头的 12；
+     要减 30% 就两段各自 ×0.7（5.6 + 8.4 = 14），别只改一段把 30% 算丢。
+     窄边（≤768）另有覆盖：上面那段再 ×0.75。 */
+  --quickadd-pad-t: var(--sp-2);
+  --quickadd-pad-b: calc(var(--sp-2) * 0.7);
+  --quickadd-first-group-pad: calc(var(--sp-3) * 0.7);
   /* 行高默认档是外壳唯一口径；设置页「阅读密度」可换档 —— 运行时往 documentElement
      写 --pref-nav-h / --pref-row-h，这里以 var(--pref-*, 默认) 消费。没设置 = 走默认。
      触屏兜底（pointer: coarse）直接重写 --row-h: 44px，同特异性、源码序更后，天然压过偏好。 */
@@ -1092,7 +1101,7 @@ code {
   z-index: 2;
   /* 吸顶时背后会滑过任务行，所以这一条必须自带上不透明的底 */
   background: var(--surface);
-  padding: var(--sp-2) var(--row-pad);
+  padding: var(--quickadd-pad-t) var(--row-pad) var(--quickadd-pad-b);
   flex-shrink: 0;
 }
 
@@ -1589,8 +1598,45 @@ code {
 
 .group-title em {
   font-style: normal;
-  margin-left: auto;
+  margin-left: 0;
   letter-spacing: 0;
+}
+
+/* 右端一组读数：计数 + 一键展开/收起。计数与按钮之间只留 8px，
+   别沿用 .group-title 的 27px 列间距 —— 那会让按钮孤零零漂到最右。 */
+.group-tail {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* 一键展开 / 收起全部子任务：只画一枚双箭头，动作由 aria-label / title 说清。
+   18px 是视觉尺寸，不硬撑 44 —— 组头本身只有一行高，撑大会把标题行顶起来。 */
+.group-toggle {
+  display: grid;
+  place-items: center;
+  inline-size: 18px;
+  block-size: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+
+.group-toggle:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+/* 首个分组头紧贴快录条：下面那 30% 由两段一起让，见 §1 的 --quickadd-first-group-pad。 */
+.task-list > .group-title:first-child {
+  padding-top: var(--quickadd-first-group-pad);
 }
 
 .group-overdue {
@@ -2245,10 +2291,29 @@ code {
 .task-row.is-child::before {
   content: "";
   position: absolute;
-  left: calc(var(--row-pad) + 13px);
+  /* 竖脊对齐父任务复选框的圆心（--row-pad + --cb-size / 2）。
+     旧版画在 --row-pad + 13px，既不对齐父勾选框、也不对齐子勾选框，
+     读起来就是一条凭空悬在左边的长线 —— 用户点名的「太丑」正是这里。 */
+  left: calc(var(--row-pad) + var(--cb-size) / 2 - 0.5px);
   top: 0;
   bottom: 0;
   width: 1px;
+  background: var(--border);
+}
+
+/* 一段子行的最后一行把竖线收到中腰：不留一条垂到行底的尾巴。 */
+.task-row.is-child.is-child-last::before {
+  bottom: 50%;
+}
+
+/* 每行一段短肘线，从竖脊指向子任务复选框左缘；留 5px 呼吸，不贴死勾选框。 */
+.task-row.is-child::after {
+  content: "";
+  position: absolute;
+  left: calc(var(--row-pad) + var(--cb-size) / 2);
+  top: calc(50% - 0.5px);
+  width: calc(28px - (var(--cb-size) / 2) - 5px);
+  height: 1px;
   background: var(--border);
 }
 
@@ -6317,6 +6382,12 @@ mark {
 
 /* --- 窄屏 / 手机：活动栏转横向，侧栏转横向过滤条 --- */
 @media (max-width: 768px) {
+  /* 快录条的上留白只在窄边再收 25%（8 → 6）：窄窗里页签条与输入框之间
+     那一截白最占地方。下留白的长边 / 窄边口径统一走 §1 的 0.7。 */
+  :root {
+    --quickadd-pad-t: calc(var(--sp-2) * 0.75);
+  }
+
   /* 引导页在窄屏回到单列，纸页跟在说明与按钮之后；行数不缩成看不清的小字。 */
   .welcome--split {
     flex-direction: column;
@@ -6345,7 +6416,8 @@ mark {
   /* 46px 的竖轨在窄屏上会把内容挤到不能读，所以整条转到顶部变成横向页签。
      2026-11-15 十一改：页签条行高 44 → 31（-30%），窗口底边让出一条底部导航；
      网格最后一行 auto —— 底部导航不在（工具页 / 设置页）时自动塌成 0。
-     2026-11-16 十七改：页签条 / 标题行 / 底部导航三行统一取 --chrome-row-h(31)。 */
+     2026-11-16 十七改：页签条 / 标题行统一取 --chrome-row-h(31)；
+     2026-11-17：底部导航改为它的 1.2 倍（37.2）。 */
   .app {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: var(--rail-row-h) minmax(0, 1fr) auto;
@@ -6752,6 +6824,14 @@ mark {
 
   .density-opt {
     min-height: 44px;
+  }
+
+  /* 组头的一键展开 / 收起：触屏上把 18px 的图标钮撑到 30px 见方。
+     组头自身只有一行高，撑到 44 会把标题行顶起来；30 已够拇指点中，
+     又不至于把「全部任务 15」那一行读成一条按钮栏。 */
+  .group-toggle {
+    inline-size: 30px;
+    block-size: 30px;
   }
 
   /* 竖轨上的页签在触屏撑到 44（平板左栏）。横向页签条（≤768）不吃这一条：

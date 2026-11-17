@@ -159,11 +159,11 @@ describe('版式契约（源码 / 样式）', () => {
     expect(narrow).toContain('.sidebar {\n    display: none;');
   });
 
-  it('三行同高：页签条 / 标题行 / 底栏都从 --chrome-row-h(31) 取值', () => {
+  it('外壳行高：标题行 / 页签条取 --chrome-row-h(31)，底栏取 1.2 倍（+20%）', () => {
     expect(css).toContain('--chrome-row-h: 31px');
     expect(css).toContain('--rail-row-h: var(--chrome-row-h)');
     expect(css).toContain('--titlebar-h: var(--chrome-row-h)');
-    expect(css).toContain('--bottomnav-h: var(--chrome-row-h)');
+    expect(css).toContain('--bottomnav-h: calc(var(--chrome-row-h) * 1.2)');
     // 页签按钮比行高矮 1px，留给选中条 / 边框
     expect(css).toContain('--rail-tab-size: calc(var(--chrome-row-h) - 1px)');
   });

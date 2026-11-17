@@ -24,9 +24,9 @@ const ENTRIES = parseFile(
   ].join('\n')
 );
 
-function render(view) {
+function render(view, entries = ENTRIES, collapsed = undefined) {
   const store = {
-    todoEntries: ENTRIES,
+    todoEntries: entries,
     doneEntries: [],
     view,
     sortMode: 'auto',
@@ -49,7 +49,12 @@ function render(view) {
   };
   return renderToStaticMarkup(
     <ContextMenuProvider>
-      <MainList store={store} query="" />
+      <MainList
+        store={store}
+        query=""
+        collapsed={collapsed}
+        toggleExpand={collapsed ? () => {} : undefined}
+      />
     </ContextMenuProvider>
   );
 }
@@ -59,10 +64,15 @@ const rowsOf = (markup) =>
   markup
     .split('class="task-row')
     .slice(1)
-    .map((chunk) => ({
-      child: chunk.slice(0, 40).includes('is-child'),
-      title: (chunk.match(/task-title[^>]*>([^<]*)/) || [, ''])[1],
-    }));
+    .map((chunk) => {
+      const end = chunk.indexOf('"');
+      const cls = end === -1 ? chunk : chunk.slice(0, end);
+      return {
+        child: cls.split(/\s+/).includes('is-child'),
+        tail: cls.split(/\s+/).includes('is-child-last'),
+        title: (chunk.match(/task-title[^>]*>([^<]*)/) || [, ''])[1],
+      };
+    });
 
 describe('「今天」与「全部」的子任务层级', () => {
   it('「今天」：父不到期的子任务不进屏，剩下的行里没有任何"孤儿缩进"', () => {
@@ -105,5 +115,31 @@ describe('「今天」与「全部」的子任务层级', () => {
         nextIsChild: true,
       });
     }
+  });
+});
+
+describe('组头一键展开 / 收起与子任务连接线', () => {
+  it('「全部」组头在计数右侧给出「收起全部子任务」（默认全展开）', () => {
+    const markup = render('all');
+    expect(markup).toContain('class="group-tail"');
+    expect(markup).toContain('class="group-toggle"');
+    expect(markup).toContain('aria-label="收起全部子任务"');
+  });
+
+  it('有父项收着时，按钮翻成「展开全部子任务」', () => {
+    const markup = render('all', ENTRIES, new Set(['aaa111', 'bbb222']));
+    expect(markup).toContain('aria-label="展开全部子任务"');
+  });
+
+  it('本屏没有可展开父项时不画这枚按钮（别留一个点了没变化的控件）', () => {
+    const markup = render('all', parseFile('独立一条\n另一条'));
+    expect(markup).not.toContain('group-toggle');
+  });
+
+  it('连续子行只给末行收尾：竖脊不会一路垂到行底', () => {
+    const markup = render('all', parseFile('父任务 id:ccc333\n子一 parent:ccc333\n子二 parent:ccc333'));
+    const kids = rowsOf(markup).filter((r) => r.child);
+    expect(kids.map((r) => r.title)).toEqual(['子一', '子二']);
+    expect(kids.map((r) => r.tail)).toEqual([false, true]);
   });
 });

@@ -19,5 +19,18 @@ export function useRowCollapse() {
     });
   }, []);
 
-  return { collapsed, toggleExpand };
+  // 「一键展开 / 收起全部」只替换本屏这些父项的键，别把用户在别的视图里
+  // 收好的行一起翻掉 —— 收起态是全局一份，动作却只针对眼前这一屏。
+  const setAllCollapsed = useCallback((keys, value) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      for (const key of keys) {
+        if (value) next.add(key);
+        else next.delete(key);
+      }
+      return next;
+    });
+  }, []);
+
+  return { collapsed, toggleExpand, setAllCollapsed };
 }

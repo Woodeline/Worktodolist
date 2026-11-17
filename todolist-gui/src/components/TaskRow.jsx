@@ -74,6 +74,7 @@ export default function TaskRow({
   hasChildren = false,
   collapsed = false,
   onToggleExpand = null,
+  childLast = false,
   minimal = false,
 }) {
   const today = dayjs().format('YYYY-MM-DD');
@@ -402,6 +403,7 @@ export default function TaskRow({
         selected ? 'selected' : '',
         readonly ? 'row-readonly' : '',
         isChild ? 'is-child' : '',
+        childLast ? 'is-child-last' : '',
         minimal ? 'is-minimal' : '',
         quickPinned ? 'is-quick-pinned' : '',
       ]

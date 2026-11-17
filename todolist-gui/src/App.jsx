@@ -215,16 +215,46 @@ export function ConflictModal({ store }) {
 
 // 分组头：等宽小标签 + 左侧色条 + 右端计数（原型里的 .group）。
 // 不再画"延伸到底的规则线" —— 列表本身没有行分隔线，标题也不需要再画一条。
-function GroupHead({ label, count, tone }) {
+// 「一键展开 / 收起」是可选动作，只挂在本屏真有可展开父项的分组头上。
+function GroupHead({ label, count, tone, action = null }) {
   return (
     <div className={'group-title' + (tone === 'overdue' ? ' group-overdue' : '')}>
       <span>{label}</span>
-      {count != null && <em>{count}</em>}
+      {(count != null || action) && (
+        <span className="group-tail">
+          {count != null && <em>{count}</em>}
+          {action}
+        </span>
+      )}
     </div>
   );
 }
 
-export function MainList({ store, query, collapsed: collapsedProp, toggleExpand: toggleProp }) {
+// 连续子行按「一段」收尾：末行的竖脊只画到行中腰，不再垂到行底留一截断头。
+// 一段只有一个子任务时，竖脊自然只剩「父行下沿 → 中腰」这半截，加肘线正好是个 L。
+// 必须按渲染顺序扫，不能按 parentId 分组 —— 孙辈行夹在中间时也要一起算进这段。
+function childRunTails(list, depthOf) {
+  const tails = new Set();
+  let prev = null;
+  for (const task of list) {
+    if (depthOf(task) > 0) {
+      if (prev) tails.delete(prev);
+      tails.add(task.id);
+      prev = task.id;
+    } else {
+      prev = null;
+    }
+  }
+  return tails;
+}
+
+export function MainList({
+  store,
+  query,
+  collapsed: collapsedProp,
+  toggleExpand: toggleProp,
+  setAllCollapsed: setAllProp,
+}) {
   const today = dayjs().format('YYYY-MM-DD');
   // 收起态按 stableId 存（运行时 id 每次解析现算，拿它当键一切换视图就丢）。
   // 产品里由 App 传同一份，键盘导航 / 顶栏计数才和真实渲染的行同源；
@@ -232,6 +262,7 @@ export function MainList({ store, query, collapsed: collapsedProp, toggleExpand:
   const own = useRowCollapse();
   const collapsed = collapsedProp ?? own.collapsed;
   const toggleExpand = toggleProp ?? own.toggleExpand;
+  const setAllCollapsed = setAllProp ?? own.setAllCollapsed;
 
   const rawEntries = useMemo(
     () => store.todoEntries.filter((e) => e.kind === 'raw'),
@@ -263,32 +294,68 @@ export function MainList({ store, query, collapsed: collapsedProp, toggleExpand:
   // 只看 kids.total 会画出点开为空的箭头 —— 「即将到期」里子任务没截止日就是这样。
   const visibleIds = useMemo(() => new Set(visible.map((t) => t.id)), [visible]);
 
-  const rowProps = useCallback(
+  // 层级只数「本屏也在」的祖先：父行不在本屏时 nestChildren 已经把它降级成
+  // 顶层行，这里若仍按全表算层级，就会出现"缩进着、却没有父任务"的孤行
+  // —— 视觉上像挂在前一条任务下面，正是"层级混乱"的来源。
+  const depthOf = useCallback(
+    (t) => (expandable ? depthWithin(nesting, t, visibleIds) : 0),
+    [nesting, expandable, visibleIds]
+  );
+
+  // 「能不能展开」在两处共用：行尾箭头与组头的一键展开/收起。
+  // 两处各自算一遍，迟早会出现「按钮说能收、行上却没有箭头」。
+  const canExpandTask = useCallback(
     (t) => {
+      if (!expandable) return false;
       const kids = childProgress(nesting, t.stableId);
-      const kidInView = (nesting.byParent.get(t.id) || []).some((k) => visibleIds.has(k.id));
-      const canExpand = expandable && kids.total > 0 && kidInView;
+      return kids.total > 0 && (nesting.byParent.get(t.id) || []).some((k) => visibleIds.has(k.id));
+    },
+    [nesting, expandable, visibleIds]
+  );
+
+  const rowProps = useCallback(
+    (t, childTail = false) => {
+      const kids = childProgress(nesting, t.stableId);
+      const canExpand = canExpandTask(t);
       const key = t.stableId || t.id;
       return {
-        // 层级只数「本屏也在」的祖先：父行不在本屏时 nestChildren 已经把它降级成
-        // 顶层行，这里若仍按全表算层级，就会出现"缩进着、却没有父任务"的孤行
-        // —— 视觉上像挂在前一条任务下面，正是"层级混乱"的来源。
-        depth: expandable ? depthWithin(nesting, t, visibleIds) : 0,
+        depth: depthOf(t),
         kids,
         hasChildren: canExpand,
         collapsed: canExpand && collapsed.has(key),
         onToggleExpand: canExpand ? () => toggleExpand(key) : null,
+        childLast: childTail,
       };
     },
-    [nesting, expandable, collapsed, toggleExpand, visibleIds]
+    [nesting, canExpandTask, depthOf, collapsed, toggleExpand]
   );
+
+  // 组头的一键按钮只作用于本屏真有可展开子项的父任务。
+  // 只要有任意一枚还收着，按钮就是「展开全部」；全部摊开时才是「收起全部」。
+  const expandableKeys = useMemo(
+    () => visible.filter(canExpandTask).map((t) => t.stableId || t.id),
+    [visible, canExpandTask]
+  );
+  const allExpanded = expandableKeys.length > 0 && !expandableKeys.some((k) => collapsed.has(k));
+  const toggleAllAction =
+    expandableKeys.length === 0 ? null : (
+      <button
+        type="button"
+        className="group-toggle"
+        onClick={() => setAllCollapsed(expandableKeys, allExpanded)}
+        aria-label={allExpanded ? '收起全部子任务' : '展开全部子任务'}
+        title={allExpanded ? '收起全部子任务' : '展开全部子任务'}
+      >
+        <Icon name={allExpanded ? 'chevrons-up' : 'chevrons-down'} size={16} />
+      </button>
+    );
 
   const rawSection = (store.view === 'all' || store.view === 'inbox') && rawEntries.length > 0;
 
   if (store.view === 'done') {
     if (doneTasks.length === 0) return <div className="empty-state">日志还是空的</div>;
     return (
-      <div>
+      <div className="task-list">
         <GroupHead label="日志 · done.txt（只读）" count={doneTasks.length} />
         {doneTasks.map((task) => (
           <TaskRow key={task.id} task={task} store={store} query={query} readonly />
@@ -328,23 +395,45 @@ export function MainList({ store, query, collapsed: collapsedProp, toggleExpand:
     const overdue = pick(groups.overdue);
     const dueToday = pick(groups.dueToday);
     const noDate = pick(groups.noDate);
+    // 三组各自铺连续子行：连接线的收尾按「这一组」算，跨组的行不连成一条。
+    const overdueTails = childRunTails(overdue, depthOf);
+    const dueTodayTails = childRunTails(dueToday, depthOf);
+    const noDateTails = childRunTails(noDate, depthOf);
     return (
-      <div>
+      <div className="task-list">
         {overdue.length > 0 && (
           <GroupHead label="逾期" count={groups.overdue.length} tone="overdue" />
         )}
         {overdue.map((t) => (
-          <TaskRow key={t.id} task={t} store={store} query={query} {...rowProps(t)} />
+          <TaskRow
+            key={t.id}
+            task={t}
+            store={store}
+            query={query}
+            {...rowProps(t, overdueTails.has(t.id))}
+          />
         ))}
         {dueToday.length > 0 && (
           <GroupHead label="今天到期" count={groups.dueToday.length} />
         )}
         {dueToday.map((t) => (
-          <TaskRow key={t.id} task={t} store={store} query={query} {...rowProps(t)} />
+          <TaskRow
+            key={t.id}
+            task={t}
+            store={store}
+            query={query}
+            {...rowProps(t, dueTodayTails.has(t.id))}
+          />
         ))}
         {noDate.length > 0 && <GroupHead label="无日期" count={groups.noDate.length} />}
         {noDate.map((t) => (
-          <TaskRow key={t.id} task={t} store={store} query={query} {...rowProps(t)} />
+          <TaskRow
+            key={t.id}
+            task={t}
+            store={store}
+            query={query}
+            {...rowProps(t, noDateTails.has(t.id))}
+          />
         ))}
       </div>
     );
@@ -355,14 +444,22 @@ export function MainList({ store, query, collapsed: collapsedProp, toggleExpand:
   // filterCollapsed 只认「父也在这屏」的层级，避免切视图 / 搜索后任务凭空消失。
   const nested = nestChildren(visible, nesting);
   const ordered = filterCollapsed(nested, nesting, collapsed);
+  const childTails = childRunTails(ordered, depthOf);
   return (
-    <div>
+    <div className="task-list">
       <GroupHead
         label={store.view === 'inbox' ? '收集箱' : store.view === 'upcoming' ? '即将到期' : '全部任务'}
         count={visible.length}
+        action={toggleAllAction}
       />
       {ordered.map((t) => (
-        <TaskRow key={t.id} task={t} store={store} query={query} {...rowProps(t)} />
+        <TaskRow
+          key={t.id}
+          task={t}
+          store={store}
+          query={query}
+          {...rowProps(t, childTails.has(t.id))}
+        />
       ))}
       {renderRawSection()}
     </div>
@@ -581,7 +678,7 @@ export default function App() {
     if (store.search) store.setSearch('');
   }, [store.search, store.setSearch]);
   // 折叠态提到 App：主列表渲染、↑↓ 导航、顶栏「共 N 项」三处读同一份。
-  const { collapsed, toggleExpand } = useRowCollapse();
+  const { collapsed, toggleExpand, setAllCollapsed } = useRowCollapse();
   // 列表显示模式（列表 / 日历）：外观**偏好**走 configStore，不进 todo.txt（红线③）。
   // 2026-11-11 起偏好与「此刻实际用哪种布局」分开：窄边只临时改布局，永不写盘。
   const [preferredMode, pickListMode] = useListMode();
@@ -968,6 +1065,7 @@ export default function App() {
                       query={query}
                       collapsed={collapsed}
                       toggleExpand={toggleExpand}
+                      setAllCollapsed={setAllCollapsed}
                     />
                   </div>
                 )}

@@ -96,6 +96,18 @@ const PATHS = {
       <path d="m6 9 6 6 6-6" />
     </>
   ), // lucide:chevron-down
+  'chevrons-down': (
+    <>
+      <path d="m7 6 5 5 5-5" />
+      <path d="m7 13 5 5 5-5" />
+    </>
+  ), // lucide:chevrons-down
+  'chevrons-up': (
+    <>
+      <path d="m7 20 5-5 5 5" />
+      <path d="m7 13 5-5 5 5" />
+    </>
+  ), // lucide:chevrons-up
   'menu': (
     <>
       <path d="M4 5h16" />
