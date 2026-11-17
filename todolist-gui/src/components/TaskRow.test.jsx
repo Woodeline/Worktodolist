@@ -452,6 +452,27 @@ describe('TaskRow 子任务行：独立版式（2026-11-15）', () => {
     // 触屏：矮行必须回到 44，且小勾选框的命中外扩单独补
     expect(css).toContain('.task-row.is-child .checkbox::before {');
   });
+
+  // 2026-11-17：行分隔线分两档。主行用 --row-line + 2px 柔光，子任务行用
+  // --row-line-child 且不投影，否则子行会退回主行那条偏硬的分隔线。
+  it('样式契约：主行分隔线走 --row-line + 柔光，子任务行走 --row-line-child 且无阴影', () => {
+    const css = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'index.css'),
+      'utf8'
+    );
+    // 明暗两套令牌都要在：只加一套，另一主题会退回旧线
+    expect((css.match(/\n  --row-line:/g) || []).length).toBe(2);
+    expect((css.match(/\n  --row-line-child:/g) || []).length).toBe(2);
+    expect((css.match(/\n  --row-line-halo:/g) || []).length).toBe(2);
+    const rowAt = css.indexOf('.task-row {');
+    const rowBody = css.slice(rowAt, css.indexOf('}', rowAt));
+    expect(rowBody).toContain('border-bottom: 1px solid var(--row-line)');
+    expect(rowBody).toContain('box-shadow: 0 1px 2px var(--row-line-halo)');
+    const childAt = css.indexOf('.task-row.is-child {');
+    const childBody = css.slice(childAt, css.indexOf('}', childAt));
+    expect(childBody).toContain('border-bottom-color: var(--row-line-child)');
+    expect(childBody).toContain('box-shadow: none');
+  });
 });
 
 describe('Highlight 搜索高亮', () => {

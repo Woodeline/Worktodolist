@@ -1,5 +1,19 @@
 # 更新日志
 
+## 未发布 · 2026-11-17（行分隔线柔化）
+
+**一句话**：主行分隔线从 `--border` 换成淡约 30% 的 `--row-line`，下面加 2px 柔光晕开；子任务行再淡一档到 `--row-line-child`，1x 下几乎看不见，只留换行暗示。
+
+### 列表行
+
+- 新增明暗两套令牌 `--row-line` / `--row-line-child` / `--row-line-halo`。`.task-row` 的 `border-bottom` 走 `--row-line`，`box-shadow: 0 1px 2px var(--row-line-halo)` 负责阴影晕开。
+- `.task-row.is-child` 覆盖为 `--row-line-child` 并取消阴影。子任务连接线的竖脊 / 肘线仍用 `--border`，那是层级结构线，不跟着行分隔线一起淡。
+- `.task-row.fading` 退场时清掉阴影，避免折叠中的行在下一行上方留一条灰带。
+
+### 验证
+
+`npm test` 794/794（50 文件，`TaskRow.test.jsx` 新增 1 例样式契约）、`test:guard` 794、`test:ui` 132 组 0 失败、`npm run build`、`test:responsive` 37 档 / 665 项。浏览器读实际应用后的计算样式核对：主行 `1px solid #e4e2db` + `0 1px 2px rgba(30,28,22,.05)`，子任务行 `1px solid #f0efea` 且无阴影；暗色为 `#2b2a25` / `#23221d`，两套均按 30% / 75% 淡化。600px 明暗截图中主行线变浅并带柔光，子行线在 1x 下基本不可见。
+
 ## 未发布 · 2026-11-17（Esc 隐藏到托盘）
 
 **一句话**：Esc 改成「逐层退出」：先关浮层 / 搜索 / 选中，退无可退时把主窗口藏到托盘；隐藏前先把防抖窗口里的改动刷盘。

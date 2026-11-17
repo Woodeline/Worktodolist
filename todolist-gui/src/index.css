@@ -52,6 +52,12 @@
   --surface-3: #e5e2db;
   --border: #dcd9d1;
   --border-strong: #b7b3a9;
+  /* 行分隔线（2026-11-17）：比 --border 再淡约 30%，只画 1px；下面那点柔光
+     用 --row-line-halo 晕开 2px，别把它做成第二根线。子任务行更轻，
+     轻到只够提示「这里换了一行」，不再是可见的分隔。 */
+  --row-line: #e4e2db;
+  --row-line-child: #f0efea;
+  --row-line-halo: rgba(30, 28, 22, 0.05);
   --control-line: #837f75; /* 对 surface / bg ≥3:1，WCAG 1.4.11 */
 
   /* --- 文字：锚点 #1d1c19 暖墨，对 surface ≈15:1 --- */
@@ -343,6 +349,11 @@
   --surface-3: #302e27;
   --border: #31302a;
   --border-strong: #525047;
+  /* 行分隔线（2026-11-17）：亮色版同语义换值；暗底上柔光改用浅墨，
+     只晕开 2px，别用纯黑把线压得更硬。 */
+  --row-line: #2b2a25;
+  --row-line-child: #23221d;
+  --row-line-halo: rgba(236, 234, 227, 0.035);
   --control-line: #8f8c81;
 
   --text: #eceae3;
@@ -1669,8 +1680,9 @@ code {
   background: transparent;
   border: 0;
   border-left: 2px solid transparent;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--row-line);
   border-radius: 0;
+  box-shadow: 0 1px 2px var(--row-line-halo);
   padding: 0 var(--row-pad);
   cursor: default;
   overflow: hidden;
@@ -1733,6 +1745,7 @@ code {
   min-height: 0;
   padding-block: 0;
   border-bottom-color: transparent;
+  box-shadow: none;
   transition: opacity var(--dur-3) var(--ease-out);
 }
 
@@ -2286,6 +2299,9 @@ code {
   column-gap: var(--sp-2);
   min-height: var(--row-child-h);
   padding: 2px var(--row-pad) 2px calc(var(--row-pad) + 28px);
+  /* 子任务之间不再用主行那套「淡线 + 柔光」：留一丝线，只负责结束这一行。 */
+  border-bottom-color: var(--row-line-child);
+  box-shadow: none;
 }
 
 .task-row.is-child::before {
