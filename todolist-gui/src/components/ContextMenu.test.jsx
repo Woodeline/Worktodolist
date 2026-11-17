@@ -21,7 +21,7 @@ describe('ContextMenu 渲染', () => {
           x={20}
           y={30}
           items={[
-            { type: 'item', label: '标记完成', accel: 'Space' },
+            { type: 'item', label: '编辑…', accel: 'E' },
             { type: 'sep' },
             { type: 'sub', label: '优先级', items: [{ type: 'item', label: '高 (A)' }] },
           ]}
@@ -30,8 +30,8 @@ describe('ContextMenu 渲染', () => {
       );
       expect(markup).toContain('ctx-anchor');
       expect(markup).toContain('ctx-menu-item');
-      expect(markup).toContain('标记完成');
-      expect(markup).toContain('Space');
+      expect(markup).toContain('编辑…');
+      expect(markup).toContain('ctx-menu-accel">E<');
       expect(markup).toContain('优先级');
       expect(markup).toContain('ctx-menu-arrow');
     } finally {

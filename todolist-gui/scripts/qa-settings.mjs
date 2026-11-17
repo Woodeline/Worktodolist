@@ -268,6 +268,7 @@ async function main() {
   check('设置页有两个显示模式按钮，且恰好一个处于按下态', shape.modeBtns === 2 && shape.modePressed.filter((v) => v === 'true').length === 1, JSON.stringify(shape.modePressed));
   check('速查表列出日历键（翻月 / 回今天 / 在这天新建）', ['PageUp', 'PageDown', 'Home', '在选中那天新建'].every((k) => shape.keyText.includes(k)), shape.keyText.slice(0, 160));
   check('每组至少一条、且每条快捷键都有键名与说明', shape.rows >= 12 && shape.rowsComplete, `rows=${shape.rows} complete=${shape.rowsComplete}`);
+  check('列表页速查不再列空格完成', !shape.keyText.includes('完成 / 取消完成当前选中任务'), shape.keyText.slice(0, 160));
   check('页头注明本页只读', shape.note.includes('只读'), shape.note);
   check('没有任何输入控件（只读页，不需要保存）', shape.hasInput === false);
   check('底栏没有按钮（旧「保存 / 清除」入口已移除）', shape.footButtons === 0, `buttons=${shape.footButtons}`);

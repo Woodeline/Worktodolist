@@ -793,9 +793,6 @@ export default function App() {
   const customTitlebar = usesCustomTitlebar(shellPlatform);
   const isWindowsShell = shellPlatform === 'windows';
 
-  const findFocusedTask = () =>
-    store.todoEntries.find((e) => e.id === store.focusedId && e.kind === 'task') || null;
-
   // 列表空白处的右键：当前视图下的通用动作（任务行自己会先拦掉右键，不会走到这里）
   const handleMainContextMenu = (e) => {
     openMenu(e, [
@@ -876,7 +873,7 @@ export default function App() {
 
   useHotkeys({
     // 设置页打开时禁用全局快捷键 —— 否则在设置里按 Esc 会顺手清掉列表页的搜索词。
-    // 编辑浮窗打开时也禁用：空格 / e / n 不该穿透到浮窗后面的列表（Esc / 回车由浮窗自己处理）。
+    // 编辑浮窗打开时也禁用：e / n 不该穿透到浮窗后面的列表（Esc / 回车由浮窗自己处理）。
     enabled: tab === 'list' && !settingsOpen && !store.editingTask,
     onNew: () => {
       // 日历里的 n = 在选中那天新建（预填 due:），列表里照旧聚焦快速添加。
@@ -885,10 +882,6 @@ export default function App() {
     },
     onSearch: openSearch,
     onMove: moveSelection,
-    onToggle: () => {
-      const task = findFocusedTask();
-      if (task) store.toggleComplete(task);
-    },
     onEdit: () => {
       if (store.focusedId) store.openEditor(store.focusedId);
     },

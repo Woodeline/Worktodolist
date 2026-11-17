@@ -100,7 +100,7 @@ function MenuList({ items, onClose, onBack, variant }) {
   };
 
   const onKeyDown = (e) => {
-    // 菜单内的按键不再外泄给全局快捷键（否则空格会被当成"完成任务"）
+    // 菜单内的按键不再外泄给全局快捷键（否则 n / e 会被当成列表动作）
     e.stopPropagation();
     if (e.key === 'ArrowDown') {
       e.preventDefault();

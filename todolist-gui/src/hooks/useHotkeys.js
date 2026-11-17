@@ -1,12 +1,11 @@
 import { useEffect } from 'react';
 
-// 全局快捷键：n 新增 / 搜索 / ↑↓ 移动选中 / 空格 完成 / e·回车 编辑 / Esc 关闭 / Ctrl+Z 撤销
+// 全局快捷键：n 新增 / 搜索 / ↑↓ 移动选中 / e·回车 编辑 / Esc 关闭 / Ctrl+Z 撤销
 // enabled=false 时整体禁用（输入框聚焦等场景由调用方传入，避免冲突）。
 export default function useHotkeys({
   onNew,
   onSearch,
   onEscape,
-  onToggle,
   onEdit,
   onEnter,
   onMove,
@@ -46,9 +45,6 @@ export default function useHotkeys({
       } else if (e.key === '/') {
         e.preventDefault();
         onSearch();
-      } else if (e.key === ' ') {
-        e.preventDefault();
-        onToggle();
       } else if (e.key === 'e') {
         e.preventDefault();
         onEdit();
@@ -57,5 +53,5 @@ export default function useHotkeys({
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onNew, onSearch, onEscape, onToggle, onEdit, onEnter, onMove, onUndo, enabled]);
+  }, [onNew, onSearch, onEscape, onEdit, onEnter, onMove, onUndo, enabled]);
 }

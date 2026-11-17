@@ -227,7 +227,6 @@ export default function TaskRow({
       {
         type: 'item',
         label: task.completed ? '取消完成' : '标记完成',
-        accel: 'Space',
         onClick: () => store.toggleComplete(task),
       },
       { type: 'item', label: '编辑…', accel: 'E', onClick: () => store.openEditor(task.id) },
@@ -455,7 +454,7 @@ export default function TaskRow({
         onClick={handleCheck}
         // 子任务行不挂原生 tooltip（用户要求：鼠标悬停不弹任何提示）；
         // 无障碍标签照旧，读屏用户不受影响。
-        title={isChild ? undefined : readonly ? '已完成（只读）' : checked ? '取消完成' : '完成（空格）'}
+        title={isChild ? undefined : readonly ? '已完成（只读）' : checked ? '取消完成' : '完成'}
         aria-label="切换完成状态"
       />
       {/* 子任务行是**另一套版式**（2026-11-15 定稿）：单行，只放复选框 + 标题。

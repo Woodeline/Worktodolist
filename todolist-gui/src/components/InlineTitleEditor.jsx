@@ -36,8 +36,7 @@ export default function InlineTitleEditor({ value, onCommit, onCancel }) {
       onChange={(e) => setDraft(e.target.value)}
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
-        // 全局快捷键挂在 window 上：不截断的话，空格会把这条任务勾成完成，
-        // e / Enter 会顺手把编辑浮窗也打开。
+        // 全局快捷键挂在 window 上：不截断的话，e / Enter 会顺手把编辑浮窗也打开。
         e.stopPropagation();
         if (e.key === 'Enter') {
           e.preventDefault();

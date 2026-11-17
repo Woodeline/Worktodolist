@@ -421,7 +421,8 @@ describe('TaskRow 子任务行：独立版式（2026-11-15）', () => {
     // 主行反过来：快捷按钮与勾选框提示都在（只读行除外）
     const parent = render(parseSingleLine('装机 id:p00002'));
     expect(parent).toContain('row-quick');
-    expect(parent).toContain('title="完成（空格）"');
+    expect(parent).toContain('title="完成"');
+    expect(parent).not.toContain('完成（空格）');
   });
 
   it('子任务的日期 / 备注 / 重复一概不上屏（数据仍在，只是不画）', () => {
