@@ -1,0 +1,2745 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231e6b4f' stroke-width='2'%3E%3Cpath d='M4 21V4.5A1.5 1.5 0 0 1 5.5 3H19'/%3E%3Cpath d='M4 7h11M4 12h15M4 17h9'/%3E%3C/svg%3E">
+<title>编辑浮窗 · 重设计三套方案 — Worktodolist</title>
+<meta name="description" content="Worktodolist 编辑浮窗（.edit-window）的三套重设计方案与现行版对照：可交互样张、明暗两套、实时几何与对比度取证。">
+<style>
+/* ==========================================================================
+   0 · 令牌：直接取自 todolist-gui/src/index.css §1（明暗两套），不另造色系。
+   这份文件是设计提案，不改项目代码；落地时这些值就是现成的。
+   ========================================================================== */
+:root,[data-theme="light"]{
+  color-scheme:light;
+  --bg:#edebe6; --surface:#f7f6f2; --surface-2:#efede8; --surface-3:#e5e2db;
+  --border:#dcd9d1; --border-strong:#b7b3a9;
+  --row-line:#e4e2db; --row-line-child:#f0efea; --row-line-halo:rgba(30,28,22,.05);
+  --control-line:#837f75; --field-bg:#f2f0ea;
+  --text:#1d1c19; --text-2:#45433d; --muted:#63605a;
+  --flag-high:#b3261e; --flag-mid:#b5700c; --flag-low:#15509b;
+  --flag-high-soft:#f8e5e2; --flag-mid-soft:#f7ecdb; --flag-low-soft:#e5edf8;
+  --flag-mid-ink:#96590a;
+  --chip-none-bg:#d9d5cc; --chip-none-fg:#3d3b35;
+  --accent:#1e6b4f; --accent-hover:#175640; --accent-fg:#ffffff;
+  --accent-soft:#e2eee7; --accent-line:#b9d4c6;
+  --danger:#b3261e; --danger-soft:#fbe9e7; --danger-line:#f0c8c4; --danger-fg:#ffffff;
+  --warn:#8a5a00; --warn-soft:#f7ecd8; --ok:#146b41; --ok-soft:#e6f4ec;
+  --mark-bg:#f5e3a3; --mark-fg:#4a2c00;
+  --sh-1:0 1px 1px rgba(30,28,22,.07);
+  --sh-2:0 1px 2px rgba(30,28,22,.09),0 0 0 1px rgba(30,28,22,.05);
+  --sh-3:0 12px 28px rgba(30,28,22,.18),0 2px 6px rgba(30,28,22,.1);
+  --overlay:rgba(28,26,21,.34);
+  --sheet-bg:#fbfaf7; --sheet-line:#dcd9d1; --sheet-gutter:#efede8; --sheet-no:#63605a;
+  --keycap-bg:#efede8; --keycap-line:#b7b3a9;
+  --sel:rgba(70,66,56,.08); --tip-bg:#2e2c26; --tip-fg:#f2f1ea;
+  --ring:0 0 0 2px rgba(30,107,79,.4); --ring-danger:0 0 0 2px rgba(179,38,30,.32);
+  --dot-edge:rgba(255,255,255,.6);
+  --fs-2xs:11px; --fs-xs:12px; --fs-sm:13px; --fs-md:14px; --fs-lg:16px;
+  --fs-xl:20px; --fs-2xl:24px; --fs-display:22px;
+  --fw-body:400; --fw-emph:500; --fw-title:600;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
+  --r-xs:4px; --r-sm:6px; --r-md:8px; --r-lg:12px; --r-xl:16px;
+  --font-ui:"Segoe UI","Microsoft YaHei UI","Microsoft YaHei","PingFang SC","Hiragino Sans GB","Source Han Sans SC",sans-serif;
+  --font-mono:"Cascadia Mono",Consolas,"SF Mono","DejaVu Sans Mono",monospace;
+  --font-mono-cjk:"Cascadia Mono",Consolas,"SF Mono","PingFang SC","Microsoft YaHei UI","DejaVu Sans Mono",monospace;
+  --h-control:28px; --h-control-lg:32px;
+  --ease:cubic-bezier(.22,1,.36,1);
+}
+:root[data-theme="dark"],[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#161511; --surface:#1e1d18; --surface-2:#26251f; --surface-3:#302e27;
+  --border:#31302a; --border-strong:#525047;
+  --row-line:#2b2a25; --row-line-child:#23221d; --row-line-halo:rgba(236,234,227,.035);
+  --control-line:#77736a; --field-bg:#141310;
+  --text:#eceae3; --text-2:#c6c3b9; --muted:#9d9a8f;
+  --flag-high:#f0968d; --flag-mid:#e8ad68; --flag-low:#86b6f0;
+  --flag-high-soft:#3a211d; --flag-mid-soft:#352b16; --flag-low-soft:#1c2a3d;
+  --flag-mid-ink:#e8ad68;
+  --chip-none-bg:#3b3931; --chip-none-fg:#cfccc2;
+  --accent:#6cc59c; --accent-hover:#82d1ac; --accent-fg:#0d1f17;
+  --accent-soft:#1b3229; --accent-line:#2f5443;
+  --danger:#f0968d; --danger-soft:#3a211d; --danger-line:#5f3430; --danger-fg:#0d1f17;
+  --warn:#dfb567; --warn-soft:#352b16; --ok:#7dd3a2; --ok-soft:#163024;
+  --mark-bg:#6b4c0d; --mark-fg:#ffe9b0;
+  --sh-1:0 1px 1px rgba(0,0,0,.5);
+  --sh-2:0 1px 2px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.03);
+  --sh-3:0 12px 28px rgba(0,0,0,.6),0 2px 6px rgba(0,0,0,.4);
+  --overlay:rgba(0,0,0,.58);
+  --sheet-bg:#201f1a; --sheet-line:#31302a; --sheet-gutter:#26251f; --sheet-no:#9d9a8f;
+  --keycap-bg:#26251f; --keycap-line:#525047;
+  --sel:rgba(255,255,255,.06); --tip-bg:#3a382f; --tip-fg:#f2f1ea;
+  --ring:0 0 0 2px rgba(108,197,156,.4); --ring-danger:0 0 0 2px rgba(240,150,141,.32);
+  --dot-edge:rgba(0,0,0,.45);
+}
+
+/* 工作台自己的可调参数（控制轨实时写这里） */
+:root{
+  --edit-window-w:400px; --dens:1.000; --fs-val:12px; --fs-label:10px; --r:6px;
+  --ctl-line:#6b675f; --scrim:.29; --dur:160ms; --dw-maxh:480px;
+  --rail-w:272px; --notes-w:340px; --top-h:52px;
+}
+
+/* ==========================================================================
+   1 · 基础
+   ========================================================================== */
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:var(--font-ui); font-size:var(--fs-sm); line-height:1.55;
+  -webkit-font-smoothing:antialiased; font-variant-numeric:tabular-nums;
+}
+button{font:inherit;color:inherit}
+input,textarea{font:inherit;color:inherit}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.cjk{font-family:var(--font-mono-cjk)}
+::selection{background:var(--mark-bg);color:var(--mark-fg)}
+
+/* 滚动条：用本文件自己的 palette 画，不留浏览器默认 */
+*{scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent}
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{
+  background:var(--border-strong); border-radius:999px;
+  border:3px solid transparent; background-clip:content-box;
+}
+*::-webkit-scrollbar-thumb:hover{background:var(--muted);background-clip:content-box;border:3px solid transparent}
+*::-webkit-scrollbar-corner{background:transparent}
+
+:focus-visible{outline:none;box-shadow:var(--ring)}
+
+/* ==========================================================================
+   2 · 外壳：顶栏 / 控制轨 / 舞台 / 取证栏
+   ========================================================================== */
+.wb{min-height:100%;display:flex;flex-direction:column}
+.top{
+  position:sticky;top:0;z-index:80;height:var(--top-h);flex:0 0 auto;
+  display:flex;align-items:center;gap:var(--sp-4);
+  padding:0 var(--sp-4);background:var(--surface);
+  border-bottom:1px solid var(--border-strong);box-shadow:var(--sh-1);
+}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand-mark{width:24px;height:24px;flex:0 0 auto;color:var(--accent)}
+.brand-txt{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+.brand-txt b{font-size:var(--fs-md);font-weight:var(--fw-emph);letter-spacing:0}
+.brand-txt span{font-family:var(--font-mono);font-size:var(--fs-2xs);color:var(--muted)}
+.top-spacer{flex:1}
+
+.tabs{display:flex;gap:2px;padding:2px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm)}
+.tabs button{
+  height:26px;padding:0 12px;border:0;background:transparent;border-radius:4px;
+  font-size:var(--fs-xs);color:var(--text-2);cursor:pointer;
+  transition:background var(--dur) var(--ease),color var(--dur) var(--ease);
+}
+.tabs button:hover{background:var(--sel)}
+.tabs button[aria-selected="true"]{background:var(--surface);color:var(--text);font-weight:var(--fw-emph);box-shadow:var(--sh-1)}
+
+.shell{flex:1;display:grid;grid-template-columns:var(--rail-w) minmax(0,1fr) var(--notes-w);align-items:start;min-height:0}
+.rail{
+  position:sticky;top:var(--top-h);height:calc(100vh - var(--top-h));overflow-y:auto;
+  background:var(--surface);border-right:1px solid var(--border-strong);padding:var(--sp-4) 0 var(--sp-6);
+}
+.notes{
+  position:sticky;top:var(--top-h);height:calc(100vh - var(--top-h));overflow-y:auto;
+  background:var(--surface);border-left:1px solid var(--border-strong);padding:var(--sp-4) var(--sp-4) var(--sp-6);
+}
+.stage{min-width:0;padding:var(--sp-5);overflow-x:hidden}
+
+/* 控制轨分组 */
+.grp{padding:0 var(--sp-4) var(--sp-4)}
+.grp + .grp{border-top:1px solid var(--border);padding-top:var(--sp-4)}
+.grp-h{
+  display:flex;align-items:center;gap:8px;margin:0 0 10px;
+  font-family:var(--font-mono-cjk);font-size:var(--fs-2xs);font-weight:var(--fw-body);color:var(--muted);
+}
+.grp-h::after{content:"";flex:1;height:1px;background:var(--border)}
+.ctl{display:grid;grid-template-columns:1fr auto;align-items:center;gap:6px 10px;margin-bottom:10px}
+.ctl:last-child{margin-bottom:0}
+.ctl-l{font-size:var(--fs-xs);color:var(--text-2)}
+.ctl-v{font-family:var(--font-mono);font-size:var(--fs-2xs);color:var(--muted);min-width:44px;text-align:right}
+.ctl-full{grid-column:1/-1}
+
+.seg{display:flex;gap:2px;padding:2px;background:var(--field-bg);border:1px solid var(--border);border-radius:var(--r-sm)}
+.seg button{
+  flex:1;height:24px;padding:0 6px;border:0;background:transparent;border-radius:4px;cursor:pointer;
+  font-size:var(--fs-2xs);color:var(--text-2);white-space:nowrap;
+  transition:background var(--dur) var(--ease),color var(--dur) var(--ease);
+}
+.seg button:hover{background:var(--sel)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);font-weight:var(--fw-emph);box-shadow:var(--sh-1)}
+.seg.wide button{height:26px;font-size:var(--fs-xs)}
+.seg.wrap{flex-wrap:wrap}
+.seg.wrap button{flex:1 1 auto;height:24px;font-size:var(--fs-2xs);padding:0 7px}
+:root[data-field-bg="0"]{--field-bg:var(--surface)}
+.tool-note{font-size:var(--fs-2xs);color:var(--muted);line-height:1.6;margin:0 0 10px}
+.rail-act{display:flex;flex-wrap:wrap;gap:6px}
+.rail-act .btn{flex:1 1 auto}
+.dw-scale{transform-origin:top center}
+.cmp-stage .dw,.state-cell .dw{animation:none}
+.shot img{cursor:zoom-in}
+.shot.is-big{grid-column:1/-1}
+.lightbox{position:fixed;inset:0;z-index:300;background:rgba(20,18,14,.82);display:grid;place-items:center;padding:24px;cursor:zoom-out}
+.lightbox img{max-width:100%;max-height:100%;box-shadow:var(--sh-3);border-radius:8px;background:var(--surface)}
+
+.rng{-webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;cursor:pointer;margin:0}
+.rng::-webkit-slider-runnable-track{height:2px;background:var(--border-strong);border-radius:2px}
+.rng::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;width:12px;height:12px;margin-top:-5px;border-radius:50%;
+  background:var(--surface);border:1.5px solid var(--accent);box-shadow:var(--sh-1);
+  transition:transform var(--dur) var(--ease);
+}
+.rng:hover::-webkit-slider-thumb{transform:scale(1.15)}
+.clr-row{display:flex;align-items:center;gap:6px}
+.clr{
+  -webkit-appearance:none;appearance:none;width:34px;height:20px;padding:0;border:1px solid var(--control-line);
+  border-radius:4px;background:var(--field-bg);cursor:pointer;flex:0 0 auto;
+}
+.clr::-webkit-color-swatch-wrapper{padding:2px}
+.clr::-webkit-color-swatch{border:0;border-radius:2px}
+.clr::-moz-color-swatch{border:0;border-radius:2px}
+.clr-pre{
+  font-family:var(--font-mono);font-size:10px;color:var(--muted);background:var(--surface-2);
+  border:1px solid var(--border);border-radius:4px;padding:2px 6px;cursor:pointer;
+  transition:color var(--dur) var(--ease),border-color var(--dur) var(--ease);
+}
+.clr-pre:hover{color:var(--text);border-color:var(--border-strong)}
+.rng::-moz-range-track{height:2px;background:var(--border-strong);border-radius:2px}
+.rng::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--surface);border:1.5px solid var(--accent)}
+
+.sw{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.sw input{position:absolute;opacity:0;width:0;height:0}
+.sw i{
+  width:30px;height:16px;flex:0 0 auto;border-radius:999px;background:var(--surface-3);
+  border:1px solid var(--control-line);position:relative;
+  transition:background var(--dur) var(--ease),border-color var(--dur) var(--ease);
+}
+.sw i::after{
+  content:"";position:absolute;top:1px;left:1px;width:12px;height:12px;border-radius:50%;
+  background:var(--surface);box-shadow:var(--sh-1);
+  transition:transform var(--dur) var(--ease);
+}
+.sw input:checked + i{background:var(--accent);border-color:var(--accent)}
+.sw input:checked + i::after{transform:translateX(14px)}
+.sw input:focus-visible + i{box-shadow:var(--ring)}
+.sw span{font-size:var(--fs-xs);color:var(--text-2)}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  height:var(--h-control);padding:0 12px;border-radius:var(--r-sm);cursor:pointer;
+  border:1px solid var(--control-line);background:var(--field-bg);color:var(--text);
+  font-size:var(--fs-xs);font-weight:var(--fw-emph);
+  transition:background var(--dur) var(--ease),border-color var(--dur) var(--ease),color var(--dur) var(--ease);
+}
+.btn:hover{background:var(--surface)}
+.btn:active{transform:translateY(.5px)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn-primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+.btn-ghost{background:transparent;border-color:transparent;color:var(--text-2);font-weight:var(--fw-body)}
+.btn-ghost:hover{background:var(--surface-2);color:var(--text)}
+.btn-ghost.is-danger{color:var(--danger)}
+.btn-ghost.is-danger:hover{background:var(--danger-soft)}
+.btn-ghost.is-danger.is-armed{background:var(--danger);border-color:var(--danger);color:var(--danger-fg);font-weight:var(--fw-emph)}
+.btn-sm{height:24px;padding:0 8px;font-size:var(--fs-2xs)}
+.btn-row{display:flex;gap:6px;flex-wrap:wrap}
+.icon-btn{
+  display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;flex:0 0 auto;
+  border:0;background:transparent;border-radius:var(--r-xs);color:var(--muted);cursor:pointer;
+  transition:background var(--dur) var(--ease),color var(--dur) var(--ease);
+}
+.icon-btn:hover{background:var(--surface-2);color:var(--text)}
+.icon{display:block;flex:0 0 auto}
+
+/* ==========================================================================
+   3 · 舞台：单套视图的「桌面上的一扇窗」
+   ========================================================================== */
+.view{display:none}
+.view.on{display:block}
+.stage-h{display:flex;align-items:baseline;gap:10px;margin:0 0 var(--sp-4)}
+.stage-h h2{margin:0;font-size:var(--fs-lg);font-weight:var(--fw-emph)}
+.stage-h .mono{font-size:var(--fs-2xs);color:var(--muted)}
+
+.scene{
+  position:relative;border:1px solid var(--border-strong);border-radius:var(--r-lg);
+  overflow:hidden;background:var(--bg);box-shadow:var(--sh-2);min-height:660px;
+  display:flex;align-items:flex-start;justify-content:center;padding:var(--sp-6) var(--sp-5);
+}
+/* 背后的真实应用（简化但同语言）：让浮窗读起来是「窗」，不是孤零零一张卡 */
+.mock{position:absolute;inset:0;display:grid;grid-template-columns:46px minmax(0,1fr);pointer-events:none}
+.mock-rail{background:var(--surface-2);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 0}
+.mock-rail i{width:30px;height:30px;border-radius:6px;display:grid;place-items:center;color:var(--muted)}
+.mock-rail i.on{background:var(--surface);color:var(--accent);box-shadow:var(--sh-1)}
+.mock-main{display:flex;flex-direction:column;min-width:0}
+.mock-ctx{height:31px;display:flex;align-items:center;gap:8px;padding:0 20px;border-bottom:1px solid var(--border);background:var(--surface)}
+.mock-ctx b{font-size:var(--fs-lg);font-weight:var(--fw-emph)}
+.mock-ctx span{font-family:var(--font-mono);font-size:var(--fs-2xs);color:var(--muted)}
+.mock-quick{margin:12px 20px 8px;height:32px;border:1px solid var(--control-line);border-radius:6px;background:var(--field-bg);display:flex;align-items:center;padding:0 10px;color:var(--muted);font-size:var(--fs-sm)}
+.mock-list{padding:0 20px;display:flex;flex-direction:column}
+.mock-row{display:grid;grid-template-columns:18px 18px minmax(0,1fr);gap:12px;align-items:center;height:32px;border-bottom:1px solid var(--row-line)}
+.mock-row .cb{width:18px;height:18px;border:1.5px solid var(--control-line);border-radius:50%}
+.mock-row .fl{width:18px;height:18px;display:grid;place-items:center}
+.mock-row .tt{font-size:var(--fs-md);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mock-row.child{grid-template-columns:18px minmax(0,1fr);padding-left:28px;height:26px}
+.mock-row.child .tt{font-size:var(--fs-xs);color:var(--muted)}
+.mock-group{height:26px;display:flex;align-items:center;gap:8px;font-family:var(--font-mono-cjk);font-size:var(--fs-2xs);color:var(--muted);margin-top:8px}
+.mock-group::after{content:"";flex:1;height:1px;background:var(--border)}
+.scrim{position:absolute;inset:0;background:rgba(28,26,21,var(--scrim));transition:background var(--dur) var(--ease)}
+:root[data-theme="dark"] .scrim,[data-theme="dark"] .scrim{background:rgba(0,0,0,var(--scrim))}
+.scene-hold{position:relative;z-index:2;width:100%;display:flex;justify-content:center}
+.reopen{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+}
+.reopen p{margin:0;font-size:var(--fs-xs);color:var(--tip-fg);background:var(--tip-bg);padding:4px 10px;border-radius:4px}
+
+/* ==========================================================================
+   4 · 浮窗公共骨架
+   ========================================================================== */
+.dw{
+  position:relative;width:var(--edit-window-w);max-width:100%;flex:0 0 auto;
+  background:var(--surface);border:1px solid var(--border-strong);
+  border-radius:calc(var(--r) + 6px);box-shadow:var(--sh-3);
+  font-family:var(--font-ui);font-size:var(--fs-val);color:var(--text);
+  display:flex;flex-direction:column;overflow:hidden;
+  transition:width var(--dur) var(--ease);
+}
+:root[data-theme="dark"] .dw,[data-theme="dark"] .dw{box-shadow:var(--sh-3),0 0 0 1px var(--border-strong)}
+.dw.has-pop{overflow:visible}
+.dw-body{overflow-y:auto;max-height:var(--dw-maxh);min-height:0}
+.dw-foot{
+  border-bottom-left-radius:calc(var(--r) + 5px);border-bottom-right-radius:calc(var(--r) + 5px);
+  flex:0 0 auto;display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;
+  border-top:1px solid var(--border);background:var(--surface);
+}
+.dw-foot .btn{height:28px;min-height:28px}
+.dw-foot .sp{flex:1}
+.dirty{font-family:var(--font-mono);font-size:var(--fs-2xs);color:var(--warn);display:inline-flex;align-items:center;gap:5px}
+.dirty::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--warn)}
+.x-btn{
+  width:24px;height:24px;flex:0 0 auto;display:grid;place-items:center;border:0;background:transparent;
+  border-radius:var(--r-xs);color:var(--muted);cursor:pointer;
+  transition:background var(--dur) var(--ease),color var(--dur) var(--ease);
+}
+.x-btn:hover{background:var(--danger-soft);color:var(--danger)}
+.dw-title{
+  width:100%;min-width:0;border:0;background:transparent;color:var(--text);
+  font-family:inherit;font-weight:var(--fw-emph);padding:2px 0;margin:0;
+}
+.dw-title::placeholder{color:var(--muted);font-weight:var(--fw-body)}
+.dw-title:focus{outline:none}
+.sep{height:1px;background:var(--border);margin:calc(14px * var(--dens)) 0}
+.key{font-family:var(--font-mono-cjk);font-size:var(--fs-label);color:var(--muted);font-weight:var(--fw-body)}
+.val{font-size:var(--fs-val);color:var(--text)}
+.empty-val{color:var(--muted)}
+.readout{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+/* 旗标：列表那枚中空旗的同一支笔 */
+.flag{display:block}
+.flag.prio-high{color:var(--flag-high)}
+.flag.prio-mid{color:var(--flag-mid)}
+.flag.prio-low{color:var(--flag-low)}
+.flag.prio-none,.flag.prio-other{color:var(--muted)}
+:root[data-mono-prio="1"] .flag.prio-high,
+:root[data-mono-prio="1"] .flag.prio-mid,
+:root[data-mono-prio="1"] .flag.prio-low{color:var(--text-2)}
+
+/*  chips（分类 / 标签） */
+.chips{display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-width:0}
+.chip{
+  display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 7px;border-radius:999px;
+  background:var(--surface-2);border:1px solid var(--border);font-size:var(--fs-xs);color:var(--text-2);
+  max-width:100%;
+}
+.chip b{font-weight:var(--fw-body);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 1px var(--dot-edge);flex:0 0 auto}
+.chip button{border:0;background:transparent;color:var(--muted);cursor:pointer;display:grid;place-items:center;padding:0;width:14px;height:14px;border-radius:50%}
+.chip button:hover{color:var(--danger);background:var(--danger-soft)}
+.chip-add{
+  display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 7px;border-radius:999px;
+  border:1px dashed var(--control-line);background:transparent;color:var(--muted);cursor:pointer;font-size:var(--fs-xs);
+}
+.chip-add:hover{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
+.chip-add.is-icon{padding:0 5px}
+.chip-add.is-icon[aria-expanded="true"]{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
+.chip-input{
+  height:22px;min-width:60px;flex:1;border:0;border-bottom:1px solid var(--accent);background:transparent;
+  font-size:var(--fs-xs);padding:0 2px;
+}
+.chip-input:focus{outline:none}
+
+/* 子任务清单（三套共用同一支笔，密度各自调） */
+.subs{list-style:none;margin:0;padding:0}
+.subs li{
+  display:grid;grid-template-columns:16px minmax(0,1fr) 20px;gap:8px;align-items:center;
+  min-height:calc(26px * var(--dens));border-bottom:1px solid var(--row-line-child);
+}
+.subs li:last-child{border-bottom:0}
+.cb{
+  width:16px;height:16px;border-radius:50%;border:1.5px solid var(--control-line);background:transparent;
+  cursor:pointer;padding:0;position:relative;transition:border-color var(--dur) var(--ease),background var(--dur) var(--ease);
+}
+.cb:hover{border-color:var(--accent)}
+.cb.on{background:var(--accent);border-color:var(--accent)}
+.cb.on::after{
+  content:"";position:absolute;inset:0;background:var(--accent-fg);
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center/9px no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center/9px no-repeat;
+}
+.sub-t{font-size:var(--fs-val);color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:text}
+.sub-t.done{color:var(--muted);text-decoration:line-through}
+.sub-del{width:20px;height:20px;border:0;background:transparent;color:var(--muted);border-radius:4px;cursor:pointer;display:grid;place-items:center;opacity:0;transition:opacity var(--dur) var(--ease)}
+.subs li:hover .sub-del,.sub-del:focus-visible{opacity:1}
+.sub-del:hover{color:var(--danger);background:var(--danger-soft)}
+.sub-edit{width:100%;height:22px;border:0;border-bottom:1px solid var(--accent);background:transparent;font-size:var(--fs-val);padding:0}
+.sub-edit:focus{outline:none}
+.sub-add{display:flex;align-items:center;gap:8px;min-height:calc(28px * var(--dens))}
+.sub-add input{
+  flex:1;min-width:0;height:26px;border:0;border-bottom:1px solid var(--border);background:transparent;
+  font-size:var(--fs-val);padding:0 2px;
+}
+.sub-add input:focus{outline:none;border-bottom-color:var(--accent)}
+.sub-add input::placeholder{color:var(--muted)}
+.prog{display:flex;align-items:center;gap:8px}
+.prog-bar{flex:1;height:2px;background:var(--surface-3);border-radius:2px;overflow:hidden}
+.prog-bar i{display:block;height:100%;background:var(--accent);transition:width var(--dur) var(--ease)}
+.prog-n{font-family:var(--font-mono);font-size:var(--fs-2xs);color:var(--muted)}
+
+/* 备注纸页 */
+.note-paper{
+  background:var(--sheet-bg);border:1px solid var(--sheet-line);border-radius:var(--r);
+  padding:8px 10px;font-size:var(--fs-val);color:var(--text-2);line-height:22px;
+}
+:root[data-ruled="1"] .note-paper{
+  background-image:repeating-linear-gradient(to bottom,transparent 0 21px,var(--sheet-line) 21px 22px);
+  background-position:0 9px;
+}
+.note-paper textarea{
+  width:100%;border:0;background:transparent;resize:vertical;min-height:66px;line-height:22px;
+  font-family:inherit;font-size:var(--fs-val);color:var(--text);padding:0;
+}
+.note-paper textarea:focus{outline:none}
+.note-empty{color:var(--muted);font-size:var(--fs-xs)}
+.note-clip{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+/* 额外标签：给机器看的原文，弱化成 mono 小字 */
+.extra{display:flex;flex-wrap:wrap;gap:4px;margin-top:calc(10px * var(--dens))}
+.extra span{
+  font-family:var(--font-mono);font-size:var(--fs-2xs);color:var(--muted);
+  background:var(--surface-2);border-radius:4px;padding:1px 5px;
+}
+
+/* 菜单（重复档位 / 候选清单 / 优先级） */
+.menu{
+  position:absolute;z-index:60;min-width:164px;padding:4px;
+  background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--r-sm);
+  box-shadow:var(--sh-2);
+}
+.menu-h{font-family:var(--font-mono-cjk);font-size:var(--fs-2xs);color:var(--muted);padding:4px 8px 6px}
+.menu-opt{
+  display:flex;align-items:center;gap:8px;width:100%;height:28px;padding:0 8px;border:0;
+  background:transparent;border-radius:4px;cursor:pointer;font-size:var(--fs-val);color:var(--text);text-align:left;
+}
+.menu-opt:hover,.menu-opt:focus-visible{background:var(--surface-2);outline:none;box-shadow:none}
+.menu-opt .tick{width:16px;flex:0 0 auto;color:var(--accent);display:grid;place-items:center}
+.menu-opt .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.menu-opt .ct{font-family:var(--font-mono);font-size:var(--fs-2xs);color:var(--muted)}
+.menu-opt[aria-selected="true"]{font-weight:var(--fw-emph)}
+.menu-empty{padding:8px;font-size:var(--fs-xs);color:var(--muted)}
+
+/* 日期弹层 */
+.dpop{
+  position:absolute;z-index:60;width:264px;padding:10px;
+  background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--r-md);box-shadow:var(--sh-3);
+}
+.dpop-h{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.dpop-h b{flex:1;text-align:center;font-size:var(--fs-sm);font-weight:var(--fw-emph)}
+.dpop-h .mono{font-size:var(--fs-2xs);color:var(--muted)}
+.dow{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:2px}
+.dow span{text-align:center;font-family:var(--font-mono-cjk);font-size:var(--fs-2xs);color:var(--muted);height:18px;line-height:18px}
+.dgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.dcell{
+  height:28px;border:0;background:transparent;border-radius:4px;cursor:pointer;
+  font-family:var(--font-mono);font-size:var(--fs-xs);color:var(--text-2);
+}
+.dcell:hover{background:var(--surface-2)}
+.dcell.out{color:var(--muted);opacity:.5}
+.dcell.today{color:var(--accent);font-weight:var(--fw-emph);box-shadow:inset 0 0 0 1px var(--accent-line)}
+.dcell.sel{background:var(--accent);color:var(--accent-fg);font-weight:var(--fw-emph)}
+.dpop-f{display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+.dpop-f .btn{height:24px;padding:0 8px;font-size:var(--fs-2xs)}
+.tstep{display:flex;align-items:center;gap:4px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+.tstep input{
+  width:64px;height:24px;border:1px solid var(--control-line);border-radius:4px;background:var(--field-bg);
+  font-family:var(--font-mono);font-size:var(--fs-xs);padding:0 6px;
+}
+.tstep input:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+
+/* 写入行（签名：行号 │ 源文本行） */
+.src{display:flex;align-items:stretch;background:var(--sheet-bg);font-family:var(--font-mono);font-size:var(--fs-2xs);line-height:1.6}
+.src-no{
+  flex:0 0 46px;display:flex;align-items:flex-start;justify-content:flex-end;gap:6px;
+  padding:7px 7px 7px 0;background:var(--sheet-gutter);color:var(--sheet-no);
+  border-right:1px solid var(--sheet-line);
+}
+.src-line{flex:1;min-width:0;padding:7px 10px;color:var(--text-2);white-space:pre-wrap;word-break:break-word}
+.tok{border-radius:3px;padding:0 1px}
+.tok-p{color:var(--flag-high);font-weight:var(--fw-emph)}
+.tok-k{color:var(--muted)}
+.tok-v{color:var(--text)}
+.tok-c{color:var(--accent)}
+.tok-j{color:var(--flag-low)}
+.tok-id{color:var(--muted)}
+button.tok{border:0;background:transparent;font:inherit;cursor:pointer;transition:background var(--dur) var(--ease)}
+button.tok:hover{background:var(--mark-bg);color:var(--mark-fg)}
+.is-linked{background:var(--accent-soft) !important;box-shadow:inset 0 -1px 0 var(--accent)}
+
+/* 键帽 */
+.kc{
+  display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;padding:0 5px;
+  border:1px solid var(--keycap-line);border-bottom-width:2px;border-radius:4px;background:var(--keycap-bg);
+  font-family:var(--font-mono);font-size:10px;color:var(--text-2);
+}
+.keys{display:flex;align-items:center;gap:6px;font-size:var(--fs-2xs);color:var(--muted)}
+
+/* 放弃确认 / 空标题 / toast */
+.ask{position:absolute;inset:0;z-index:70;display:grid;place-items:center;background:var(--overlay);border-radius:inherit}
+.ask-card{width:min(300px,86%);background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--r-md);box-shadow:var(--sh-3);padding:var(--sp-4)}
+.ask-card h3{margin:0 0 6px;font-size:var(--fs-md);font-weight:var(--fw-emph)}
+.ask-card p{margin:0 0 14px;font-size:var(--fs-xs);color:var(--text-2);line-height:1.6}
+.ask-row{display:flex;gap:8px;justify-content:flex-end}
+.err-msg{display:flex;align-items:center;gap:6px;font-size:var(--fs-2xs);color:var(--danger);margin-top:4px}
+.toasts{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.toast{
+  display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:var(--r-sm);
+  background:var(--tip-bg);color:var(--tip-fg);box-shadow:var(--sh-3);font-size:var(--fs-xs);
+  animation:toast-in var(--dur) var(--ease) backwards;
+}
+.toast .mono{font-size:var(--fs-2xs);opacity:.8}
+@keyframes toast-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes win-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.dw{animation:win-in var(--dur) var(--ease) backwards}
+.flash{animation:flash 1.4s var(--ease)}
+@keyframes flash{0%{background:var(--accent-soft)}100%{background:var(--sheet-bg)}}
+
+/* 4px 栅格参考线 */
+.gridlay{
+  position:absolute;inset:0;z-index:65;pointer-events:none;border-radius:inherit;
+  background-image:
+    repeating-linear-gradient(to bottom,rgba(30,107,79,.16) 0 1px,transparent 1px 4px),
+    repeating-linear-gradient(to right,rgba(30,107,79,.16) 0 1px,transparent 1px 4px);
+}
+:root[data-theme="dark"] .gridlay,[data-theme="dark"] .gridlay{
+  background-image:
+    repeating-linear-gradient(to bottom,rgba(108,197,156,.18) 0 1px,transparent 1px 4px),
+    repeating-linear-gradient(to right,rgba(108,197,156,.18) 0 1px,transparent 1px 4px);
+}
+
+/* ==========================================================================
+   5 · 现行版（基线，照 src/index.css 的实测值复刻）
+   ========================================================================== */
+.sch-now{--fs-title:16px}
+.sch-now .dw-head{display:flex;align-items:center;gap:12px;padding:16px 20px 12px}
+.sch-now .dw-title{font-size:16px;border:1px solid transparent;border-radius:6px;padding:4px 0}
+.sch-now .dw-title:hover{border-color:var(--border)}
+.sch-now .dw-title:focus{border-color:var(--accent);box-shadow:var(--ring)}
+.sch-now .dw-title.is-error,.sch-now .dw-title.is-error:focus{border-color:var(--danger);box-shadow:var(--ring-danger)}
+.sch-now .dw-body{padding:0 20px 16px}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.frow + .frow{margin-top:18px}
+.f{display:flex;flex-direction:column;gap:6px;min-width:0}
+.f > .key{font-size:11px}
+.ctlbox{
+  display:flex;align-items:center;gap:8px;width:100%;height:32px;padding:0 8px;
+  border:1px solid var(--ctl-line);border-radius:var(--r);background:var(--field-bg);
+  font-size:var(--fs-val);color:var(--text);cursor:pointer;text-align:left;min-width:0;
+  transition:background var(--dur) var(--ease),border-color var(--dur) var(--ease);
+}
+.ctlbox:hover{background:var(--surface)}
+.ctlbox:focus-visible{border-color:var(--accent);box-shadow:var(--ring);outline:none}
+.ctlbox.is-open{border-color:var(--accent)}
+.ctlbox .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctlbox .car{color:var(--muted);flex:0 0 auto}
+.ctlbox input{flex:1;min-width:0;border:0;background:transparent;font-size:var(--fs-val);padding:0}
+.ctlbox input:focus{outline:none}
+.prio-seg{display:flex;height:32px;border:1px solid var(--ctl-line);border-radius:var(--r);overflow:hidden;background:var(--field-bg)}
+.prio-seg button{
+  flex:1;border:0;border-left:1px solid var(--border);background:transparent;cursor:pointer;
+  font-size:var(--fs-val);color:var(--text-2);
+}
+.prio-seg button:first-child{border-left:0}
+.prio-seg button:hover{background:var(--surface)}
+.prio-seg button.sel{font-weight:var(--fw-emph)}
+.prio-seg button.sel.prio-high{background:var(--flag-high-soft);color:var(--flag-high)}
+.prio-seg button.sel.prio-mid{background:var(--flag-mid-soft);color:var(--flag-mid-ink)}
+.prio-seg button.sel.prio-low{background:var(--flag-low-soft);color:var(--flag-low)}
+.prio-seg button.sel.prio-none{background:var(--surface-3);color:var(--text)}
+.prio-seg button.sel.prio-other{background:var(--surface-3);color:var(--text-2)}
+:root[data-mono-prio="1"] .prio-seg button.sel.prio-high,
+:root[data-mono-prio="1"] .prio-seg button.sel.prio-mid,
+:root[data-mono-prio="1"] .prio-seg button.sel.prio-low{background:var(--surface-3);color:var(--text)}
+.sch-now .sub-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.sch-now .note-btn{align-self:flex-start}
+
+/* ==========================================================================
+   6 · 方案 A「登记卡」：纸面刻度行 + 写入行
+   ========================================================================== */
+.sch-a{--fs-title:18px}
+.a-head{padding:14px 20px 12px}
+.a-meta{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.a-meta .mono{font-size:var(--fs-2xs);color:var(--muted)}
+.a-meta .sp{flex:1}
+.a-meta .ln{color:var(--sheet-no);background:var(--sheet-gutter);border:1px solid var(--sheet-line);border-radius:3px;padding:0 5px}
+.sch-a .dw-title{font-size:var(--fs-title);border-bottom:1px solid transparent;padding:2px 0 6px}
+.sch-a .dw-title:hover{border-bottom-color:var(--border)}
+.sch-a .dw-title:focus{border-bottom-color:var(--accent)}
+.sch-a .dw-title.is-error{border-bottom-color:var(--danger);box-shadow:0 1px 0 var(--danger)}
+.a-strip{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.a-read{
+  display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:4px;
+  border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);cursor:pointer;
+  font-size:var(--fs-xs);transition:background var(--dur) var(--ease),color var(--dur) var(--ease);
+}
+.a-read:hover{background:var(--surface-3);color:var(--text)}
+.a-read.is-overdue{background:var(--danger-soft);color:var(--danger)}
+.a-read.is-empty{color:var(--muted);background:transparent;border-color:var(--border)}
+.a-read .mono{font-size:var(--fs-xs)}
+.sch-a .dw-body{padding:0 20px 14px}
+.a-rows{border-top:1px solid var(--border)}
+.a-row{
+  display:grid;grid-template-columns:84px minmax(0,1fr);gap:12px;align-items:center;
+  min-height:calc(36px * var(--dens));padding:3px 0;border-bottom:1px solid var(--row-line);
+}
+.a-row:last-child{border-bottom:0}
+.a-edit{
+  display:flex;align-items:center;gap:8px;width:100%;min-height:28px;padding:2px 6px;margin-left:-6px;
+  border:1px solid transparent;border-radius:var(--r-xs);background:transparent;cursor:pointer;
+  font-size:var(--fs-val);color:var(--text);text-align:left;min-width:0;
+  transition:background var(--dur) var(--ease),border-color var(--dur) var(--ease);
+}
+.a-edit:hover{background:var(--field-bg)}
+.a-edit:focus-visible{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+.a-edit.is-open{background:var(--field-bg);border-color:var(--accent)}
+.a-edit .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.a-edit .car{color:var(--muted);flex:0 0 auto}
+.a-edit input{flex:1;min-width:0;border:0;background:transparent;font-size:var(--fs-val);padding:0}
+.a-edit input:focus{outline:none}
+/* 优先级刻度尺：一条横线 + 四枚旗，选中档下方一道 2px 本色刻度 */
+.a-prio{position:relative;display:flex;height:30px;align-items:stretch}
+.a-prio::before{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--border-strong)}
+.a-prio button{
+  position:relative;flex:1;display:flex;align-items:center;justify-content:center;gap:5px;
+  border:0;background:transparent;cursor:pointer;color:var(--muted);font-size:var(--fs-xs);padding:0 2px;
+}
+.a-prio button .flag{opacity:.5}
+.a-prio button:hover{color:var(--text-2)}
+.a-prio button:hover .flag{opacity:.8}
+.a-prio button.sel{color:var(--text);font-weight:var(--fw-emph)}
+.a-prio button.sel .flag{opacity:1}
+.a-prio button.sel::after{content:"";position:absolute;left:10px;right:10px;bottom:0;height:2px;background:currentColor}
+.a-prio button.sel.prio-high{color:var(--flag-high)}
+.a-prio button.sel.prio-mid{color:var(--flag-mid-ink)}
+.a-prio button.sel.prio-low{color:var(--flag-low)}
+:root[data-mono-prio="1"] .a-prio button.sel{color:var(--text)}
+.a-block{margin-top:calc(16px * var(--dens))}
+.a-bhead{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.a-bhead .sp{flex:1}
+.a-addline{
+  display:flex;align-items:center;gap:6px;width:100%;min-height:26px;padding:0 2px;border:0;background:transparent;
+  color:var(--muted);cursor:pointer;font-size:var(--fs-xs);text-align:left;
+}
+.a-addline:hover{color:var(--accent)}
+.sch-a .src{border-top:1px solid var(--sheet-line)}
+.sch-a .dw-foot{padding:0 14px}
+
+/* ==========================================================================
+   7 · 方案 B「检视器」：高密度属性表 + 近 7 日刻度条 + 键帽
+   ========================================================================== */
+.sch-b{--fs-title:16px}
+.b-head{display:flex;align-items:flex-start;gap:10px;padding:12px 16px 8px}
+.b-head .col{flex:1;min-width:0}
+.b-id{font-family:var(--font-mono);font-size:var(--fs-2xs);color:var(--muted);margin-bottom:2px;display:block}
+.sch-b .dw-title{font-size:var(--fs-title);border-bottom:1px solid transparent;padding:1px 0 4px}
+.sch-b .dw-title:hover{border-bottom-color:var(--border)}
+.sch-b .dw-title:focus{border-bottom-color:var(--accent)}
+.sch-b .dw-title.is-error{border-bottom-color:var(--danger)}
+.b-week{padding:0 16px 10px}
+.b-week-h{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.b-week-h .sp{flex:1}
+.b-days{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.b-day{
+  height:calc(40px * var(--dens));border:1px solid var(--border);border-radius:var(--r-xs);background:var(--surface);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;cursor:pointer;padding:0;
+  transition:background var(--dur) var(--ease),border-color var(--dur) var(--ease);
+}
+.b-day:hover{background:var(--surface-2);border-color:var(--control-line)}
+.b-day .wd{font-family:var(--font-mono-cjk);font-size:var(--fs-2xs);color:var(--muted);line-height:1.2}
+.b-day .dn{font-family:var(--font-mono);font-size:var(--fs-xs);color:var(--text-2);line-height:1.2}
+.b-day.is-today{border-color:var(--accent-line);background:var(--accent-soft)}
+.b-day.is-today .wd{color:var(--accent)}
+.b-day.is-due{background:var(--text);border-color:var(--text)}
+.b-day.is-due .wd,.b-day.is-due .dn{color:var(--surface)}
+.b-day.is-overdue{border-color:var(--danger-line);background:var(--danger-soft)}
+.b-day.is-overdue .dn{color:var(--danger)}
+.sch-b .dw-body{padding:0 0 12px}
+.b-group + .b-group{margin-top:calc(10px * var(--dens))}
+.b-ghead{display:flex;align-items:center;gap:8px;height:22px;padding:0 16px}
+.b-ghead::after{content:"";flex:1;height:1px;background:var(--border)}
+.b-ghead .ct{font-family:var(--font-mono);font-size:var(--fs-2xs);color:var(--muted)}
+.b-row{
+  display:grid;grid-template-columns:72px minmax(0,1fr);gap:10px;align-items:center;
+  min-height:calc(28px * var(--dens));padding:1px 16px;
+  transition:background var(--dur) var(--ease);
+}
+.b-row:hover{background:var(--sel)}
+.b-val{
+  display:flex;align-items:center;gap:6px;width:100%;min-height:24px;padding:1px 4px;margin-left:-4px;
+  border:0;border-radius:var(--r-xs);background:transparent;cursor:pointer;text-align:left;
+  font-size:var(--fs-val);color:var(--text);min-width:0;
+}
+.b-val:hover{background:var(--field-bg)}
+.b-val:focus-visible{outline:none;box-shadow:var(--ring)}
+.b-val .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.b-val .car{color:var(--muted);opacity:0;transition:opacity var(--dur) var(--ease)}
+.b-row:hover .b-val .car,.b-val:focus-visible .car,.b-val.is-open .car{opacity:1}
+.b-val .mono{font-size:var(--fs-val)}
+.b-val.is-overdue .mono{color:var(--danger)}
+.b-sub{padding:2px 16px 0}
+.b-note{padding:2px 16px 0}
+.b-note-read{display:flex;align-items:flex-start;gap:8px;width:100%;border:0;background:transparent;cursor:pointer;text-align:left;padding:2px 4px;margin-left:-4px;border-radius:4px;color:var(--text-2);font-size:var(--fs-val)}
+.b-note-read:hover{background:var(--field-bg)}
+.b-note-read .n{font-family:var(--font-mono);font-size:var(--fs-2xs);color:var(--muted);flex:0 0 auto;padding-top:2px}
+.b-keys{display:flex;align-items:center;gap:8px;padding:8px 16px;border-top:1px solid var(--border);flex-wrap:wrap}
+.b-keys .sp{flex:1}
+.sch-b .dw-foot{padding:0 12px}
+
+/* ==========================================================================
+   8 · 方案 C「源文对照」：原文 token ↔ 表单双向联动 + 分组卡片
+   ========================================================================== */
+.sch-c{--fs-title:20px;background:var(--bg)}
+.c-head{padding:12px 16px 10px}
+.c-crumb{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:var(--fs-2xs);color:var(--muted);margin-bottom:6px}
+.c-crumb .sp{flex:1}
+.c-crumb .file{color:var(--text-2)}
+.sch-c .dw-title{font-size:var(--fs-title);letter-spacing:-.01em;border-bottom:1px solid transparent;padding:2px 0 6px}
+.sch-c .dw-title:hover{border-bottom-color:var(--border-strong)}
+.sch-c .dw-title:focus{border-bottom-color:var(--accent)}
+.sch-c .dw-title.is-error{border-bottom-color:var(--danger)}
+.sch-c .src{border-top:1px solid var(--sheet-line);border-bottom:1px solid var(--sheet-line)}
+.sch-c .dw-body{padding:12px;background:var(--bg)}
+.c-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--sh-1);padding:10px 12px}
+.c-card + .c-card{margin-top:10px}
+.c-chead{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.c-chead .sp{flex:1}
+.c-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.c-cell{display:flex;flex-direction:column;gap:4px;min-width:0}
+.c-edit{
+  display:flex;align-items:center;gap:6px;width:100%;min-height:28px;padding:2px 2px 4px;
+  border:0;border-bottom:1px solid var(--ctl-line);border-radius:0;background:transparent;cursor:pointer;
+  font-size:var(--fs-val);color:var(--text);text-align:left;min-width:0;
+  transition:border-color var(--dur) var(--ease),background var(--dur) var(--ease);
+}
+.c-edit:hover{border-bottom-color:var(--text-2);background:var(--sel)}
+.c-edit:focus-visible{outline:none;border-bottom:2px solid var(--accent);padding-bottom:3px}
+.c-edit.is-open{border-bottom:2px solid var(--accent);padding-bottom:3px}
+.c-edit .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c-edit .car{color:var(--muted)}
+.c-edit input{flex:1;min-width:0;border:0;background:transparent;font-size:var(--fs-val);padding:0}
+.c-edit input:focus{outline:none}
+.c-prio{display:flex;gap:0;border-bottom:1px solid var(--ctl-line);min-height:28px}
+.c-prio button{
+  flex:1;display:flex;align-items:center;justify-content:center;gap:4px;border:0;background:transparent;
+  cursor:pointer;color:var(--muted);font-size:var(--fs-xs);padding:0 0 4px;position:relative;
+}
+.c-prio button.sel{color:var(--text);font-weight:var(--fw-emph)}
+.c-prio button.sel::after{content:"";position:absolute;left:6px;right:6px;bottom:-1px;height:2px;background:currentColor}
+.c-prio button.sel.prio-high{color:var(--flag-high)}
+.c-prio button.sel.prio-mid{color:var(--flag-mid-ink)}
+.c-prio button.sel.prio-low{color:var(--flag-low)}
+:root[data-mono-prio="1"] .c-prio button.sel{color:var(--text)}
+.sch-c .dw-foot{background:var(--surface);border-top:1px solid var(--border-strong);padding:0 14px}
+.c-hint{display:flex;align-items:center;gap:6px;padding:0 16px 10px;font-size:var(--fs-2xs);color:var(--muted)}
+
+/* ==========================================================================
+   9 · 并排 / 状态矩阵 / 效果图 / 说明
+   ========================================================================== */
+.compare{display:grid;grid-template-columns:repeat(4,minmax(400px,1fr));gap:var(--sp-4);align-items:start;overflow-x:auto;padding-bottom:10px}
+.compare.both{grid-template-columns:repeat(4,minmax(400px,1fr))}
+.cmp-col{min-width:0;display:flex;flex-direction:column;gap:10px}
+.cmp-h{display:flex;align-items:baseline;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--border-strong)}
+.cmp-h b{font-size:var(--fs-md);font-weight:var(--fw-emph)}
+.cmp-h .mono{font-size:var(--fs-2xs);color:var(--muted)}
+.cmp-h .tagx{margin-left:auto;font-family:var(--font-mono);font-size:10px;color:var(--muted);border:1px solid var(--border);border-radius:3px;padding:0 4px}
+.cmp-stage{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;display:flex;justify-content:center;min-height:200px}
+.cmp-stage.dark{background:#161511;border-color:#31302a}
+.cmp-note{font-size:var(--fs-xs);color:var(--text-2);line-height:1.6;margin:0}
+.cmp-note b{font-weight:var(--fw-emph);color:var(--text)}
+.cmp-scale{transform-origin:top center}
+
+.states{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:var(--sp-4)}
+.state-cell{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;display:flex;flex-direction:column;gap:10px;align-items:center}
+.state-h{display:flex;align-items:baseline;gap:8px;width:100%}
+.state-h b{font-size:var(--fs-sm);font-weight:var(--fw-emph)}
+.state-h .mono{font-size:var(--fs-2xs);color:var(--muted);margin-left:auto}
+.state-d{font-size:var(--fs-xs);color:var(--text-2);margin:0;line-height:1.6;width:100%}
+.state-reopen{align-self:center;margin:auto;white-space:nowrap}
+
+.shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:var(--sp-4)}
+.shot{background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--r-md);overflow:hidden;box-shadow:var(--sh-1);cursor:zoom-in}
+.shot img{display:block;width:100%;height:auto;background:var(--surface-2)}
+.shot-f{display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--border)}
+.shot-f b{font-size:var(--fs-xs);font-weight:var(--fw-emph)}
+.shot-f .mono{font-size:var(--fs-2xs);color:var(--muted)}
+.shot-f .sp{flex:1}
+.shot-miss{padding:32px 16px;text-align:center;color:var(--muted);font-size:var(--fs-xs)}
+
+.doc{max-width:820px}
+.doc h3{font-size:var(--fs-lg);font-weight:var(--fw-emph);margin:var(--sp-5) 0 var(--sp-2)}
+.doc h4{font-size:var(--fs-md);font-weight:var(--fw-emph);margin:var(--sp-4) 0 var(--sp-2)}
+.doc p{margin:0 0 var(--sp-3);color:var(--text-2);line-height:1.75}
+.doc ul{margin:0 0 var(--sp-3);padding-left:20px;color:var(--text-2)}
+.doc li{margin-bottom:6px;line-height:1.7}
+.doc code{font-family:var(--font-mono);font-size:var(--fs-xs);background:var(--surface-2);border-radius:3px;padding:1px 4px;color:var(--text)}
+.audit{width:100%;border-collapse:collapse;font-size:var(--fs-xs);margin-bottom:var(--sp-4)}
+.audit th,.audit td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--row-line);vertical-align:top}
+.audit th{font-family:var(--font-mono-cjk);font-size:var(--fs-2xs);color:var(--muted);font-weight:var(--fw-body);border-bottom:1px solid var(--border-strong)}
+.audit td:first-child{color:var(--text);font-weight:var(--fw-emph);white-space:nowrap}
+.audit .where{font-family:var(--font-mono);font-size:var(--fs-2xs);color:var(--muted)}
+.pill{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:3px;font-family:var(--font-mono);font-size:10px}
+.pill.p0{background:var(--danger-soft);color:var(--danger)}
+.pill.p1{background:var(--warn-soft);color:var(--warn)}
+.pill.p2{background:var(--surface-3);color:var(--text-2)}
+
+/* 取证栏 */
+.n-card{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-2);padding:12px;margin-bottom:14px}
+.n-card h3{margin:0 0 8px;font-size:var(--fs-sm);font-weight:var(--fw-emph);display:flex;align-items:center;gap:8px}
+.n-card h3 .mono{font-size:var(--fs-2xs);color:var(--muted);font-weight:var(--fw-body);margin-left:auto}
+.n-card p{margin:0 0 8px;font-size:var(--fs-xs);color:var(--text-2);line-height:1.65}
+.n-card p:last-child{margin-bottom:0}
+.n-card ul{margin:0;padding-left:18px;font-size:var(--fs-xs);color:var(--text-2)}
+.n-card li{margin-bottom:5px;line-height:1.6}
+.meas{display:grid;grid-template-columns:1fr auto;gap:4px 10px;font-size:var(--fs-xs)}
+.meas dt{color:var(--muted)}
+.meas dd{margin:0;font-family:var(--font-mono);color:var(--text);text-align:right}
+table.ct{width:100%;border-collapse:collapse;font-size:var(--fs-2xs)}
+table.ct th{text-align:left;font-family:var(--font-mono-cjk);color:var(--muted);font-weight:var(--fw-body);padding:4px 6px;border-bottom:1px solid var(--border-strong)}
+table.ct td{padding:4px 6px;border-bottom:1px solid var(--row-line);color:var(--text-2)}
+table.ct td.n{font-family:var(--font-mono);text-align:right;color:var(--text)}
+table.ct td.ok{color:var(--ok)}
+table.ct td.bad{color:var(--danger);font-weight:var(--fw-emph)}
+.swatch{display:inline-block;width:9px;height:9px;border-radius:2px;border:1px solid var(--dot-edge);vertical-align:-1px;margin-right:5px}
+.n-actions{display:flex;gap:6px;flex-wrap:wrap}
+
+.foot{padding:var(--sp-4) var(--sp-5);border-top:1px solid var(--border);color:var(--muted);font-size:var(--fs-2xs);display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.foot .sp{flex:1}
+.foot a{color:var(--text-2)}
+
+/* ==========================================================================
+   10 · 窄屏：控制轨仍然常驻可见（不折叠、不进弹窗），改为顶部横向区
+   ========================================================================== */
+@media (max-width:1400px){
+  :root{--notes-w:300px;--rail-w:250px}
+  .compare{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:1120px){
+  .shell{grid-template-columns:var(--rail-w) minmax(0,1fr)}
+  .notes{position:static;height:auto;grid-column:1/-1;border-left:0;border-top:1px solid var(--border-strong)}
+  .compare{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:860px){
+  .shell{grid-template-columns:minmax(0,1fr)}
+  .rail{position:static;height:auto;border-right:0;border-bottom:1px solid var(--border-strong);
+        display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:0 var(--sp-4)}
+  .grp + .grp{border-top:0;padding-top:0}
+  .top{height:auto;min-height:var(--top-h);flex-wrap:wrap;padding:8px var(--sp-3);gap:8px}
+  .stage{padding:var(--sp-3)}
+  .compare{grid-template-columns:minmax(0,1fr)}
+  .scene{padding:var(--sp-4) var(--sp-2);min-height:520px}
+  .brand-txt span{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;transition-duration:.01ms !important}
+}
+:root[data-motion="0"] *{animation-duration:.01ms !important;transition-duration:.01ms !important}
+
+@media print{
+  .top,.rail,.notes,.foot,.toasts{display:none !important}
+  .shell{display:block}
+  .stage{padding:0}
+  .scene{border:0;box-shadow:none;min-height:0;padding:0}
+  .mock,.scrim{display:none}
+  .dw{box-shadow:none;break-inside:avoid}
+  body{background:#fff}
+}
+</style>
+</head>
+<body>
+<div class="wb">
+  <header class="top">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 21V4.5A1.5 1.5 0 0 1 5.5 3H19"/><path d="M4 7h11M4 12h15M4 17h9"/>
+      </svg>
+      <span class="brand-txt">
+        <b>编辑浮窗 · 重设计提案</b>
+        <span>Worktodolist / .edit-window / 2026-11-17</span>
+      </span>
+    </div>
+    <nav class="tabs" id="viewTabs" role="tablist" aria-label="视图"></nav>
+    <span class="top-spacer"></span>
+    <div class="seg" id="themeSeg" role="group" aria-label="主题"></div>
+    <div class="btn-row">
+      <button class="btn btn-sm" id="btnExport" type="button"></button>
+      <button class="btn btn-sm" id="btnTokens" type="button"></button>
+      <button class="btn btn-sm" id="btnPrint" type="button"></button>
+    </div>
+  </header>
+
+  <div class="shell">
+    <aside class="rail" id="rail" aria-label="设计参数控制轨"></aside>
+    <main class="stage" id="stage">
+      <section class="view on" id="view-detail" role="tabpanel" aria-label="单套样张"></section>
+      <section class="view" id="view-compare" role="tabpanel" aria-label="并排对照"></section>
+      <section class="view" id="view-states" role="tabpanel" aria-label="状态矩阵"></section>
+      <section class="view" id="view-shots" role="tabpanel" aria-label="效果图"></section>
+      <section class="view" id="view-notes" role="tabpanel" aria-label="审计与说明"></section>
+    </main>
+    <aside class="notes" id="notes" aria-label="方案说明与取证"></aside>
+  </div>
+
+  <footer class="foot">
+    <span>设计提案 · 未改动 <code class="mono">src/</code> 任何一行</span>
+    <span class="sp"></span>
+    <span>令牌取自 <code class="mono">todolist-gui/src/index.css §1</code></span>
+    <span>unslop by @heydamir (CC BY 4.0)</span>
+  </footer>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+'use strict';
+window.__wbErrors = [];
+window.addEventListener('error', (e) => window.__wbErrors.push(String(e.message)));
+window.addEventListener('unhandledrejection', (e) => window.__wbErrors.push('rejection: ' + String(e.reason)));
+/* ==========================================================================
+   A · 工具：DOM / 图标 / 日期 / 对比度
+   ========================================================================== */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+const PATHS = {
+  x: 'M18 6 6 18M6 6l12 12',
+  check: 'M20 6 9 17l-5-5',
+  chev: 'm6 9 6 6 6-6',
+  chevR: 'm9 18 6-6-6-6',
+  chevL: 'm15 18-6-6 6-6',
+  cal: 'M8 2v4M16 2v4M3 10h18',
+  clock: 'M12 6v6l4 2',
+  flag: 'M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7',
+  repeat: 'm17 2 4 4-4 4M3 11v-1a4 4 0 0 1 4-4h14m-14 15-4-4 4-4M21 13v1a4 4 0 0 1-4 4H3',
+  plus: 'M5 12h14M12 5v14',
+  trash: 'M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6',
+  tree: 'M21 12h-8M21 6H8M21 18h-8M3 6v4c0 1.1.9 2 2 2h3M3 10v6c0 1.1.9 2 2 2h3',
+  tag: 'M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z',
+  at: 'M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8',
+  enter: 'M9 10 4 15l5 5M20 4v7a4 4 0 0 1-4 4H4',
+  sun: 'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42',
+  moon: 'M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z',
+  monitor: 'M8 21h8M12 17v4',
+  reset: 'M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5',
+  shuffle: 'M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5',
+  download: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
+  copy: 'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1',
+  printer: 'M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 9V2h12v7',
+  alert: 'M12 8v4M12 16h.01',
+  ruler: 'M21.3 8.7 8.7 21.3a1 1 0 0 1-1.4 0l-4.6-4.6a1 1 0 0 1 0-1.4L15.3 2.7a1 1 0 0 1 1.4 0l4.6 4.6a1 1 0 0 1 0 1.4Zm-13.8 1.8 2 2m1-5 2 2m1-5 2 2m-11 8 2 2',
+  grid: 'M3 12h18M12 3v18',
+  eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z',
+  sliders: 'M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4',
+  file: 'M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7ZM14 2v5h5M16 13H8M16 17H8M10 9H8',
+  sort: 'm21 16-4 4-4-4M17 20V4M3 8l4-4 4 4M7 4v16',
+  panel: 'M9 3v18',
+  search: 'm21 21-4.3-4.3',
+  bell: 'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0',
+  note: 'M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5ZM15 3v6h6',
+  pen: 'M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z',
+  checkCircle: 'm9 12 2 2 4-4',
+  inbox: 'M22 12h-6l-2 3h-4l-2-3H2M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z',
+};
+const CIRCLES = { cal: [12, 12, 10], clock: [12, 12, 10], alert: [12, 12, 10], at: [12, 12, 4], eye: [12, 12, 3], search: [11, 11, 8], checkCircle: [12, 12, 10] };
+const RECTS = { cal: [3, 4, 18, 18, 2], monitor: [2, 3, 20, 14, 2], grid: [3, 3, 18, 18, 2], panel: [3, 3, 18, 18, 2], copy: [9, 9, 13, 13, 2], printer: [6, 14, 12, 8, 0], note: [] };
+function ic(name, size = 16, cls = '') {
+  const p = PATHS[name] || '';
+  const c = CIRCLES[name];
+  const r = RECTS[name];
+  let inner = '';
+  if (r && r.length) inner += `<rect x="${r[0]}" y="${r[1]}" width="${r[2]}" height="${r[3]}" rx="${r[4]}"/>`;
+  if (c) inner += `<circle cx="${c[0]}" cy="${c[1]}" r="${c[2]}"/>`;
+  if (name === 'tag') inner += '<circle cx="7.5" cy="7.5" r=".6" fill="currentColor"/>';
+  if (p) inner += `<path d="${p}"/>`;
+  return `<svg class="icon ${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+}
+
+/* --- 日期：形状与项目一致（due: YYYY-MM-DD / rem: YYYY-MM-DDTHH:mm） --- */
+const pad = (n) => String(n).padStart(2, '0');
+const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseISO = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
+const addDays = (d, n) => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() + n); return x; };
+const TODAY = new Date(); TODAY.setHours(0, 0, 0, 0);
+const TODAY_ISO = iso(TODAY);
+const shortDate = (s) => { const d = parseISO(s); return d ? `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())}` : ''; };
+const timeOf = (s) => { const m = /T(\d{2}:\d{2})/.exec(s || ''); return m ? m[1] : ''; };
+const dateOf = (s) => (s || '').slice(0, 10);
+const WD = ['日', '一', '二', '三', '四', '五', '六'];
+function relDay(s) {
+  const d = parseISO(s); if (!d) return '';
+  const n = Math.round((d - TODAY) / 86400000);
+  if (n === 0) return '今天'; if (n === 1) return '明天'; if (n === 2) return '后天';
+  if (n === -1) return '昨天';
+  return n < 0 ? `逾期 ${-n} 天` : `${n} 天后`;
+}
+const isOverdue = (s) => Boolean(s) && s < TODAY_ISO;
+function nextMonday() { let d = addDays(TODAY, 1); while (d.getDay() !== 1) d = addDays(d, 1); return d; }
+
+/* --- 对比度：真算 WCAG 2.1，不是摆设 --- */
+function hex2rgb(h) {
+  h = String(h).trim();
+  if (h.startsWith('rgb')) { const m = h.match(/[\d.]+/g); return m ? m.slice(0, 3).map(Number) : [0, 0, 0]; }
+  h = h.replace('#', '');
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+function lum(rgb) {
+  const a = rgb.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+  return 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2];
+}
+function ratio(fg, bg) {
+  const l1 = lum(hex2rgb(fg)), l2 = lum(hex2rgb(bg));
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+}
+function mix(a, b, t) {
+  const A = hex2rgb(a), B = hex2rgb(b);
+  return '#' + A.map((v, i) => pad(Math.round(v + (B[i] - v) * t).toString(16)).slice(-2)).join('');
+}
+function cssVar(name, el) { return getComputedStyle(el || document.documentElement).getPropertyValue(name).trim(); }
+
+/* --- toast --- */
+function toast(msg, readout) {
+  const wrap = $('#toasts');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `${ic('checkCircle', 14)}<span>${esc(msg)}</span>${readout ? `<span class="mono">${esc(readout)}</span>` : ''}`;
+  wrap.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 200ms'; setTimeout(() => el.remove(), 220); }, 2600);
+  while (wrap.children.length > 3) wrap.firstChild.remove();
+}
+
+/* ==========================================================================
+   B · 演示数据：相对今天生成，逾期 / 今天 / 明天都是真的
+   ========================================================================== */
+const CTX_OPTIONS = [{ name: '投资', count: 12 }, { name: '工作', count: 8 }, { name: '生活', count: 5 }, { name: '硬件', count: 3 }, { name: '文档', count: 2 }];
+const PRJ_OPTIONS = [{ name: '回测', count: 9 }, { name: '量化', count: 6 }, { name: '复盘', count: 4 }, { name: '行政', count: 2 }, { name: '硬件', count: 1 }];
+const REC_CHOICES = [{ value: '', label: '从不' }, { value: '+1d', label: '每日' }, { value: '+1w', label: '每周' }, { value: '+1m', label: '每月' }];
+const PRIO_LABELS = { A: '高', B: '中', C: '低' };
+const PRIO_ORDER = [{ value: '', label: '无', cls: 'prio-none' }, { value: 'C', label: '低', cls: 'prio-low' }, { value: 'B', label: '中', cls: 'prio-mid' }, { value: 'A', label: '高', cls: 'prio-high' }];
+function recLabel(v) {
+  const hit = REC_CHOICES.find((c) => c.value === v);
+  if (hit) return hit.label;
+  if (!v) return '从不';
+  const m = /^\+(\d+)([dwm])$/.exec(v);
+  if (m) return `每 ${m[1]} ${{ d: '天', w: '周', m: '月' }[m[2]]}`;
+  return v;
+}
+function prioCls(p) { return p === 'A' ? 'prio-high' : p === 'B' ? 'prio-mid' : p === 'C' ? 'prio-low' : p ? 'prio-other' : 'prio-none'; }
+
+const SEEDS = {
+  quant: {
+    key: 'quant', name: '回测报告', stableId: 'k3f9a2', line: 42,
+    created: iso(addDays(TODAY, -16)), title: '写第 46 周回测报告', priority: 'B',
+    due: iso(addDays(TODAY, 1)), rem: `${iso(addDays(TODAY, 1))}T09:30`, rec: '+1w',
+    contexts: ['投资'], projects: ['回测', '量化'],
+    threshold: iso(addDays(TODAY, -3)), extra: [],
+    subs: [
+      { id: 's1', title: '拉取本周成交与持仓快照', done: true },
+      { id: 's2', title: '跑三组参数的对照回测', done: true },
+      { id: 's3', title: '画净值曲线与回撤图', done: false },
+      { id: 's4', title: '写结论与下周调整建议', done: false },
+    ],
+    note: '对照口径沿用第 45 周：同一批标的、同一手续费假设。\n回撤超过 6% 的段落要单独说明原因。',
+  },
+  reimburse: {
+    key: 'reimburse', name: '出差报销', stableId: 'm81c4d', line: 17,
+    created: iso(addDays(TODAY, -9)), title: '提交深圳出差报销单', priority: 'A',
+    due: iso(addDays(TODAY, -2)), rem: '', rec: '',
+    contexts: ['工作'], projects: ['行政'], extra: [],
+    subs: [
+      { id: 's1', title: '整理高铁与住宿发票', done: true },
+      { id: 's2', title: '填报销单并贴票', done: false },
+      { id: 's3', title: '找部门负责人签字', done: false },
+    ],
+    note: '财务说本月 25 号截止，逾期要等下个结算周期。住宿超标部分需要附说明。',
+  },
+  ledger: {
+    key: 'ledger', name: '每月对账', stableId: 'p02e77', line: 8,
+    created: iso(addDays(TODAY, -41)), title: '每月对账并导出流水', priority: '',
+    due: iso(addDays(TODAY, 14)), rem: `${iso(addDays(TODAY, 13))}T09:00`, rec: '+1m',
+    contexts: ['投资'], projects: ['复盘'], extra: [], subs: [], note: '',
+  },
+  minimal: {
+    key: 'minimal', name: '一条空任务', stableId: 'z9aa01', line: 63,
+    created: iso(addDays(TODAY, -2)), title: '买一根六类网线', priority: '', due: '', rem: '', rec: '',
+    contexts: [], projects: ['硬件'], extra: [{ key: 'src', value: 'ghfast' }], subs: [], note: '',
+  },
+};
+const SEED_KEYS = Object.keys(SEEDS);
+
+/* ==========================================================================
+   C · 工作台状态
+   ========================================================================== */
+const DEFAULTS = {
+  view: 'detail', scheme: 'a', theme: 'light',
+  width: 400, dens: 100, fsVal: 12, fsLabel: 10, radius: 6, ctl: '#6b675f',
+  fieldBg: true, prioColor: true, preview: true, ruled: true, grid: false,
+  scrim: 29, motion: true, dur: 160, maxh: 480, seed: 'quant', force: 'default', both: false,
+};
+const WB = Object.assign({}, DEFAULTS);
+let uid = 0;
+const drawers = [];
+
+const SCHEMES = {
+  now: { name: '现行版', tag: 'baseline', idea: '今天装在你机器上的那一版，作为对照基线。' },
+  a: { name: 'A · 登记卡', tag: 'ledger', idea: '一张登记卡：纸面刻度行，控件平时是读数，底部常驻「写入行」。' },
+  b: { name: 'B · 检视器', tag: 'inspector', idea: '一台仪器的属性面板：单列高密度属性表 + 近 7 日刻度条 + 键帽。' },
+  c: { name: 'C · 源文对照', tag: 'source', idea: 'todo.txt 的那一行摊开在顶上，点原文里的记号就改对应字段。' },
+};
+const VIEWS = [
+  { id: 'detail', label: '单套样张' },
+  { id: 'compare', label: '并排对照' },
+  { id: 'states', label: '状态矩阵' },
+  { id: 'shots', label: '效果图' },
+  { id: 'notes', label: '审计说明' },
+];
+const FORCES = [
+  { id: 'default', label: '默认' },
+  { id: 'empty', label: '空标题被拦' },
+  { id: 'armed', label: '删除待确认' },
+  { id: 'ask', label: '放弃修改' },
+  { id: 'rec', label: '重复下拉开' },
+  { id: 'date', label: '日期弹层' },
+  { id: 'note', label: '备注展开' },
+  { id: 'nokids', label: '无子任务' },
+  { id: 'closed', label: '已关闭' },
+];
+
+/* ==========================================================================
+   D · 浮窗模型：一条任务摊平成表单，指纹只取 save() 会写回的字段
+   ========================================================================== */
+function signature(f) {
+  return JSON.stringify([f.title.trim(), f.priority, f.due, f.rem, f.rec, f.contexts.join(','), f.projects.join(','), f.note]);
+}
+function makeDrawer(scheme, seedKey, opts = {}) {
+  const s = SEEDS[seedKey] || SEEDS.quant;
+  const d = {
+    uid: ++uid, scheme, seedKey, seed: s, scale: opts.scale || 1, opts,
+    form: {
+      title: s.title, priority: s.priority, due: s.due, rem: s.rem, rec: s.rec,
+      contexts: [...s.contexts], projects: [...s.projects], note: s.note,
+    },
+    subs: s.subs.map((x) => ({ ...x })),
+    ui: {
+      menu: null, pop: null, armed: false, ask: false, titleError: false, closed: false,
+      subAdd: false, subText: '', subEdit: null, subEditText: '', tagEdit: null, tagText: '',
+      noteOpen: false, composing: false, saved: false,
+    },
+    root: null, initial: null,
+  };
+  d.initial = signature(d.form);
+  applyForce(d, opts.force || 'default');
+  return d;
+}
+function applyForce(d, force) {
+  const u = d.ui;
+  if (force === 'empty') { d.form.title = ''; u.titleError = true; }
+  if (force === 'armed') u.armed = true;
+  if (force === 'ask') { d.form.rec = d.form.rec ? '' : '+1d'; u.ask = true; }
+  if (force === 'rec') u.menu = { kind: 'rec', anchor: 'rec' };
+  if (force === 'date') u.pop = { kind: 'due', anchor: 'due', ym: monthOf(d.form.due), time: timeOf(d.form.rem) || '09:00' };
+  if (force === 'note') u.noteOpen = true;
+  if (force === 'nokids') d.subs = [];
+  if (force === 'closed') u.closed = true;
+}
+function monthOf(s) { const d = parseISO(s) || TODAY; return [d.getFullYear(), d.getMonth()]; }
+const dirtyOf = (d) => signature(d.form) !== d.initial;
+const subDone = (d) => d.subs.filter((s) => s.done).length;
+
+/* --- 写入行：严格按 lib/todoParser.js#serializeTask 的顺序拼 --- */
+function sourceTokens(d) {
+  const f = d.form, s = d.seed, out = [];
+  if (f.priority) out.push({ t: `(${f.priority})`, c: 'tok-p', link: 'prio', act: 'prio-menu' });
+  if (s.created) out.push({ t: s.created, c: 'tok-id' });
+  out.push({ t: f.title || '（空标题）', c: 'tok-v', link: 'title', act: 'focus-title' });
+  f.contexts.forEach((x) => out.push({ t: `@${x}`, c: 'tok-c', link: 'ctx', act: 'tag-menu', arg: 'ctx' }));
+  f.projects.forEach((x) => out.push({ t: `+${x}`, c: 'tok-j', link: 'prj', act: 'tag-menu', arg: 'prj' }));
+  if (f.due) out.push({ t: `due:${f.due}`, c: 'tok-k', link: 'due', act: 'date-open', arg: 'due', v: f.due });
+  if (s.threshold) out.push({ t: `t:${s.threshold}`, c: 'tok-k' });
+  if (f.rem) out.push({ t: `rem:${f.rem}`, c: 'tok-k', link: 'rem', act: 'date-open', arg: 'rem', v: f.rem });
+  if (f.rec) out.push({ t: `rec:${f.rec}`, c: 'tok-k', link: 'rec', act: 'rec-menu', v: f.rec });
+  out.push({ t: `id:${s.stableId}`, c: 'tok-id' });
+  s.extra.forEach((x) => out.push({ t: `${x.key}:${x.value}`, c: 'tok-id' }));
+  return out;
+}
+function srcInner(d, interactive) {
+  const toks = sourceTokens(d).map((x) => {
+    const inner = x.v ? `<span class="tok-k">${esc(x.t.slice(0, x.t.indexOf(':') + 1))}</span><span class="tok-v">${esc(x.v)}</span>` : esc(x.t);
+    if (!interactive || !x.act) return `<span class="tok ${x.c}"${x.link ? ` data-link="${x.link}"` : ''}>${inner}</span>`;
+    return `<button type="button" class="tok ${x.c}" data-act="${x.act}"${x.arg ? ` data-arg="${x.arg}"` : ''}${x.link ? ` data-link="${x.link}"` : ''} title="点它改这一项">${inner}</button>`;
+  }).join(' ');
+  return `<span class="src-no mono">${pad(d.seed.line)}<span aria-hidden="true">│</span></span><span class="src-line">${toks}</span>`;
+}
+function srcHTML(d, interactive) {
+  return `<div class="src" data-live="src">${srcInner(d, interactive)}</div>`;
+}
+
+/* --- 分类 / 标签 chips --- */
+function chipsHTML(d, kind) {
+  const list = kind === 'ctx' ? d.form.contexts : d.form.projects;
+  const pre = kind === 'ctx' ? '@' : '+';
+  const editing = d.ui.tagEdit === kind;
+  const chips = list.map((name, i) => `<span class="chip"${kind === 'prj' ? '' : ''}>${kind === 'prj' ? '<i class="dot"></i>' : ''}<b>${esc(pre + name)}</b><button type="button" data-act="tag-rm" data-arg="${kind}" data-i="${i}" aria-label="移除 ${esc(pre + name)}">${ic('x', 12)}</button></span>`).join('');
+  const add = editing
+    ? `<input class="chip-input" data-bind="tagtext" data-fk="tag-${kind}" value="${esc(d.ui.tagText)}" placeholder="${kind === 'ctx' ? '分类名' : '标签名'}" aria-label="新增${kind === 'ctx' ? '分类' : '标签'}">`
+    : `<button type="button" class="chip-add" data-act="tag-add" data-arg="${kind}" data-fk="tagadd-${kind}">${ic('plus', 12)}<span>${kind === 'ctx' ? '分类' : '标签'}</span></button>`;
+  const menuBtn = `<button type="button" class="chip-add is-icon" data-act="tag-menu" data-arg="${kind}" data-anchor="${kind}" data-fk="tagmenu-${kind}" aria-haspopup="listbox" aria-expanded="${d.ui.menu && d.ui.menu.kind === kind}" aria-label="展开${kind === 'ctx' ? '分类' : '标签'}候选" title="展开候选">${ic('chev', 12)}</button>`;
+  return `<span class="chips" data-link="${kind}">${chips}${add}${menuBtn}</span>`;
+}
+
+/* --- 子任务 --- */
+function subsHTML(d, o = {}) {
+  const n = d.subs.length, done = subDone(d);
+  const pct = n ? Math.round((done / n) * 100) : 0;
+  const head = `<div class="${o.headCls || 'a-bhead'}">
+      <span class="key">${o.label || '子任务'}</span>
+      ${n ? `<span class="prog-n mono">${done}/${n}</span>` : ''}
+      <span class="sp"></span>
+      ${n ? `<span class="prog" style="min-width:72px"><span class="prog-bar"><i style="width:${pct}%"></i></span></span>` : ''}
+    </div>`;
+  const list = n ? `<ul class="subs">${d.subs.map((s) => `<li>
+      <button type="button" class="cb${s.done ? ' on' : ''}" data-act="sub-toggle" data-arg="${s.id}" data-fk="sub-${s.id}" aria-label="${s.done ? '取消完成' : '完成'} ${esc(s.title)}" aria-pressed="${s.done}"></button>
+      ${d.ui.subEdit === s.id
+      ? `<input class="sub-edit" data-bind="subedit" data-fk="subedit-${s.id}" value="${esc(d.ui.subEditText)}" aria-label="编辑子任务">`
+      : `<span class="sub-t${s.done ? ' done' : ''}" data-act="sub-edit" data-arg="${s.id}" title="点击编辑">${esc(s.title)}</span>`}
+      <button type="button" class="sub-del" data-act="sub-del" data-arg="${s.id}" aria-label="删除子任务 ${esc(s.title)}">${ic('x', 12)}</button>
+    </li>`).join('')}</ul>` : '';
+  const add = d.ui.subAdd || o.alwaysAdd
+    ? `<div class="sub-add"><input data-bind="subtext" data-fk="subadd" value="${esc(d.ui.subText)}" placeholder="添加子任务，回车落一行" aria-label="添加子任务"><button type="button" class="btn btn-sm btn-ghost" data-act="sub-add" ${d.ui.subText.trim() ? '' : 'disabled'}>添加</button></div>`
+    : `<button type="button" class="a-addline" data-act="sub-add-start" data-fk="subadd-start">${ic('plus', 14)}<span>添加子任务</span></button>`;
+  return head + list + add;
+}
+
+/* --- 备注纸页 --- */
+function noteHTML(d, variant) {
+  const open = d.ui.noteOpen, has = Boolean(d.form.note.trim());
+  if (variant === 'b') {
+    if (!open) {
+      return `<button type="button" class="b-note-read" data-act="note-toggle" data-fk="note">
+        <span class="n mono">${has ? d.form.note.trim().length + ' 字' : '空'}</span>
+        <span class="${has ? 'note-clip' : 'note-empty'}">${has ? esc(d.form.note) : '添加备注'}</span>
+      </button>`;
+    }
+    return `<div class="note-paper"><textarea data-bind="note" data-fk="note" rows="3" aria-label="备注">${esc(d.form.note)}</textarea>
+      <div style="display:flex;gap:6px;margin-top:6px"><span class="prog-n mono" data-live="notecount">${d.form.note.trim().length} 字</span><span class="sp" style="flex:1"></span><button type="button" class="btn btn-sm btn-ghost" data-act="note-toggle">${ic('check', 12)}完成</button></div></div>`;
+  }
+  const btn = `<button type="button" class="btn btn-sm btn-ghost" data-act="note-toggle" data-fk="note">${open ? ic('check', 12) : ic('note', 12)}<span>${open ? '完成' : has ? '编辑备注' : '添加备注'}</span></button>`;
+  if (open) return `<div class="a-bhead"><span class="key">备注</span><span class="sp"></span>${btn}</div>
+    <div class="note-paper"><textarea data-bind="note" data-fk="note" rows="3" aria-label="备注">${esc(d.form.note)}</textarea></div>`;
+  if (has) return `<div class="a-bhead"><span class="key">备注</span><span class="sp" style="flex:1"></span>${btn}</div>
+    <div class="note-paper"><span class="note-clip">${esc(d.form.note)}</span></div>`;
+  return `<div class="a-bhead"><span class="key">备注</span><span class="sp" style="flex:1"></span>${btn}</div>`;
+}
+function extraHTML(d) {
+  const s = d.seed;
+  const all = [...(s.threshold ? [{ key: 't', value: s.threshold }] : []), ...s.extra];
+  if (!all.length) return '';
+  return `<div class="extra">${all.map((x) => `<span>${esc(x.key)}:${esc(x.value)}</span>`).join('')}</div>`;
+}
+
+/* --- 底栏 / 放弃确认 --- */
+function footHTML(d) {
+  const u = d.ui;
+  return `<div class="dw-foot">
+    <button type="button" class="btn btn-ghost is-danger${u.armed ? ' is-armed' : ''}" data-act="del" data-fk="del">${u.armed ? '确认删除' : '删除'}</button>
+    <span data-live="dirty">${dirtyOf(d) ? '<span class="dirty">未保存</span>' : ''}</span>
+    <span class="sp"></span>
+    <button type="button" class="btn btn-ghost" data-act="close" data-fk="cancel">取消</button>
+    <button type="button" class="btn btn-primary" data-act="save" data-fk="save">保存</button>
+  </div>`;
+}
+function askHTML(d) {
+  if (!d.ui.ask) return '';
+  return `<div class="ask" data-ask="1"><div class="ask-card" role="alertdialog" aria-modal="true" aria-label="放弃修改？">
+    <h3>放弃修改？</h3>
+    <p>这一条还有没保存的改动。关闭浮窗不会把它们写进 todo.txt。</p>
+    <div class="ask-row">
+      <button type="button" class="btn btn-ghost is-danger" data-act="ask-discard" data-fk="ask-discard">放弃修改</button>
+      <button type="button" class="btn btn-primary" data-act="ask-keep" data-fk="ask-keep">继续编辑</button>
+    </div>
+  </div></div>`;
+}
+function errHTML(d) {
+  return d.ui.titleError ? `<div class="err-msg">${ic('alert', 12)}<span>标题不能为空：todo.txt 的行首就是标题</span></div>` : '';
+}
+
+/* --- 菜单 --- */
+function menuHTML(d) {
+  const m = d.ui.menu; if (!m) return '';
+  let opts = [], head = '', multi = false;
+  if (m.kind === 'rec') {
+    head = '重复';
+    opts = REC_CHOICES.map((c) => ({ v: c.value, label: c.label, on: d.form.rec === c.value }));
+    const cur = d.form.rec;
+    if (cur && !REC_CHOICES.some((c) => c.value === cur)) opts.push({ v: cur, label: recLabel(cur), on: true, extra: true });
+  } else if (m.kind === 'prio') {
+    head = '优先级';
+    opts = PRIO_ORDER.slice().reverse().map((p) => ({ v: p.value, label: p.label, on: d.form.priority === p.value, flag: p.cls, code: p.value }));
+  } else {
+    multi = true;
+    const kind = m.kind;
+    head = kind === 'ctx' ? '分类 @' : '标签 +';
+    const list = kind === 'ctx' ? CTX_OPTIONS : PRJ_OPTIONS;
+    const sel = kind === 'ctx' ? d.form.contexts : d.form.projects;
+    opts = list.map((o) => ({ v: o.name, label: (kind === 'ctx' ? '@' : '+') + o.name, on: sel.includes(o.name), count: o.count, dot: kind === 'prj' }));
+  }
+  return `<div class="menu" role="listbox" aria-label="${esc(head)}" data-menu="1">
+    <div class="menu-h">${esc(head)}${multi ? ' · 可多选' : ''}</div>
+    ${opts.length ? opts.map((o, i) => `<button type="button" class="menu-opt" role="option" aria-selected="${o.on}" data-act="menu-pick" data-arg="${esc(o.v)}" data-i="${i}" data-fk="opt-${i}">
+      <span class="tick">${o.on ? ic('check', 14) : ''}</span>
+      ${o.flag ? `<span class="flag ${o.flag}">${ic('flag', 14)}</span>` : ''}
+      ${o.dot ? '<i class="dot" style="width:6px;height:6px;border-radius:50%;background:var(--accent);display:block"></i>' : ''}
+      <span class="nm">${esc(o.label)}</span>
+      ${o.code ? `<span class="ct mono">(${esc(o.code)})</span>` : ''}
+      ${o.count != null ? `<span class="ct mono">${o.count}</span>` : ''}
+    </button>`).join('') : '<div class="menu-empty">还没有已保存的候选</div>'}
+  </div>`;
+}
+
+/* --- 日期弹层 --- */
+function popHTML(d) {
+  const p = d.ui.pop; if (!p) return '';
+  const [y, m] = p.ym;
+  const first = new Date(y, m, 1);
+  const start = addDays(first, -((first.getDay() + 6) % 7));
+  const sel = dateOf(p.kind === 'due' ? d.form.due : d.form.rem);
+  let cells = '';
+  for (let i = 0; i < 42; i++) {
+    const day = addDays(start, i), s = iso(day);
+    const cls = ['dcell'];
+    if (day.getMonth() !== m) cls.push('out');
+    if (s === TODAY_ISO) cls.push('today');
+    if (s === sel) cls.push('sel');
+    cells += `<button type="button" class="${cls.join(' ')}" data-act="day" data-arg="${s}" data-fk="day-${s}" aria-label="${s}">${day.getDate()}</button>`;
+  }
+  const withTime = p.kind === 'rem';
+  return `<div class="dpop" role="dialog" aria-label="${withTime ? '提醒时刻' : '截止日期'}" data-pop="1">
+    <div class="dpop-h">
+      <button type="button" class="icon-btn" data-act="mon" data-arg="-1" aria-label="上个月">${ic('chevL', 16)}</button>
+      <b>${y} 年 ${m + 1} 月</b>
+      <button type="button" class="icon-btn" data-act="mon" data-arg="1" aria-label="下个月">${ic('chevR', 16)}</button>
+    </div>
+    <div class="dow">${['一', '二', '三', '四', '五', '六', '日'].map((w) => `<span>${w}</span>`).join('')}</div>
+    <div class="dgrid">${cells}</div>
+    ${withTime ? `<div class="tstep">
+      <span class="key">时刻</span>
+      <input class="mono" data-bind="remtime" data-fk="remtime" value="${esc(p.time)}" aria-label="提醒时刻" placeholder="09:00">
+      <button type="button" class="btn btn-sm" data-act="tstep" data-arg="-15">−15</button>
+      <button type="button" class="btn btn-sm" data-act="tstep" data-arg="15">+15</button>
+    </div>` : ''}
+    <div class="dpop-f">
+      <button type="button" class="btn btn-sm" data-act="preset" data-arg="0">今天</button>
+      <button type="button" class="btn btn-sm" data-act="preset" data-arg="1">明天</button>
+      <button type="button" class="btn btn-sm" data-act="preset" data-arg="mon">下周一</button>
+      <span class="sp" style="flex:1"></span>
+      <button type="button" class="btn btn-sm btn-ghost is-danger" data-act="date-clear">清除</button>
+    </div>
+  </div>`;
+}
+
+/* ==========================================================================
+   E · 四套渲染
+   ========================================================================== */
+function titleInput(d, cls) {
+  return `<input class="dw-title ${cls || ''}${d.ui.titleError ? ' is-error' : ''}" data-bind="title" data-fk="title" data-link="title"
+    value="${esc(d.form.title)}" placeholder="写一行任务" aria-label="任务标题" aria-invalid="${d.ui.titleError}">`;
+}
+function xBtn(d) { return `<button type="button" class="x-btn" data-act="close" data-fk="x" aria-label="关闭">${ic('x', 16)}</button>`; }
+function flagOf(p, size = 14) { return p ? `<span class="flag ${prioCls(p)}">${ic('flag', size)}</span>` : ''; }
+
+/* --- 现行版基线 --- */
+function renderNow(d) {
+  const f = d.form;
+  const prioSeg = `<div class="prio-seg" role="radiogroup" aria-label="优先级" data-link="prio">
+    ${PRIO_ORDER.map((p) => `<button type="button" role="radio" aria-checked="${f.priority === p.value}" class="${p.cls}${f.priority === p.value ? ' sel' : ''}" data-act="prio" data-arg="${p.value}" data-fk="prio-${p.value || 'none'}">${p.label}</button>`).join('')}
+  </div>`;
+  const recBox = `<button type="button" class="ctlbox${d.ui.menu && d.ui.menu.kind === 'rec' ? ' is-open' : ''}" data-act="rec-menu" data-anchor="rec" data-link="rec" data-fk="rec"><span class="grow">${esc(recLabel(f.rec))}</span><span class="car">${ic('chev', 16)}</span></button>`;
+  const dateBox = (kind, label, val, withTime) => `<button type="button" class="ctlbox${d.ui.pop && d.ui.pop.kind === kind ? ' is-open' : ''}" data-act="date-open" data-arg="${kind}" data-anchor="${kind}" data-link="${kind}" data-fk="${kind}">
+      ${ic(withTime ? 'clock' : 'cal', 16, '')}<span class="grow mono${val ? '' : ' empty-val'}">${val ? (withTime ? esc(shortDate(dateOf(val)) + ' ' + timeOf(val)) : esc(shortDate(val))) : '未设置'}</span></button>`;
+  const tagBox = (kind, label) => `<div class="ctlbox" data-link="${kind}" style="cursor:text">
+      <input data-bind="tagraw-${kind}" data-fk="tagraw-${kind}" value="${esc((kind === 'ctx' ? f.contexts : f.projects).join(', '))}" placeholder="${kind === 'ctx' ? '工作, 生活' : '回测, 量化'}" aria-label="${label}">
+      <button type="button" class="icon-btn" data-act="tag-menu" data-arg="${kind}" data-anchor="${kind}" data-fk="tagmenu-${kind}" aria-label="展开候选" style="width:24px;height:24px">${ic('chev', 16)}</button>
+    </div>`;
+  return `<div class="dw-head">${titleInput(d)}${xBtn(d)}</div>
+  ${errHTML(d)}
+  <div class="dw-body">
+    <div class="frow">
+      <div class="f"><span class="key">优先级</span>${prioSeg}</div>
+      <div class="f"><span class="key">重复</span>${recBox}</div>
+    </div>
+    <div class="frow">
+      <div class="f"><span class="key">截止日期</span>${dateBox('due', '截止日期', f.due, false)}</div>
+      <div class="f"><span class="key">提醒时刻</span>${dateBox('rem', '提醒时刻', f.rem, true)}</div>
+    </div>
+    <div class="frow">
+      <div class="f"><span class="key">@分类</span>${tagBox('ctx', '@分类')}</div>
+      <div class="f"><span class="key">+标签</span>${tagBox('prj', '+标签')}</div>
+    </div>
+    <div class="sep"></div>
+    <div class="f">${subsHTML(d, { headCls: 'sub-head', label: '子任务', alwaysAdd: true })}</div>
+    <div class="sep"></div>
+    <div class="f">${noteHTML(d, 'now')}</div>
+    ${extraHTML(d)}
+  </div>
+  ${footHTML(d)}`;
+}
+
+/* --- A 登记卡 --- */
+function renderA(d) {
+  const f = d.form;
+  const strip = `<div class="a-strip" data-live="strip">
+    <button type="button" class="a-read" data-act="prio-menu" data-anchor="prio" data-link="prio" data-fk="prio-strip">${flagOf(f.priority)}<span>${f.priority ? PRIO_LABELS[f.priority] || f.priority : '无优先级'}</span></button>
+    <button type="button" class="a-read${isOverdue(f.due) ? ' is-overdue' : ''}${f.due ? '' : ' is-empty'}" data-act="date-open" data-arg="due" data-anchor="due" data-link="due" data-fk="due-strip">${ic('cal', 14)}<span class="mono">${f.due ? esc(shortDate(f.due)) : '未设截止'}</span>${f.due ? `<span>${esc(relDay(f.due))}</span>` : ''}</button>
+    <button type="button" class="a-read${f.rec ? '' : ' is-empty'}" data-act="rec-menu" data-anchor="rec" data-link="rec" data-fk="rec-strip">${ic('repeat', 14)}<span>${esc(recLabel(f.rec))}</span></button>
+    <button type="button" class="a-read${f.rem ? '' : ' is-empty'}" data-act="date-open" data-arg="rem" data-anchor="rem" data-link="rem" data-fk="rem-strip">${ic('bell', 14)}<span class="mono">${f.rem ? esc(shortDate(dateOf(f.rem)) + ' ' + timeOf(f.rem)) : '无提醒'}</span></button>
+  </div>`;
+  const ruler = `<div class="a-prio" role="radiogroup" aria-label="优先级" data-link="prio">
+    ${PRIO_ORDER.map((p) => `<button type="button" role="radio" aria-checked="${f.priority === p.value}" class="${p.cls}${f.priority === p.value ? ' sel' : ''}" data-act="prio" data-arg="${p.value}" data-fk="prio-${p.value || 'none'}">${p.value ? `<span class="flag ${p.cls}">${ic('flag', 14)}</span>` : ''}<span>${p.label}</span></button>`).join('')}
+  </div>`;
+  const row = (key, inner, link) => `<div class="a-row"><span class="key">${key}</span><span${link ? ` data-link="${link}"` : ''} style="min-width:0">${inner}</span></div>`;
+  const editBtn = (act, arg, anchor, link, fk, inner, empty) => `<button type="button" class="a-edit${empty ? ' empty-val' : ''}${d.ui.menu && d.ui.menu.anchor === anchor || d.ui.pop && d.ui.pop.anchor === anchor ? ' is-open' : ''}" data-act="${act}"${arg ? ` data-arg="${arg}"` : ''} data-anchor="${anchor}" data-link="${link}" data-fk="${fk}">${inner}</button>`;
+  return `<div class="a-head">
+    <div class="a-meta"><span class="mono">id:${esc(d.seed.stableId)}</span><span class="ln mono">L${pad(d.seed.line)}</span><span class="sp"></span>${xBtn(d)}</div>
+    ${titleInput(d)}${errHTML(d)}${strip}
+  </div>
+  <div class="dw-body">
+    <div class="a-rows">
+      ${row('优先级', ruler, 'prio')}
+      ${row('重复', editBtn('rec-menu', '', 'rec', 'rec', 'rec', `<span class="grow">${esc(recLabel(f.rec))}</span><span class="car">${ic('chev', 14)}</span>`, !f.rec), 'rec')}
+      ${row('截止', editBtn('date-open', 'due', 'due', 'due', 'due', `${ic('cal', 14)}<span class="grow mono${f.due ? '' : ' empty-val'}">${f.due ? esc(shortDate(f.due)) : '未设置'}</span>${f.due ? `<span class="key">${esc(relDay(f.due))}</span>` : ''}`, !f.due), 'due')}
+      ${row('提醒', editBtn('date-open', 'rem', 'rem', 'rem', 'rem', `${ic('clock', 14)}<span class="grow mono${f.rem ? '' : ' empty-val'}">${f.rem ? esc(shortDate(dateOf(f.rem)) + ' ' + timeOf(f.rem)) : '未设置'}</span>`, !f.rem), 'rem')}
+      ${row('分类', chipsHTML(d, 'ctx'), 'ctx')}
+      ${row('标签', chipsHTML(d, 'prj'), 'prj')}
+    </div>
+    <div class="a-block">${subsHTML(d)}</div>
+    <div class="a-block">${noteHTML(d, 'a')}</div>
+    ${extraHTML(d)}
+  </div>
+  ${WB.preview ? srcHTML(d, false) : ''}
+  ${footHTML(d)}`;
+}
+
+/* --- B 检视器 --- */
+function renderB(d) {
+  const f = d.form;
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const day = addDays(TODAY, i), s = iso(day);
+    const cls = ['b-day'];
+    if (s === TODAY_ISO) cls.push('is-today');
+    if (f.due === s) cls.push('is-due');
+    if (isOverdue(f.due) && i === 0) cls.push('is-overdue');
+    days.push(`<button type="button" class="${cls.join(' ')}" data-act="week" data-arg="${s}" data-fk="week-${s}" aria-label="截止设为 ${s}">
+      <span class="wd">${i === 0 ? '今' : WD[day.getDay()]}</span><span class="dn">${pad(day.getDate())}</span></button>`);
+  }
+  const week = `<div class="b-week" data-live="week">
+    <div class="b-week-h"><span class="key">近 7 日</span><span class="sp"></span>
+      <span class="prog-n mono">${f.due ? esc(shortDate(f.due)) : '未设截止'}</span>
+      <button type="button" class="btn btn-sm btn-ghost" data-act="date-clear" data-arg="due">清除</button>
+    </div>
+    <div class="b-days">${days.join('')}</div>
+  </div>`;
+  const val = (act, arg, anchor, link, fk, inner, overdue) => `<button type="button" class="b-val${overdue ? ' is-overdue' : ''}${d.ui.menu && d.ui.menu.anchor === anchor || d.ui.pop && d.ui.pop.anchor === anchor ? ' is-open' : ''}" data-act="${act}"${arg ? ` data-arg="${arg}"` : ''} data-anchor="${anchor}" data-link="${link}" data-fk="${fk}">${inner}<span class="car">${ic('chev', 14)}</span></button>`;
+  const row = (key, inner, link) => `<div class="b-row"><span class="key">${key}</span><span style="min-width:0"${link ? ` data-link="${link}"` : ''}>${inner}</span></div>`;
+  const group = (name, ct, rows) => `<div class="b-group"><div class="b-ghead"><span class="key">${name}</span>${ct ? `<span class="ct">${ct}</span>` : ''}</div>${rows}</div>`;
+  return `<div class="b-head">
+    <span class="col"><span class="b-id">id:${esc(d.seed.stableId)} · L${pad(d.seed.line)}</span>${titleInput(d)}${errHTML(d)}</span>
+    ${xBtn(d)}
+  </div>
+  ${week}
+  <div class="dw-body">
+    ${group('排期', '', [
+    row('截止', val('date-open', 'due', 'due', 'due', 'due', `<span class="grow mono${f.due ? '' : ' empty-val'}">${f.due ? esc(shortDate(f.due)) : '未设置'}</span>${f.due ? `<span class="key">${esc(relDay(f.due))}</span>` : ''}`, isOverdue(f.due)), 'due'),
+    row('提醒', val('date-open', 'rem', 'rem', 'rem', 'rem', `<span class="grow mono${f.rem ? '' : ' empty-val'}">${f.rem ? esc(shortDate(dateOf(f.rem)) + ' ' + timeOf(f.rem)) : '未设置'}</span>`, false), 'rem'),
+    row('重复', val('rec-menu', '', 'rec', 'rec', 'rec', `<span class="grow">${esc(recLabel(f.rec))}</span>`, false), 'rec'),
+  ].join(''))}
+    ${group('记号', '', [
+    row('优先级', val('prio-menu', '', 'prio', 'prio', 'prio', `${flagOf(f.priority)}<span class="grow">${f.priority ? esc(PRIO_LABELS[f.priority] || f.priority) : '无'}</span>${f.priority ? `<span class="key mono">(${esc(f.priority)})</span>` : ''}`, false), 'prio'),
+    row('分类', chipsHTML(d, 'ctx'), 'ctx'),
+    row('标签', chipsHTML(d, 'prj'), 'prj'),
+  ].join(''))}
+    ${group('执行', '', `<div class="b-sub">${subsHTML(d, { headCls: 'a-bhead', label: '子任务' })}</div>
+      <div class="b-note" style="margin-top:8px"><div class="a-bhead"><span class="key">备注</span></div>${noteHTML(d, 'b')}</div>
+      ${extraHTML(d)}`)}
+  </div>
+  <div class="b-keys">
+    <span class="keys"><span class="kc">⏎</span>保存</span>
+    <span class="keys"><span class="kc">Esc</span>逐层退出</span>
+    <span class="keys"><span class="kc">Tab</span>下一项</span>
+    <span class="sp"></span>
+    <span class="keys mono" data-live="tabcount"></span>
+  </div>
+  ${footHTML(d)}`;
+}
+
+/* --- C 源文对照 --- */
+function renderC(d) {
+  const f = d.form;
+  const cell = (key, inner, link) => `<div class="c-cell"><span class="key">${key}</span><span style="min-width:0"${link ? ` data-link="${link}"` : ''}>${inner}</span></div>`;
+  const edit = (act, arg, anchor, link, fk, inner, empty) => `<button type="button" class="c-edit${empty ? ' empty-val' : ''}${d.ui.menu && d.ui.menu.anchor === anchor || d.ui.pop && d.ui.pop.anchor === anchor ? ' is-open' : ''}" data-act="${act}"${arg ? ` data-arg="${arg}"` : ''} data-anchor="${anchor}" data-link="${link}" data-fk="${fk}">${inner}</button>`;
+  const prio = `<div class="c-prio" role="radiogroup" aria-label="优先级" data-link="prio">
+    ${PRIO_ORDER.map((p) => `<button type="button" role="radio" aria-checked="${f.priority === p.value}" class="${p.cls}${f.priority === p.value ? ' sel' : ''}" data-act="prio" data-arg="${p.value}" data-fk="prio-${p.value || 'none'}">${p.value ? `<span class="flag ${p.cls}">${ic('flag', 12)}</span>` : ''}<span>${p.label}</span></button>`).join('')}
+  </div>`;
+  const card = (name, ct, inner) => `<div class="c-card"><div class="c-chead"><span class="key">${name}</span><span class="sp"></span>${ct ? `<span class="prog-n mono">${ct}</span>` : ''}</div>${inner}</div>`;
+  return `<div class="c-head">
+    <div class="c-crumb">${ic('file', 12)}<span class="file">todo.txt</span><span>›</span><span>L${pad(d.seed.line)}</span><span class="sp"></span>${xBtn(d)}</div>
+    ${titleInput(d)}${errHTML(d)}
+  </div>
+  ${srcHTML(d, true)}
+  <div class="c-hint">${ic('eye', 12)}<span>点原文里的记号改对应字段；悬停字段会点亮它在原文里的那一段</span></div>
+  <div class="dw-body">
+    ${card('本体', '', `<div class="c-grid">
+      ${cell('优先级', prio, 'prio')}
+      ${cell('重复', edit('rec-menu', '', 'rec', 'rec', 'rec', `<span class="grow">${esc(recLabel(f.rec))}</span><span class="car">${ic('chev', 14)}</span>`, !f.rec), 'rec')}
+      ${cell('截止', edit('date-open', 'due', 'due', 'due', 'due', `<span class="grow mono${f.due ? '' : ' empty-val'}">${f.due ? esc(shortDate(f.due)) : '未设置'}</span>`, !f.due), 'due')}
+      ${cell('提醒', edit('date-open', 'rem', 'rem', 'rem', 'rem', `<span class="grow mono${f.rem ? '' : ' empty-val'}">${f.rem ? esc(timeOf(f.rem)) : '未设置'}</span>`, !f.rem), 'rem')}
+    </div>`)}
+    ${card('归属', '', `<div class="c-grid">
+      ${cell('分类 @', chipsHTML(d, 'ctx'), 'ctx')}
+      ${cell('标签 +', chipsHTML(d, 'prj'), 'prj')}
+    </div>`)}
+    ${card('执行', `${subDone(d)}/${d.subs.length}`, `${subsHTML(d, { headCls: 'a-bhead', label: '子任务' })}
+      <div style="margin-top:10px">${noteHTML(d, 'a')}</div>${extraHTML(d)}`)}
+  </div>
+  ${footHTML(d)}`;
+}
+
+function drawerHTML(d) {
+  if (d.ui.closed) return '';
+  const body = d.scheme === 'now' ? renderNow(d) : d.scheme === 'a' ? renderA(d) : d.scheme === 'b' ? renderB(d) : renderC(d);
+  return body + menuHTML(d) + popHTML(d) + askHTML(d) + (WB.grid ? '<div class="gridlay" aria-hidden="true"></div>' : '');
+}
+
+/* ==========================================================================
+   F · 渲染 / 焦点 / 浮层落位
+   ========================================================================== */
+const byUid = (n) => drawers.find((d) => d.uid === Number(n));
+let subSeq = 100;
+let measTimer = 0;
+
+function focusables(scope) {
+  return $$('button,input,textarea,select,a[href],[tabindex]', scope).filter((el) => {
+    if (el.disabled || el.type === 'hidden') return false;
+    if (el.getAttribute('tabindex') === '-1') return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  });
+}
+function captureFocus(d) {
+  const a = document.activeElement;
+  if (!a || !d.root || !d.root.contains(a)) return null;
+  return { fk: a.dataset.fk || null, s: a.selectionStart, e: a.selectionEnd, sel: 'selectionStart' in a };
+}
+function focusFk(d, fk) {
+  if (!d.root || !fk) return;
+  const el = d.root.querySelector(`[data-fk="${fk}"]`);
+  if (el) el.focus({ preventScroll: true });
+}
+function restoreFocus(d, f) {
+  if (!f || !f.fk) return;
+  const el = d.root.querySelector(`[data-fk="${f.fk}"]`);
+  if (!el) return;
+  el.focus({ preventScroll: true });
+  if (f.sel && f.s != null && el.setSelectionRange) { try { el.setSelectionRange(f.s, f.e); } catch (_) { /* number/time 输入不支持 */ } }
+}
+function applyRoving(d) {
+  $$('.prio-seg,.a-prio,.c-prio', d.root).forEach((g) => {
+    const btns = $$('button', g);
+    btns.forEach((b) => { b.tabIndex = b.classList.contains('sel') ? 0 : -1; });
+    if (!btns.some((b) => b.tabIndex === 0) && btns[0]) btns[0].tabIndex = 0;
+  });
+}
+function placeLayers(d) {
+  const layer = d.root.querySelector('[data-menu],[data-pop]');
+  if (!layer) return;
+  const key = d.ui.menu ? d.ui.menu.anchor : d.ui.pop.anchor;
+  const anchor = d.root.querySelector(`[data-anchor="${key}"]`);
+  const rr = d.root.getBoundingClientRect();
+  const ar = anchor ? anchor.getBoundingClientRect() : rr;
+  const sc = d.scale || 1;
+  const ax = (ar.left - rr.left) / sc, ay = (ar.top - rr.top) / sc;
+  const aw = ar.width / sc, ah = ar.height / sc;
+  layer.style.visibility = 'hidden'; layer.style.left = '0px'; layer.style.top = '0px';
+  const lw = layer.offsetWidth, lh = layer.offsetHeight;
+  const W = rr.width / sc;
+  let left = clamp(ax, 6, Math.max(6, W - lw - 6));
+  let top = ay + ah + 4;
+  if (rr.top + (top + lh) * sc > window.innerHeight - 8) top = Math.max(6, ay - lh - 4);
+  if (aw > lw) left = clamp(ax, 6, Math.max(6, W - lw - 6));
+  layer.style.left = `${Math.round(left)}px`;
+  layer.style.top = `${Math.round(top)}px`;
+  layer.style.visibility = '';
+}
+function syncLight(d) {
+  if (!d.root) return;
+  const put = (sel, html) => {
+    const el = d.root.querySelector(sel);
+    if (!el || el.contains(document.activeElement)) return;
+    el.innerHTML = html;
+  };
+  put('[data-live="src"]', srcInner(d, d.scheme === 'c'));
+  put('[data-live="dirty"]', dirtyOf(d) ? '<span class="dirty">未保存</span>' : '');
+  put('[data-live="notecount"]', `${d.form.note.trim().length} 字`);
+  clearTimeout(measTimer);
+  measTimer = setTimeout(measureNotes, 140);
+}
+function renderDrawer(d) {
+  if (!d.root) return;
+  const f = captureFocus(d);
+  d.root.className = `dw sch-${d.scheme}${d.ui.menu || d.ui.pop ? ' has-pop' : ''}`;
+  d.root.innerHTML = drawerHTML(d);
+  d.root.style.display = d.ui.closed ? 'none' : '';
+  applyRoving(d);
+  placeLayers(d);
+  restoreFocus(d, f);
+  const tc = d.root.querySelector('[data-live="tabcount"]');
+  if (tc) tc.textContent = `${focusables(d.root).length} 个 Tab 停靠点`;
+  const scene = d.root.closest('.scene');
+  if (scene) {
+    const ro = scene.querySelector('.reopen');
+    if (ro) ro.style.display = d.ui.closed ? 'flex' : 'none';
+  }
+  syncLight(d);
+}
+function renderAll() { drawers.forEach(renderDrawer); }
+function clearDrawers() {
+  drawers.forEach((d) => { if (d.root && d.root.parentNode) d.root.parentNode.removeChild(d.root); });
+  drawers.length = 0;
+}
+function mount(d, host) {
+  const el = document.createElement('div');
+  el.className = `dw sch-${d.scheme}`;
+  el.dataset.uid = d.uid;
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-modal', 'true');
+  el.setAttribute('aria-label', `编辑任务 · ${SCHEMES[d.scheme].name}`);
+  host.appendChild(el);
+  d.root = el;
+  drawers.push(d);
+  renderDrawer(d);
+  return el;
+}
+function linkHi(d, key) {
+  if (!d.root) return;
+  $$('.is-linked', d.root).forEach((el) => el.classList.remove('is-linked'));
+  if (!key) return;
+  $$(`[data-link="${key}"]`, d.root).forEach((el) => el.classList.add('is-linked'));
+}
+
+/* ==========================================================================
+   G · 动作：每一次点击都真的改状态
+   ========================================================================== */
+function resetForm(d) {
+  const s = d.seed;
+  d.form = {
+    title: s.title, priority: s.priority, due: s.due, rem: s.rem, rec: s.rec,
+    contexts: [...s.contexts], projects: [...s.projects], note: s.note,
+  };
+  d.subs = s.subs.map((x) => ({ ...x }));
+  d.initial = signature(d.form);
+}
+function requestClose(d) {
+  if (d.ui.ask) { d.ui.ask = false; renderDrawer(d); focusFk(d, 'title'); return; }
+  if (dirtyOf(d)) { d.ui.ask = true; renderDrawer(d); focusFk(d, 'ask-keep'); return; }
+  d.ui.closed = true; renderDrawer(d);
+}
+function doSave(d) {
+  if (!d.form.title.trim()) {
+    d.ui.titleError = true; renderDrawer(d); focusFk(d, 'title');
+    toast('标题不能为空', 'save() 前置拦截 · 按钮不禁用');
+    return;
+  }
+  d.ui.titleError = false;
+  d.initial = signature(d.form);
+  d.ui.closed = true;
+  renderDrawer(d);
+  toast('已写回 todo.txt', `L${pad(d.seed.line)} · ${d.form.title.trim()}`);
+}
+function openMenu(d, kind, anchor, returnFk) {
+  const same = d.ui.menu && d.ui.menu.kind === kind;
+  d.ui.pop = null;
+  d.ui.menu = same ? null : { kind, anchor, returnFk };
+  renderDrawer(d);
+  if (d.ui.menu) {
+    const opts = $$('.menu-opt', d.root);
+    const on = opts.find((o) => o.getAttribute('aria-selected') === 'true');
+    (on || opts[0] || d.root).focus({ preventScroll: true });
+  } else focusFk(d, returnFk);
+}
+function openPop(d, kind, returnFk) {
+  const same = d.ui.pop && d.ui.pop.kind === kind;
+  d.ui.menu = null;
+  d.ui.pop = same ? null : { kind, anchor: kind, returnFk, ym: monthOf(kind === 'due' ? d.form.due : d.form.rem), time: timeOf(d.form.rem) || '09:00' };
+  renderDrawer(d);
+  if (d.ui.pop) {
+    const sel = d.root.querySelector('.dcell.sel') || d.root.querySelector('.dcell.today');
+    if (sel) sel.focus({ preventScroll: true });
+  } else focusFk(d, returnFk);
+}
+function pickDay(d, s) {
+  const p = d.ui.pop; if (!p) return;
+  if (p.kind === 'due') d.form.due = s;
+  else d.form.rem = `${s}T${/^\d{2}:\d{2}$/.test(p.time) ? p.time : '09:00'}`;
+  d.ui.pop = null; renderDrawer(d); focusFk(d, p.kind);
+}
+function commitTag(d) {
+  const kind = d.ui.tagEdit; if (!kind) return;
+  const name = d.ui.tagText.trim().replace(/^[@+]/, '');
+  const arr = kind === 'ctx' ? d.form.contexts : d.form.projects;
+  if (name && !arr.includes(name)) arr.push(name);
+  d.ui.tagEdit = null; d.ui.tagText = '';
+  renderDrawer(d); focusFk(d, `tagadd-${kind}`);
+}
+function commitSubEdit(d) {
+  const id = d.ui.subEdit; if (!id) return;
+  const s = d.subs.find((x) => x.id === id);
+  const t = d.ui.subEditText.trim();
+  if (s) { if (t) s.title = t; else d.subs = d.subs.filter((x) => x.id !== id); }
+  d.ui.subEdit = null; renderDrawer(d);
+}
+function addSub(d) {
+  const t = d.ui.subText.trim(); if (!t) return;
+  d.subs.push({ id: `s${++subSeq}`, title: t, done: false });
+  d.ui.subText = ''; renderDrawer(d); focusFk(d, 'subadd');
+}
+function stepTime(d, mins) {
+  const p = d.ui.pop; if (!p) return;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(p.time || '');
+  let total = m ? (+m[1]) * 60 + (+m[2]) : 9 * 60;
+  total = ((total + mins) % 1440 + 1440) % 1440;
+  p.time = `${pad(Math.floor(total / 60))}:${pad(total % 60)}`;
+  const inp = d.root.querySelector('[data-bind="remtime"]');
+  if (inp) inp.value = p.time;
+  if (d.form.rem) { d.form.rem = `${dateOf(d.form.rem)}T${p.time}`; syncLight(d); }
+}
+function act(d, name, arg, el) {
+  const f = d.form, u = d.ui;
+  const fk = el && el.dataset ? el.dataset.fk : null;
+  switch (name) {
+    case 'close': requestClose(d); break;
+    case 'reopen': u.closed = false; u.ask = false; u.armed = false; renderDrawer(d); focusFk(d, 'title'); break;
+    case 'save': doSave(d); break;
+    case 'del':
+      if (!u.armed) { u.armed = true; renderDrawer(d); focusFk(d, 'del'); }
+      else {
+        u.armed = false; u.closed = true; renderDrawer(d);
+        toast('已删除这一行', `L${pad(d.seed.line)} 移除 · notes.md 里它的备注保留`);
+      }
+      break;
+    case 'prio': f.priority = arg; u.menu = null; renderDrawer(d); focusFk(d, fk); break;
+    case 'prio-menu': openMenu(d, 'prio', 'prio', fk); break;
+    case 'rec-menu': openMenu(d, 'rec', 'rec', fk); break;
+    case 'tag-menu': openMenu(d, arg, arg, fk); break;
+    case 'menu-pick': {
+      const m = u.menu; if (!m) break;
+      if (m.kind === 'rec') { f.rec = arg; u.menu = null; renderDrawer(d); focusFk(d, m.returnFk); }
+      else if (m.kind === 'prio') { f.priority = arg; u.menu = null; renderDrawer(d); focusFk(d, m.returnFk); }
+      else {
+        const arr = m.kind === 'ctx' ? f.contexts : f.projects;
+        const i = arr.indexOf(arg);
+        if (i >= 0) arr.splice(i, 1); else arr.push(arg);
+        renderDrawer(d);
+        const opts = $$('.menu-opt', d.root);
+        if (opts[Number(el.dataset.i)]) opts[Number(el.dataset.i)].focus({ preventScroll: true });
+      }
+      break;
+    }
+    case 'tag-add': u.tagEdit = arg; u.tagText = ''; u.menu = null; renderDrawer(d); focusFk(d, `tag-${arg}`); break;
+    case 'tag-rm': {
+      const arr = arg === 'ctx' ? f.contexts : f.projects;
+      arr.splice(Number(el.dataset.i), 1); renderDrawer(d); break;
+    }
+    case 'date-open': openPop(d, arg, fk); break;
+    case 'mon': {
+      const p = u.pop; if (!p) break;
+      const dt = new Date(p.ym[0], p.ym[1] + Number(arg), 1);
+      p.ym = [dt.getFullYear(), dt.getMonth()];
+      renderDrawer(d); focusFk(d, 'mon'); break;
+    }
+    case 'day': pickDay(d, arg); break;
+    case 'preset': pickDay(d, arg === 'mon' ? iso(nextMonday()) : iso(addDays(TODAY, Number(arg)))); break;
+    case 'date-clear': {
+      const kind = arg || (u.pop && u.pop.kind) || 'due';
+      if (kind === 'due') f.due = ''; else f.rem = '';
+      u.pop = null; renderDrawer(d); focusFk(d, kind); break;
+    }
+    case 'tstep': stepTime(d, Number(arg)); break;
+    case 'week': f.due = arg; renderDrawer(d); focusFk(d, `week-${arg}`); break;
+    case 'sub-toggle': { const s = d.subs.find((x) => x.id === arg); if (s) s.done = !s.done; renderDrawer(d); focusFk(d, `sub-${arg}`); break; }
+    case 'sub-edit': u.subEdit = arg; u.subEditText = (d.subs.find((x) => x.id === arg) || {}).title || ''; renderDrawer(d); focusFk(d, `subedit-${arg}`); break;
+    case 'sub-del': d.subs = d.subs.filter((x) => x.id !== arg); if (u.subEdit === arg) u.subEdit = null; renderDrawer(d); break;
+    case 'sub-add-start': u.subAdd = true; renderDrawer(d); focusFk(d, 'subadd'); break;
+    case 'sub-add': addSub(d); break;
+    case 'note-toggle': u.noteOpen = !u.noteOpen; renderDrawer(d); if (u.noteOpen) focusFk(d, 'note'); break;
+    case 'ask-keep': u.ask = false; renderDrawer(d); focusFk(d, 'title'); break;
+    case 'ask-discard': resetForm(d); u.ask = false; u.closed = true; renderDrawer(d); toast('已放弃修改', 'todo.txt 未被写入'); break;
+    case 'focus-title': focusFk(d, 'title'); break;
+    default: break;
+  }
+}
+function onInput(d, el) {
+  const b = el.dataset.bind, v = el.value;
+  if (b === 'title') {
+    d.form.title = v;
+    if (d.ui.titleError && v.trim()) {
+      d.ui.titleError = false;
+      el.classList.remove('is-error'); el.setAttribute('aria-invalid', 'false');
+      const em = d.root.querySelector('.err-msg'); if (em) em.remove();
+    }
+    syncLight(d); return;
+  }
+  if (b === 'note') { d.form.note = v; syncLight(d); return; }
+  if (b === 'subtext') {
+    d.ui.subText = v;
+    const btn = d.root.querySelector('[data-act="sub-add"]'); if (btn) btn.disabled = !v.trim();
+    return;
+  }
+  if (b === 'subedit') { d.ui.subEditText = v; return; }
+  if (b === 'tagtext') { d.ui.tagText = v; return; }
+  if (b === 'remtime') { if (d.ui.pop) d.ui.pop.time = v; return; }
+  if (b === 'tagraw-ctx' || b === 'tagraw-prj') {
+    const kind = b.slice(7);
+    const arr = v.split(/[,，]/).map((x) => x.trim().replace(/^[@+]/, '')).filter(Boolean);
+    if (kind === 'ctx') d.form.contexts = arr; else d.form.projects = arr;
+    syncLight(d);
+  }
+}
+function onKey(d, e) {
+  const u = d.ui, t = e.target;
+  if (e.key === 'Escape') {
+    e.preventDefault(); e.stopPropagation();
+    if (u.ask) { u.ask = false; renderDrawer(d); focusFk(d, 'title'); return; }
+    if (u.menu) { const rk = u.menu.returnFk; u.menu = null; renderDrawer(d); focusFk(d, rk); return; }
+    if (u.pop) { const rk = u.pop.returnFk; u.pop = null; renderDrawer(d); focusFk(d, rk); return; }
+    if (u.subEdit) { u.subEdit = null; renderDrawer(d); return; }
+    if (u.tagEdit) { const k = u.tagEdit; u.tagEdit = null; renderDrawer(d); focusFk(d, `tagadd-${k}`); return; }
+    if (u.subAdd) { u.subAdd = false; u.subText = ''; renderDrawer(d); return; }
+    if (u.armed) { u.armed = false; renderDrawer(d); focusFk(d, 'del'); return; }
+    requestClose(d); return;
+  }
+  if (e.key === 'Enter' && !u.composing) {
+    const b = t.dataset ? t.dataset.bind : null;
+    if (b === 'title') { e.preventDefault(); doSave(d); return; }
+    if (b === 'subtext') { e.preventDefault(); addSub(d); return; }
+    if (b === 'subedit') { e.preventDefault(); commitSubEdit(d); return; }
+    if (b === 'tagtext') { e.preventDefault(); commitTag(d); return; }
+    if (b === 'remtime') {
+      e.preventDefault();
+      if (/^\d{2}:\d{2}$/.test(t.value) && d.form.rem) d.form.rem = `${dateOf(d.form.rem)}T${t.value}`;
+      u.pop = null; renderDrawer(d); focusFk(d, 'rem'); return;
+    }
+    if (t.classList && t.classList.contains('menu-opt')) { e.preventDefault(); t.click(); return; }
+  }
+  if (e.key === 'Tab') {
+    const layer = d.root.querySelector('[data-menu],[data-pop]');
+    const scope = layer || d.root;
+    const list = focusables(scope);
+    if (!list.length) return;
+    const i = list.indexOf(document.activeElement);
+    const n = i < 0 ? (e.shiftKey ? list.length - 1 : 0) : (e.shiftKey ? (i - 1 + list.length) % list.length : (i + 1) % list.length);
+    e.preventDefault(); list[n].focus(); return;
+  }
+  const prioGroup = t.closest ? t.closest('.prio-seg,.a-prio,.c-prio') : null;
+  if (prioGroup && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+    e.preventDefault();
+    const btns = $$('button', prioGroup);
+    let i = btns.indexOf(t);
+    if (e.key === 'Home') i = 0;
+    else if (e.key === 'End') i = btns.length - 1;
+    else i = (i + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1) + btns.length) % btns.length;
+    d.form.priority = btns[i].dataset.arg;
+    renderDrawer(d);
+    const again = $$('button', d.root.querySelector('.prio-seg,.a-prio,.c-prio'))[i];
+    if (again) again.focus({ preventScroll: true });
+    return;
+  }
+  const menu = t.closest ? t.closest('[data-menu]') : null;
+  if (menu && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
+    e.preventDefault();
+    const opts = $$('.menu-opt', menu);
+    let i = opts.indexOf(t);
+    if (e.key === 'Home') i = 0;
+    else if (e.key === 'End') i = opts.length - 1;
+    else i = (i + (e.key === 'ArrowDown' ? 1 : -1) + opts.length) % opts.length;
+    if (opts[i]) opts[i].focus();
+    return;
+  }
+  const grid = t.closest ? t.closest('.dgrid') : null;
+  if (grid && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+    e.preventDefault();
+    const cells = $$('.dcell', grid);
+    const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[e.key];
+    const i = clamp(cells.indexOf(t) + step, 0, cells.length - 1);
+    if (cells[i]) cells[i].focus();
+  }
+}
+
+/* --- 全局事件委托：一份监听器服务所有浮窗 --- */
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-act]');
+  if (!el) return;
+  const root = el.closest('.dw');
+  const d = root ? byUid(root.dataset.uid) : null;
+  if (!d) {
+    const scene = el.closest('.scene');
+    const sd = scene ? drawers.find((x) => x.root && x.root.closest('.scene') === scene) : null;
+    if (sd && el.dataset.act === 'reopen') act(sd, 'reopen', el.dataset.arg, el);
+    return;
+  }
+  act(d, el.dataset.act, el.dataset.arg, el);
+});
+document.addEventListener('input', (e) => {
+  const el = e.target.closest('[data-bind]');
+  if (!el) return;
+  const root = el.closest('.dw');
+  const d = root ? byUid(root.dataset.uid) : null;
+  if (d) onInput(d, el);
+});
+document.addEventListener('keydown', (e) => {
+  const root = e.target.closest ? e.target.closest('.dw') : null;
+  const d = root ? byUid(root.dataset.uid) : null;
+  if (d) onKey(d, e);
+}, true);
+document.addEventListener('compositionstart', (e) => {
+  const root = e.target.closest ? e.target.closest('.dw') : null;
+  const d = root ? byUid(root.dataset.uid) : null;
+  if (d) d.ui.composing = true;
+});
+document.addEventListener('compositionend', (e) => {
+  const root = e.target.closest ? e.target.closest('.dw') : null;
+  const d = root ? byUid(root.dataset.uid) : null;
+  if (d) { d.ui.composing = false; onInput(d, e.target); }
+});
+document.addEventListener('mousedown', (e) => {
+  let changed = false;
+  drawers.forEach((d) => {
+    if (!d.root || d.root.contains(e.target)) return;
+    if (d.ui.menu || d.ui.pop || d.ui.armed) { d.ui.menu = null; d.ui.pop = null; d.ui.armed = false; changed = true; }
+  });
+  if (changed) renderAll();
+});
+document.addEventListener('mouseover', (e) => {
+  const root = e.target.closest ? e.target.closest('.dw') : null;
+  const d = root ? byUid(root.dataset.uid) : null;
+  if (!d) return;
+  const l = e.target.closest('[data-link]');
+  linkHi(d, l ? l.dataset.link : null);
+});
+document.addEventListener('focusin', (e) => {
+  const root = e.target.closest ? e.target.closest('.dw') : null;
+  const d = root ? byUid(root.dataset.uid) : null;
+  if (!d) return;
+  const l = e.target.closest('[data-link]');
+  linkHi(d, l ? l.dataset.link : null);
+});
+window.addEventListener('resize', () => { drawers.forEach(placeLayers); clearTimeout(measTimer); measTimer = setTimeout(measureNotes, 160); });
+
+/* ==========================================================================
+   H · 参数：控制轨实时写 CSS 变量，不重建 DOM
+   ========================================================================== */
+function applyParams() {
+  const r = document.documentElement;
+  r.dataset.theme = WB.theme;
+  r.dataset.fieldBg = WB.fieldBg ? '1' : '0';
+  r.dataset.monoPrio = WB.prioColor ? '0' : '1';
+  r.dataset.ruled = WB.ruled ? '1' : '0';
+  r.dataset.motion = WB.motion ? '1' : '0';
+  const set = (k, v) => r.style.setProperty(k, v);
+  set('--edit-window-w', `${WB.width}px`);
+  set('--dens', (WB.dens / 100).toFixed(3));
+  set('--fs-val', `${WB.fsVal}px`);
+  set('--fs-label', `${WB.fsLabel}px`);
+  set('--r', `${WB.radius}px`);
+  set('--scrim', (WB.scrim / 100).toFixed(2));
+  set('--dur', `${WB.dur}ms`);
+  set('--dw-maxh', `${WB.maxh}px`);
+  set('--ctl-line', WB.ctl);
+}
+
+/* ==========================================================================
+   I · 舞台背景：背后那一屏真实应用（简化，但同一支笔）
+   ========================================================================== */
+function mockHTML() {
+  const s = SEEDS[WB.seed];
+  const rows = [
+    { t: '提交深圳出差报销单', p: 'A', over: true },
+    { t: s.title, p: s.priority, on: true },
+    ...s.subs.slice(0, 2).map((x) => ({ t: x.title, child: true, done: x.done })),
+    { t: '每月对账并导出流水', p: '' },
+    { t: '把第 45 周的结论归档到复盘', p: 'C' },
+    { t: '买一根六类网线', p: '' },
+  ];
+  return `<div class="mock" aria-hidden="true">
+    <div class="mock-rail">
+      <i class="on">${ic('checkCircle', 16)}</i><i>${ic('cal', 16)}</i><i>${ic('grid', 16)}</i><i>${ic('cal', 16)}</i><i>${ic('note', 16)}</i>
+    </div>
+    <div class="mock-main">
+      <div class="mock-ctx">${ic('panel', 16)}<b>全部</b><span>12 项</span><span style="flex:1"></span>${ic('search', 16)}${ic('sort', 16)}</div>
+      <div class="mock-quick">${ic('plus', 14)}<span style="margin-left:8px">添加任务…</span></div>
+      <div class="mock-list">
+        <div class="mock-group">今天 · 5</div>
+        ${rows.map((r) => r.child
+    ? `<div class="mock-row child"><span class="cb${r.done ? ' on' : ''}" style="width:14px;height:14px;border:1.5px solid var(--control-line);border-radius:50%"></span><span class="tt">${esc(r.t)}</span></div>`
+    : `<div class="mock-row"><span class="cb"></span><span class="fl">${r.p ? `<span class="flag ${prioCls(r.p)}">${ic('flag', 16)}</span>` : ''}</span><span class="tt"${r.over ? ' style="color:var(--danger)"' : ''}>${esc(r.t)}</span></div>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ==========================================================================
+   J · 五个视图
+   ========================================================================== */
+const FORCE_DESC = {
+  default: '一条属性齐全的任务：优先级、截止、提醒、重复、分类、标签、子任务、备注都在。',
+  empty: '标题被清空后点保存：红描边 + 一行解释，按钮不禁用，焦点回到标题。',
+  armed: '删除的第一下：按钮转实心「确认删除」，再点一下才落盘。',
+  ask: '有改动时关闭：阻塞层「放弃修改？」，绿色那枚是继续编辑。',
+  rec: '重复下拉开着：四个预设 + 手写值动态补的「当前值」，不静默改成从不。',
+  date: '日期弹层：周一起始、今天描边、选中实心，底部三枚预设与清除。',
+  note: '备注展开成横线纸页，行数跟着内容长。',
+  nokids: '没有子任务时：进度线不画，只留一行「添加子任务」。',
+  closed: '保存 / 删除 / 放弃之后：窗收起，舞台上留一枚重新打开。',
+};
+function scaledMount(host, scheme, seed, force, width) {
+  const wrap = document.createElement('div');
+  wrap.className = 'dw-scale';
+  host.appendChild(wrap);
+  const d = makeDrawer(scheme, seed, { force, width });
+  mount(d, wrap);
+  const avail = host.clientWidth - 28;
+  const s = Math.min(1, avail / width);
+  d.scale = s;
+  // 版式必须按原宽排好再整体缩放；max-width:100% 会让它在窄列里重新折行
+  d.root.style.maxWidth = 'none';
+  d.root.style.width = `${width}px`;
+  d.root.style.transformOrigin = 'top left';
+  d.root.style.transform = `scale(${s})`;
+  wrap.style.width = `${Math.round(width * s)}px`;
+  wrap.style.height = `${Math.round(d.root.offsetHeight * s)}px`;
+  placeLayers(d);
+  return d;
+}
+function buildDetail(host) {
+  const s = SCHEMES[WB.scheme];
+  host.innerHTML = `<div class="stage-h"><h2>${esc(s.name)}</h2><span class="mono">${s.tag} · ${WB.width}px · ${WB.theme} · ${esc(SEEDS[WB.seed].name)}</span></div>
+    <div class="scene">${mockHTML()}<div class="scrim"></div><div class="scene-hold"></div>
+      <div class="reopen" style="display:none"><p>浮窗已收起</p><button type="button" class="btn btn-primary" data-act="reopen">重新打开这一条</button></div>
+    </div>
+    <p class="tool-note" style="margin-top:12px">${esc(s.idea)} 背后那一屏是同语言的列表，用来判断这扇窗压在实际界面上是否还读得清。</p>`;
+  const d = makeDrawer(WB.scheme, WB.seed, { force: WB.force });
+  mount(d, $('.scene-hold', host));
+}
+function schemeHeights() {
+  const keep = drawers.length;
+  const host = document.createElement('div');
+  host.setAttribute('data-theme', WB.theme);
+  host.style.cssText = 'position:fixed;left:0;top:0;width:640px;opacity:0;pointer-events:none;z-index:-1';
+  document.body.appendChild(host);
+  const out = {};
+  ['now', 'a', 'b', 'c'].forEach((k) => {
+    const d = makeDrawer(k, WB.seed, {});
+    mount(d, host);
+    const body = d.root.querySelector('.dw-body');
+    const win = d.root.offsetHeight;
+    const over = body ? Math.max(0, body.scrollHeight - body.clientHeight) : 0;
+    if (body) body.style.maxHeight = 'none';
+    const full = d.root.offsetHeight;
+    if (body) body.style.maxHeight = '';
+    out[k] = { full, win, over };
+  });
+  drawers.splice(keep);
+  host.remove();
+  return out;
+}
+function heightDelta(n) { return n >= 0 ? `省 ${n}px` : `多 ${-n}px`; }
+function cmpNote(k, H) {
+  const h = H[k], base = H.now;
+  const tail = k === 'now'
+    ? `全文高 ${h.full}px · 窗口 ${h.win}px · 正文溢出 ${h.over}px。`
+    : `全文高 ${h.full}px（比基线${heightDelta(base.full - h.full)}）· 窗口 ${h.win}px · 正文溢出 ${h.over}px。`;
+  return {
+    now: `<b>基线。</b>三行两列的表单，控件是「挖下去的格子」。问题不在丑，在于每个字段都要先读一遍标签再读一遍值，13 个控件把 ${WB.width}px 撑成一屏表单。${tail}`,
+    a: `<b>登记卡。</b>控件平时是读数，hover 才浮出可编辑的底；优先级是一把刻度尺；底部常驻写入行。字段标签从 13 个减到 6 个，代价是刻度尺与写入行各占一段纵向。${tail}`,
+    b: `<b>检视器。</b>单列属性表 + 近 7 日刻度条：改截止日不需要开弹层，点一下今天往后的第七格就行。键帽常驻，键盘用户不必猜。${tail}`,
+    c: `<b>源文对照。</b>todo.txt 的那一行摊在顶上，点原文里的 <code>due:</code> 就开日期弹层，悬停字段会点亮它在原文里的那一段。对「纯文本是唯一数据源」这条红线最诚实的一套，原文区是它多出来的那段纵向。${tail}`,
+  }[k];
+}
+function buildCompare(host) {
+  const keys = ['now', 'a', 'b', 'c'];
+  const H = schemeHeights();
+  host.innerHTML = `<div class="stage-h"><h2>并排对照</h2><span class="mono">同一条任务 · 同一组参数 · ${WB.both ? '明暗双份' : WB.theme}</span></div>
+    <div class="compare${WB.both ? ' both' : ''}">${keys.map((k) => `<div class="cmp-col">
+      <div class="cmp-h"><b>${esc(SCHEMES[k].name)}</b><span class="mono">${SCHEMES[k].tag}</span><span class="tagx">${WB.width}px</span></div>
+      <div class="cmp-stage" data-theme="${WB.both ? 'light' : WB.theme}"></div>
+      ${WB.both ? '<div class="cmp-stage" data-theme="dark"></div>' : ''}
+      <p class="cmp-note">${cmpNote(k, H)}</p>
+    </div>`).join('')}</div>`;
+  $$('.cmp-col', host).forEach((col, i) => {
+    $$('.cmp-stage', col).forEach((st) => scaledMount(st, keys[i], WB.seed, 'default', WB.width));
+  });
+}
+function buildStates(host) {
+  host.innerHTML = `<div class="stage-h"><h2>状态矩阵</h2><span class="mono">${esc(SCHEMES[WB.scheme].name)} · 九种状态都是真的，不是截图</span></div>
+    <div class="states">${FORCES.map((f) => `<div class="state-cell">
+      <div class="state-h"><b>${esc(f.label)}</b><span class="mono">${f.id}</span></div>
+      <div class="cmp-stage" data-force="${f.id}" style="width:100%"></div>
+      <p class="state-d">${esc(FORCE_DESC[f.id])}</p>
+    </div>`).join('')}</div>`;
+  $$('.state-cell .cmp-stage', host).forEach((st) => {
+    const d = scaledMount(st, WB.scheme, WB.seed, st.dataset.force, WB.width);
+    if (st.dataset.force === 'closed') {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn btn-primary state-reopen';
+      b.textContent = '重新打开这一条';
+      b.addEventListener('click', () => {
+        act(d, 'reopen'); b.remove();
+        const wrap = d.root.parentElement;
+        wrap.style.width = `${Math.round(WB.width * d.scale)}px`;
+        wrap.style.height = `${Math.round(d.root.offsetHeight * d.scale)}px`;
+        placeLayers(d);
+      });
+      st.appendChild(b);
+    }
+  });
+}
+const SHOTS = [
+  { f: 'a-light.png', n: 'A · 登记卡', m: '浅色 · 400px · 属性齐全' },
+  { f: 'a-dark.png', n: 'A · 登记卡', m: '深色 · 同一条任务' },
+  { f: 'b-light.png', n: 'B · 检视器', m: '浅色 · 近 7 日刻度条' },
+  { f: 'b-dark.png', n: 'B · 检视器', m: '深色 · 键帽常驻' },
+  { f: 'c-light.png', n: 'C · 源文对照', m: '浅色 · 原文 token 可点' },
+  { f: 'c-dark.png', n: 'C · 源文对照', m: '深色 · 卡片浮在凹底上' },
+  { f: 'now-light.png', n: '现行版基线', m: '浅色 · 今天装在机器上的那一版' },
+  { f: 'now-dark.png', n: '现行版基线', m: '深色 · 对照组' },
+  { f: 'compare-light.png', n: '四套并排', m: '浅色 · 同一组参数' },
+  { f: 'compare-dark.png', n: '四套并排', m: '深色 · 同一组参数' },
+  { f: 'states.png', n: '状态矩阵', m: '九种状态 · 守卫与弹层' },
+  { f: 'overdue.png', n: '逾期 · 高优先级', m: '整行唯一强色是逾期红' },
+  { f: 'narrow.png', n: '窄屏 820px', m: '控制轨转横向，仍然常驻' },
+];
+function buildShots(host) {
+  host.innerHTML = `<div class="stage-h"><h2>效果图</h2><span class="mono">由无头 Chrome 从本页实拍 · 2× 像素密度</span></div>
+    <p class="tool-note">这些 PNG 不是画出来的示意，是这份文件在真实浏览器里渲染后截的图（浅色 / 深色都用 <code class="mono">Emulation.setEmulatedMedia</code> 显式钉死）。点任意一张放大。图片与本页同目录：<code class="mono">assets/2026-11-17-重设计/</code>。</p>
+    <div class="shots">${SHOTS.map((s) => `<figure class="shot" style="margin:0" data-src="assets/2026-11-17-重设计/${s.f}">
+      <img src="assets/2026-11-17-重设计/${encodeURI(s.f)}" alt="${esc(s.n)} ${esc(s.m)}" loading="lazy">
+      <figcaption class="shot-f"><b>${esc(s.n)}</b><span class="mono">${esc(s.m)}</span><span class="sp"></span><span class="mono">${s.f}</span></figcaption>
+    </figure>`).join('')}</div>`;
+  $$('.shot img', host).forEach((img) => {
+    img.addEventListener('error', () => {
+      const fig = img.closest('.shot');
+      img.remove();
+      const d = document.createElement('div');
+      d.className = 'shot-miss';
+      d.textContent = '这张还没拍出来 —— 跑一次截图脚本即可';
+      fig.prepend(d);
+    });
+    img.addEventListener('click', () => lightbox(img.src, img.alt));
+  });
+  $$('.shot', host).forEach((fig) => {
+    fig.addEventListener('click', (e) => {
+      if (e.target.closest('img')) return;
+      const im = fig.querySelector('img');
+      if (im) lightbox(im.src, im.alt);
+    });
+  });
+}
+function lightbox(src, alt) {
+  const el = document.createElement('div');
+  el.className = 'lightbox';
+  el.innerHTML = `<img src="${src}" alt="${esc(alt || '')}">`;
+  const close = () => { el.remove(); document.removeEventListener('keydown', esc); };
+  function esc(e) { if (e.key === 'Escape') close(); }
+  el.addEventListener('click', close);
+  document.addEventListener('keydown', esc);
+  document.body.appendChild(el);
+}
+const DOC_HTML = `
+<div class="doc">
+  <h3 style="margin-top:0">为什么这一版要重做</h3>
+  <p>上一轮把编辑浮窗从「一堆控件」收拾成了「一页纸」：字段挖底、刻度 11px（项目原值；本次评审令牌单把刻度压到 10px、值压到 12px）、按钮四族、三行统一 <code>1fr 1fr</code>。这些都对，也都留下了。但它们解决的是<b>整齐</b>，没有解决<b>好用</b>——打开一条任务，眼睛仍要在 13 个控件之间来回跳，每个字段都得先读标签再读值；改一个截止日要开弹层、翻月、点一天、关弹层，四步。</p>
+  <p>这一轮换了一个问法：<b>这扇窗到底是「表单」还是「一条任务的档案」？</b>产品是本地纯文本待办，唯一数据源是 <code>todo.txt</code> 的一行。那么编辑浮窗最诚实的样子，是把那一行摊开给人看、让人改，而不是把它翻译成一张与源文件无关的表单。三套方案都从这个问法长出来，方向不同，但共用同一套令牌、同一套守卫、同一套键盘契约。</p>
+
+  <h3>方向：登记簿里的一张卡</h3>
+  <ul>
+    <li><b>产品</b>：单人自用的本地待办，离线、纯文本、可被 grep / topydo / 记事本往返。</li>
+    <li><b>性格</b>：安静、可核对、有刻度。不喊、不渐变、不发光。</li>
+    <li><b>世界</b>：账簿 / 登记卡 / 源文件。暖纸中性 + 墨绿强调 + 旗标三色 + 逾期红，全部取自 <code>src/index.css §1</code>，明暗两套。</li>
+    <li><b>签名</b>：<code>行号 │ 源文本行</code>，等宽 + tabular-nums。三套里它分别落在底部（A）、不出现（B）、顶部且可点（C）。</li>
+    <li><b>一处亮色</b>：A 的优先级刻度尺、B 的近 7 日条、C 的原文联动。其余全部安静。</li>
+  </ul>
+
+  <h3>三套的取舍</h3>
+  <table class="audit">
+    <thead><tr><th>轴</th><th>A · 登记卡</th><th>B · 检视器</th><th>C · 源文对照</th></tr></thead>
+    <tbody>
+      <tr><td>一句话</td><td>控件平时是读数</td><td>改期不开弹层</td><td>原文即界面</td></tr>
+      <tr><td>字段标签数</td><td>6（刻度列）</td><td>6 + 3 组头</td><td>6（卡片内）</td></tr>
+      <tr><td>纵向开销（全文高 / 窗口高 / 正文溢出，随控制轨实时重测）</td><td data-h="a"></td><td data-h="b"></td><td data-h="c"></td></tr>
+      <tr><td>改截止日</td><td>点读数 → 弹层（2 步）</td><td>点近 7 日一格（1 步）</td><td>点原文 due: → 弹层（2 步）</td></tr>
+      <tr><td>学习成本</td><td>低：仍是表单，只是安静</td><td>中：刻度条要认一次</td><td>中高：要懂 todo.txt 记号</td></tr>
+      <tr><td>最适合</td><td>默认档，所有人</td><td>键盘重度 / 每天排期</td><td>把纯文本当第一公民的人</td></tr>
+      <tr><td>风险</td><td>hover 才浮底，触屏要常驻</td><td>7 天以外的日期仍要弹层</td><td>原文区占高，窄屏要折</td></tr>
+    </tbody>
+  </table>
+  <p>关于纵向开销要说实话：按本次评审令牌单实测，<b>三套的全文高都比基线高</b>，早先稿子里的「省 90px」是在旧字号下量的，已作废。登记卡把「标签＋控件」换成「刻度列＋读数行＋写入行」，段数少了、每段却更高；而且题头读数条与写入行都落在正文上限之外，所以<b>窗口比基线高一截、正文要滚的像素却更少</b>（C 例外：原文区在正文里，滚得最多）。上表三个数都是当场量的，随控制轨实时变。这一轮换到的不是高度，是<b>扫读成本</b>：标签从 13 个减到 6 个，眼睛不必在每个字段上停两次。</p>
+  <p>我的推荐：<b>A 做默认</b>，把 B 的近 7 日条作为 A 的日期弹层顶部快捷区吸收进来，C 的原文联动作为 A 底部写入行的可选增强（悬停字段点亮原文）。这样只维护一套版式，三套的好处都拿到。控制轨里的「方案」开关就是用来当场比较这个判断的。</p>
+
+  <h3>共用契约（三套都不许破）</h3>
+  <ul>
+    <li>宽度恒 <code>--edit-window-w</code>：<code>min-width:0</code> + <code>flex:0 0 var(--edit-window-w)</code>，窄边不改 100%。项目现行契约是 392px；<b>本次评审令牌单取 400px</b>，本页所有样张与实测都按 400 走 —— 若拍板落地，须同步改 <code>AGENTS.md</code> 与版式契约测试里的 392 断言，不能只改 CSS。</li>
+    <li>底栏 40px / 按钮 28px；全窗只有「保存」一枚实心块；删除是红字不红框，第二下才转实心。</li>
+    <li>空标题不许保存：<code>.is-error</code> + 焦点回标题，按钮<b>不禁用</b>。</li>
+    <li>有改动才多问一句：<code>formSignature()</code> 只取 save 会写回的字段；「继续编辑」是绿色那枚。</li>
+    <li>Esc 逐层退出：放弃确认 → 菜单 → 日期弹层 → 行内编辑 → 删除待确认 → 关窗。</li>
+    <li>优先级是 radiogroup + roving tabindex，整组只停一次 Tab；选中档只上底色，不画内描边。</li>
+    <li>重复档位是自绘下拉，复用候选清单的样式；手写值动态补「当前值」，不静默改成从不。</li>
+    <li>日期 / 时刻形状锁死 <code>due: YYYY-MM-DD</code> / <code>rem: YYYY-MM-DDTHH:mm</code>；界面读数 <code>YYYY/MM/DD</code>。</li>
+    <li>颜色只编码状态：逾期是整行唯一强色，accent 只表选中 / 今天 / 焦点；旗标三色是用户自己打的记号。</li>
+    <li>不引 webfont、不引 jsdom、不换数据源、不把偏好写进 <code>todo.txt</code>。</li>
+  </ul>
+
+  <h3>落地顺序</h3>
+  <table class="audit">
+    <thead><tr><th>档</th><th>做什么</th><th>动哪里</th><th>门禁影响</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill p0">P0</span></td><td>A 的刻度行版式 + 读数态控件（hover 浮底、触屏常驻）</td><td><span class="where">EditDrawer.jsx / index.css §edit-window</span></td><td>qa-css-check 需补 tokens；qa-contrast 增「读数态」两条</td></tr>
+      <tr><td><span class="pill p0">P0</span></td><td>底部写入行常驻（只读预览，按 serializeTask 顺序）</td><td><span class="where">新增 SourceLine.jsx（纯展示）</span></td><td>新增渲染测试；不动解析器</td></tr>
+      <tr><td><span class="pill p1">P1</span></td><td>日期弹层顶部吸收近 7 日条</td><td><span class="where">DateField.jsx + lib/dateField.js</span></td><td>qa-settings 日历段不受影响；补 dateField 单测</td></tr>
+      <tr><td><span class="pill p1">P1</span></td><td>优先级刻度尺替换分段控件（保留 radiogroup 契约）</td><td><span class="where">PriorityMark.jsx 增 variant="ruler"</span></td><td>Tab 停靠点数不变；qa-hooks 需复跑</td></tr>
+      <tr><td><span class="pill p2">P2</span></td><td>原文 token ↔ 字段双向点亮（C 的增强）</td><td><span class="where">SourceLine.jsx + EditDrawer 悬停态</span></td><td>纯视图态，不落盘；补渲染测试</td></tr>
+      <tr><td><span class="pill p2">P2</span></td><td>键帽速查进浮窗底栏上方（B 的做法）</td><td><span class="where">EditDrawer.jsx</span></td><td>设置页「只读」速查仍是唯一权威，这里只放三枚</td></tr>
+    </tbody>
+  </table>
+
+  <h3>这份文件自己是什么</h3>
+  <p>一个零依赖的单文件工作台：令牌抄自项目、四套浮窗都是<b>真的可交互</b>（改标题、勾子任务、开下拉、选日期、走守卫），右侧取证栏的对比度是<b>当场算的 WCAG 2.1</b>，不是写死的数字。「跑一遍自检」会在离屏挂载真实组件后逐条断言，结果直接列出来。它不改 <code>src/</code> 任何一行，也不联网。</p>
+</div>`;
+function buildDoc(host) {
+  host.innerHTML = `<div class="stage-h"><h2>审计与说明</h2><span class="mono">方向 · 取舍 · 契约 · 落地顺序</span></div>${DOC_HTML}`;
+  const H = schemeHeights();
+  $$('[data-h]', host).forEach((td) => {
+    const k = td.dataset.h, h = H[k];
+    td.textContent = `${h.full}px / ${h.win}px / 溢出 ${h.over}px（比基线${heightDelta(H.now.full - h.full)}）`;
+  });
+}
+function buildView() {
+  clearDrawers();
+  $$('.view').forEach((v) => v.classList.remove('on'));
+  const host = $(`#view-${WB.view}`);
+  host.classList.add('on');
+  if (WB.view === 'detail') buildDetail(host);
+  else if (WB.view === 'compare') buildCompare(host);
+  else if (WB.view === 'states') buildStates(host);
+  else if (WB.view === 'shots') buildShots(host);
+  else buildDoc(host);
+}
+
+/* ==========================================================================
+   K · 控制轨：常驻可见，全部实时生效
+   ========================================================================== */
+const RAIL = [
+  {
+    h: '样张', items: [
+      { p: 'scheme', label: '方案', type: 'seg', wrap: true, opts: Object.keys(SCHEMES).map((k) => ({ v: k, l: SCHEMES[k].name })) },
+      { p: 'seed', label: '演示任务', type: 'seg', wrap: true, opts: SEED_KEYS.map((k) => ({ v: k, l: SEEDS[k].name })) },
+      { p: 'force', label: '强制状态', type: 'seg', wrap: true, opts: FORCES.map((f) => ({ v: f.id, l: f.label })) },
+    ],
+  },
+  {
+    h: '尺寸与密度', items: [
+      { p: 'width', label: '窗口宽', type: 'rng', min: 320, max: 520, step: 4, unit: 'px' },
+      { p: 'dens', label: '阅读密度', type: 'rng', min: 80, max: 130, step: 2, unit: '%' },
+      { p: 'fsVal', label: '正文字号', type: 'rng', min: 11, max: 16, step: 1, unit: 'px' },
+      { p: 'fsLabel', label: '刻度字号', type: 'rng', min: 9, max: 13, step: 1, unit: 'px' },
+      { p: 'radius', label: '圆角', type: 'rng', min: 0, max: 14, step: 1, unit: 'px' },
+      { p: 'maxh', label: '正文最大高', type: 'rng', min: 380, max: 760, step: 10, unit: 'px' },
+    ],
+  },
+  {
+    h: '颜色与材质', items: [
+      { p: 'ctl', label: '控件描边', type: 'clr', hint: '明暗共用一枚' },
+      { p: 'scrim', label: '遮罩浓度', type: 'rng', min: 0, max: 70, step: 1, unit: '%' },
+      { p: 'fieldBg', label: '字段挖底', type: 'sw' },
+      { p: 'prioColor', label: '优先级彩色', type: 'sw' },
+      { p: 'ruled', label: '备注横线', type: 'sw' },
+      { p: 'preview', label: '写入行预览', type: 'sw' },
+      { p: 'grid', label: '4px 栅格', type: 'sw' },
+    ],
+  },
+  {
+    h: '动效', items: [
+      { p: 'motion', label: '过渡与入场', type: 'sw' },
+      { p: 'dur', label: '时长', type: 'rng', min: 0, max: 400, step: 10, unit: 'ms' },
+    ],
+  },
+];
+function buildRail() {
+  const groups = RAIL.map((g) => `<div class="grp"><div class="grp-h">${esc(g.h)}</div>${g.items.map((it) => {
+    if (it.type === 'seg') {
+      return `<div class="ctl"><span class="ctl-l">${esc(it.label)}</span><span class="ctl-v" data-v="${it.p}"></span>
+        <div class="seg wide ctl-full${it.wrap ? ' wrap' : ''}" role="group" aria-label="${esc(it.label)}">
+          ${it.opts.map((o) => `<button type="button" data-p="${it.p}" data-v="${esc(o.v)}" aria-pressed="false">${esc(o.l)}</button>`).join('')}
+        </div></div>`;
+    }
+    if (it.type === 'clr') {
+      return `<div class="ctl"><span class="ctl-l">${esc(it.label)}${it.hint ? ` <span class="mono" style="font-size:10px;color:var(--muted)">${esc(it.hint)}</span>` : ''}</span>
+        <span class="ctl-v mono" data-v="${it.p}"></span>
+        <div class="clr-row ctl-full">
+          <input class="clr" type="color" data-p="${it.p}" aria-label="${esc(it.label)}">
+          <button type="button" class="clr-pre" data-ctl="#837f75" title="项目浅色原值">#837f75</button>
+          <button type="button" class="clr-pre" data-ctl="#77736a" title="项目深色原值">#77736a</button>
+        </div></div>`;
+    }
+    if (it.type === 'rng') {
+      return `<div class="ctl"><span class="ctl-l">${esc(it.label)}${it.hint ? ` <span class="mono" style="font-size:10px;color:var(--muted)">${esc(it.hint)}</span>` : ''}</span>
+        <span class="ctl-v" data-v="${it.p}"></span>
+        <input class="rng ctl-full" type="range" data-p="${it.p}" min="${it.min}" max="${it.max}" step="${it.step}" aria-label="${esc(it.label)}"></div>`;
+    }
+    return `<div class="ctl"><label class="sw"><input type="checkbox" data-p="${it.p}"><i></i><span>${esc(it.label)}</span></label><span class="ctl-v" data-v="${it.p}"></span></div>`;
+  }).join('')}</div>`).join('');
+  $('#rail').innerHTML = groups + `<div class="grp"><div class="grp-h">动作</div>
+    <div class="ctl"><label class="sw"><input type="checkbox" data-p="both"><i></i><span>并排视图明暗双份</span></label><span class="ctl-v" data-v="both"></span></div>
+    <div class="rail-act">
+      <button type="button" class="btn btn-sm" id="btnReset">${ic('reset', 14)}重置</button>
+      <button type="button" class="btn btn-sm" id="btnRandom">${ic('shuffle', 14)}随机一组</button>
+      <button type="button" class="btn btn-sm" id="btnExportRail">${ic('download', 14)}导出 HTML</button>
+      <button type="button" class="btn btn-sm" id="btnTokensRail">${ic('copy', 14)}复制令牌</button>
+    </div>
+    <p class="tool-note" style="margin-top:10px">左侧每一枚都当场生效。浮窗里的字段也都能改：改标题、勾子任务、开下拉、选日期、走守卫，全是真的。</p>
+  </div>`;
+}
+function syncRail() {
+  $$('#rail [data-p]').forEach((el) => {
+    const p = el.dataset.p;
+    if (el.tagName === 'BUTTON') el.setAttribute('aria-pressed', String(WB[p] === el.dataset.v));
+    else if (el.type === 'checkbox') el.checked = Boolean(WB[p]);
+    else if (el.type === 'range') el.value = WB[p];
+    else if (el.type === 'color') el.value = WB[p];
+  });
+  $$('#rail [data-v]').forEach((el) => {
+    const p = el.dataset.v;
+    if (el.classList.contains('ctl-v')) {
+      const it = RAIL.flatMap((g) => g.items).find((x) => x.p === p);
+      if (it && it.type === 'rng') el.textContent = `${WB[p]}${it.unit}`;
+      else if (it && it.type === 'clr') el.textContent = WB[p];
+      else if (it && it.type === 'seg') el.textContent = '';
+      else el.textContent = WB[p] ? '开' : '关';
+    }
+  });
+}
+function syncTop() {
+  $('#viewTabs').innerHTML = VIEWS.map((v) => `<button type="button" role="tab" data-view="${v.id}" aria-selected="${WB.view === v.id}">${esc(v.label)}</button>`).join('');
+  $('#themeSeg').innerHTML = [['light', 'sun', '浅色'], ['dark', 'moon', '深色']].map(([v, i, l]) => `<button type="button" data-theme="${v}" aria-pressed="${WB.theme === v}">${ic(i, 14)}${l}</button>`).join('');
+  $('#btnExport').innerHTML = `${ic('download', 14)}导出`;
+  $('#btnTokens').innerHTML = `${ic('copy', 14)}令牌`;
+  $('#btnPrint').innerHTML = `${ic('printer', 14)}打印`;
+}
+function refresh() { applyParams(); buildView(); syncRail(); syncTop(); measureNotes(); }
+
+/* ==========================================================================
+   L · 取证：实测尺寸 + 当场算的对比度
+   ========================================================================== */
+const POINTS = {
+  now: ['13 个控件、6 个标签都要读一遍', '改截止日：开弹层 → 翻月 → 点一天 → 关', '守卫齐全，但版式把「一条任务」读成了「一张表单」'],
+  a: ['控件平时是读数，hover 才浮出可编辑的底', '优先级是一把刻度尺，选中档下方一道本色刻度', '底部常驻写入行：保存前就能看见要写进文件的那一行'],
+  b: ['近 7 日刻度条：改期一步到位，不必开弹层', '单列属性表 + 三组发丝线组头，扫读路径只有一条', '键帽常驻底栏上方，Tab 停靠点当场数给你看'],
+  c: ['原文摊在顶上，点 due: 就开日期弹层', '悬停字段点亮它在原文里的那一段，双向', '卡片浮在凹底上：分组靠高度差，不靠描边堆叠'],
+};
+const CHECKS = [
+  { n: '标题', sel: '.dw-title', min: 4.5, fb: ['--text', '--surface'] },
+  { n: '刻度标签', sel: '.key', min: 4.5, fb: ['--muted', '--surface'] },
+  { n: '字段读数', sel: '.a-edit,.b-val,.c-edit,.ctlbox', min: 4.5, fb: ['--text', '--field-bg'] },
+  { n: '控件描边', sel: '.ctlbox,.prio-seg,.c-edit', min: 3, border: true, fb: ['--control-line', '--field-bg'] },
+  { n: '优先级·选中', sel: '.prio-seg button.sel,.a-prio button.sel,.c-prio button.sel', min: 4.5, fb: ['--flag-mid-ink', '--flag-mid-soft'] },
+  { n: '旗标图形', sel: '.flag.prio-high', min: 3, fb: ['--flag-high', '--surface'] },
+  { n: '逾期读数', sel: '.is-overdue', min: 4.5, fb: ['--danger', '--danger-soft'] },
+  { n: '保存按钮', sel: '.dw-foot .btn-primary', min: 4.5, fb: ['--accent-fg', '--accent'] },
+  { n: '写入行', sel: '.src-line', min: 4.5, fb: ['--text-2', '--sheet-bg'] },
+  { n: '键帽', sel: '.kc', min: 4.5, fb: ['--text-2', '--keycap-bg'] },
+  { n: '胶囊', sel: '.chip', min: 4.5, fb: ['--text-2', '--surface-2'] },
+  { n: '备注纸页', sel: '.note-paper', min: 4.5, fb: ['--text-2', '--sheet-bg'] },
+  { n: '读数 / 窗底', sel: '.a-read,.b-day,.chip', min: 1.12, step: true, fb: ['--border', '--surface'] },
+];
+function opaqueBg(el) {
+  let n = el;
+  while (n && n.nodeType === 1) {
+    const c = getComputedStyle(n).backgroundColor;
+    const m = /rgba?\(([^)]+)\)/.exec(c);
+    if (m) { const p = m[1].split(',').map((x) => parseFloat(x)); if (p.length < 4 || p[3] > 0.05) return c; }
+    n = n.parentElement;
+  }
+  return cssVar('--surface');
+}
+function primaryDrawer() {
+  return drawers.find((d) => d.scheme === WB.scheme && !d.ui.closed) || drawers.find((d) => !d.ui.closed) || drawers[0] || null;
+}
+function contrastReport(d) {
+  return CHECKS.map((c) => {
+    const el = d && d.root ? d.root.querySelector(c.sel) : null;
+    let fg, bg, live = false, r0 = null;
+    if (el) {
+      const cs = getComputedStyle(el);
+      if (c.step) {
+        bg = opaqueBg(el.parentElement);
+        const fill = ratio(opaqueBg(el), bg);
+        const line = ratio(cs.borderTopColor, bg);
+        fg = line >= fill ? cs.borderTopColor : opaqueBg(el);
+        r0 = Math.max(fill, line);
+      }
+      else {
+        fg = c.border ? (cs.borderTopColor || cs.borderBottomColor) : cs.color;
+        bg = opaqueBg(el);
+        if (c.border) { const alt = opaqueBg(el.parentElement); if (ratio(fg, alt) < ratio(fg, bg)) bg = alt; }
+      }
+      live = true;
+    } else { fg = cssVar(c.fb[0]); bg = cssVar(c.fb[1]); }
+    const r = r0 != null ? r0 : ratio(fg, bg);
+    return { ...c, fg, bg, r, live, ok: r >= c.min };
+  });
+}
+function measureNotes() {
+  const d = primaryDrawer();
+  const s = SCHEMES[WB.scheme];
+  const set = (id, html) => { const el = $(id); if (el) el.innerHTML = html; };
+  set('#n-scheme', esc(s.name));
+  set('#n-tag', esc(s.tag));
+  set('#n-idea', esc(s.idea));
+  set('#n-points', POINTS[WB.scheme].map((x) => `<li>${esc(x)}</li>`).join(''));
+  if (!d || !d.root) {
+    set('#n-meas', '<dt>当前视图</dt><dd>没有活体浮窗</dd>');
+    set('#n-when', 'token');
+  } else {
+    const root = d.root, body = root.querySelector('.dw-body');
+    const cs = getComputedStyle(root);
+    const title = root.querySelector('.dw-title');
+    const key = root.querySelector('.key');
+    const row = root.querySelector('.a-row,.b-row');
+    const over = body ? Math.max(0, body.scrollHeight - body.clientHeight) : 0;
+    const src = root.querySelector('.src-line');
+    const items = [
+      ['窗口宽 × 高', `${root.offsetWidth} × ${root.offsetHeight}`],
+      ['正文滚动', over ? `溢出 ${over}px` : '无溢出'],
+      ['Tab 停靠点', `${focusables(root).length}`],
+      ['可开合字段', `${$$('[data-anchor]', root).length}`],
+      ['标题字号', title ? getComputedStyle(title).fontSize : '—'],
+      ['刻度字号', key ? getComputedStyle(key).fontSize : '—'],
+      ['刻度行高', row ? `${Math.round(row.getBoundingClientRect().height / (d.scale || 1))}px` : '—'],
+      ['控件描边', cs.getPropertyValue('--ctl-line').trim() || cssVar('--ctl-line')],
+      ['写入行字符', src ? `${src.textContent.trim().length}` : '未启用'],
+      ['子任务', `${subDone(d)}/${d.subs.length}`],
+      ['脏标记', dirtyOf(d) ? '未保存' : '干净'],
+    ];
+    set('#n-meas', items.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join(''));
+    set('#n-when', `${WB.theme} · live`);
+  }
+  const rep = contrastReport(d);
+  set('#n-ct', `<thead><tr><th>配对</th><th>比值</th><th>判定</th></tr></thead><tbody>${rep.map((x) => `<tr>
+    <td><span class="swatch" style="background:${esc(x.fg)}"></span><span class="swatch" style="background:${esc(x.bg)}"></span>${esc(x.n)}${x.live ? '' : ' <span class="mono" style="opacity:.6">token</span>'}</td>
+    <td class="n">${x.r.toFixed(2)}</td>
+    <td class="${x.ok ? 'ok' : 'bad'}">${x.ok ? '≥' : '<'}${x.min}</td></tr>`).join('')}</tbody>`);
+  const bad = rep.filter((x) => !x.ok);
+  set('#n-ct-sum', bad.length ? `有 ${bad.length} 对不达标：${bad.map((x) => x.n).join('、')}。用控制轨「控件描边」的取色器换一枚更深的色（或点旁边的预设），或切到深色再看。` : `全部 ${rep.length} 对达标（正文 ≥4.5，图形 / 描边 ≥3）。数值是从${d ? '活体元素的 computed style' : '令牌'}当场算的。`);
+  renderTestResults();
+}
+
+/* ==========================================================================
+   M · 自检：离屏挂载真实组件，逐条断言
+   ========================================================================== */
+let TESTS = null;
+function runSelfTest(theme) {
+  const keep = drawers.length;
+  const host = document.createElement('div');
+  host.setAttribute('data-theme', theme || WB.theme);
+  host.style.cssText = 'position:fixed;left:0;top:0;width:560px;opacity:0;pointer-events:none;z-index:-1';
+  document.body.appendChild(host);
+  const res = [];
+  const t = (name, fn) => {
+    try { const r = fn(); res.push({ name, ok: r === true, detail: r === true ? '通过' : (typeof r === 'string' ? r : '断言不成立') }); }
+    catch (err) { res.push({ name, ok: false, detail: String((err && err.message) || err) }); }
+  };
+  const hosts = [host];
+  const mk = (scheme) => {
+    const h = document.createElement('div');
+    h.setAttribute('data-theme', theme || WB.theme);
+    h.style.cssText = 'position:fixed;left:0;top:0;width:560px;opacity:0;pointer-events:none;z-index:-1';
+    document.body.appendChild(h); hosts.push(h);
+    const d = makeDrawer(scheme || 'a', 'quant', {}); mount(d, h); return d;
+  };
+  const fake = (i) => ({ dataset: { i: String(i) } });
+
+  t('空标题保存被拦，按钮不禁用', () => {
+    const d = mk(); d.form.title = '   '; act(d, 'save');
+    const btn = d.root.querySelector('[data-act="save"]');
+    return (d.ui.titleError && !d.ui.closed && !btn.disabled) || 'titleError/关闭态/禁用态不符';
+  });
+  t('有标题保存即落盘并收窗', () => {
+    const d = mk(); act(d, 'save');
+    return (d.ui.closed && !dirtyOf(d)) || '未收窗或指纹未更新';
+  });
+  t('删除要点两下', () => {
+    const d = mk(); act(d, 'del');
+    const first = d.ui.armed && !d.ui.closed;
+    act(d, 'del');
+    return (first && d.ui.closed) || '第一下就删了 / 第二下没删';
+  });
+  t('有改动关闭 → 放弃修改？', () => {
+    const d = mk(); d.form.title += '（改）'; act(d, 'close');
+    const asked = d.ui.ask && !d.ui.closed;
+    act(d, 'ask-keep');
+    return (asked && !d.ui.ask && !d.ui.closed) || '确认层或继续编辑不符';
+  });
+  t('放弃修改真的回滚', () => {
+    const d = mk(); d.form.priority = 'A'; act(d, 'close'); act(d, 'ask-discard');
+    return (d.ui.closed && d.form.priority === d.seed.priority) || '字段没回到开窗时的值';
+  });
+  t('重复下拉保留手写当前值', () => {
+    const d = mk(); d.form.rec = '+2w'; act(d, 'rec-menu');
+    const labels = $$('.menu-opt .nm', d.root).map((x) => x.textContent);
+    return (labels.length === 5 && labels.includes('每 2 周')) || `档位=${labels.join('/')}`;
+  });
+  t('选一天 → due 形状锁死', () => {
+    const d = mk(); act(d, 'date-open', 'due');
+    const target = iso(addDays(TODAY, 5)); act(d, 'day', target);
+    return (d.form.due === target && /^\d{4}-\d{2}-\d{2}$/.test(d.form.due)) || `due=${d.form.due}`;
+  });
+  t('提醒 ±15 分钟 → rem 形状锁死', () => {
+    const d = mk(); act(d, 'date-open', 'rem'); act(d, 'tstep', 15);
+    const stepped = d.form.rem.endsWith('T09:45');
+    act(d, 'day', iso(TODAY));
+    return (stepped && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(d.form.rem)) || `rem=${d.form.rem}`;
+  });
+  t('子任务 增 / 勾 / 删', () => {
+    const d = mk(); const n0 = d.subs.length;
+    act(d, 'sub-add-start'); d.ui.subText = '新增一条'; act(d, 'sub-add');
+    const n1 = d.subs.length; const last = d.subs[n1 - 1];
+    act(d, 'sub-toggle', last.id); const done = last.done;
+    act(d, 'sub-del', last.id);
+    return (n1 === n0 + 1 && done && d.subs.length === n0) || `数量 ${n0}→${n1}→${d.subs.length}`;
+  });
+  t('分类 增 / 删', () => {
+    const d = mk(); act(d, 'tag-add', 'ctx'); d.ui.tagText = '复盘'; commitTag(d);
+    const added = d.form.contexts.includes('复盘');
+    act(d, 'tag-rm', 'ctx', fake(d.form.contexts.indexOf('复盘')));
+    return (added && !d.form.contexts.includes('复盘')) || '增删不符';
+  });
+  t('写入行顺序 = serializeTask', () => {
+    const d = mk(); const s = d.seed, f = d.form;
+    const want = `(B) ${s.created} ${f.title} @投资 +回测 +量化 due:${f.due} t:${s.threshold} rem:${f.rem} rec:${f.rec} id:${s.stableId}`;
+    const got = d.root.querySelector('.src-line').textContent.replace(/\s+/g, ' ').trim();
+    return got === want || `得到「${got}」`;
+  });
+  t('Tab 焦点陷阱不逃出窗口', () => {
+    const d = mk(); const list = focusables(d.root);
+    return (list.length >= 10 && list.every((el) => d.root.contains(el))) || `停靠点=${list.length}`;
+  });
+  t('优先级整组只停一次 Tab', () => {
+    const d = mk(); const g = d.root.querySelector('.a-prio');
+    const zeros = $$('button', g).filter((b) => b.tabIndex === 0).length;
+    return zeros === 1 || `tabIndex=0 的段数=${zeros}`;
+  });
+  t('日期弹层不越出视口', () => {
+    const d = mk(); act(d, 'date-open', 'due');
+    const r = d.root.querySelector('.dpop').getBoundingClientRect();
+    return (r.width > 0 && r.right <= window.innerWidth + 1 && r.bottom <= window.innerHeight + 1 && r.left >= -1) || `rect=${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.right)},${Math.round(r.bottom)}`;
+  });
+  t('深色下对比度全达标', () => {
+    const dark = document.createElement('div');
+    dark.setAttribute('data-theme', 'dark');
+    dark.style.cssText = 'position:fixed;left:0;top:0;width:560px;opacity:0;pointer-events:none;z-index:-1';
+    document.body.appendChild(dark);
+    const d = makeDrawer('a', 'reimburse', {}); mount(d, dark);
+    const bad = contrastReport(d).filter((x) => x.live && !x.ok);
+    dark.remove();
+    return bad.length === 0 || `不达标：${bad.map((x) => `${x.n} ${x.r.toFixed(2)}`).join('、')}`;
+  });
+  t('三套都能渲染且无空壳', () => {
+    const out = [];
+    ['now', 'a', 'b', 'c'].forEach((k) => {
+      const d = mk(k);
+      const n = focusables(d.root).length;
+      if (n < 8 || !d.root.querySelector('.dw-foot')) out.push(`${k}:${n}`);
+    });
+    return out.length === 0 || `控件不足：${out.join('、')}`;
+  });
+
+  drawers.splice(keep);
+  hosts.forEach((h) => h.remove());
+  TESTS = { theme: theme || WB.theme, res, at: new Date() };
+  renderTestResults();
+  const pass = res.filter((x) => x.ok).length;
+  toast(`自检 ${pass}/${res.length} 通过`, TESTS.theme);
+  return TESTS;
+}
+function renderTestResults() {
+  const tb = $('#n-test'), sum = $('#n-test-sum');
+  if (!tb) return;
+  if (!TESTS) { tb.innerHTML = ''; if (sum) sum.textContent = '未跑'; return; }
+  const pass = TESTS.res.filter((x) => x.ok).length;
+  if (sum) sum.textContent = `${pass}/${TESTS.res.length} · ${TESTS.theme}`;
+  tb.innerHTML = `<tbody>${TESTS.res.map((x) => `<tr><td>${esc(x.name)}</td><td class="${x.ok ? 'ok' : 'bad'}" style="text-align:right">${x.ok ? '通过' : '失败'}</td></tr>${x.ok ? '' : `<tr><td colspan="2" class="mono" style="color:var(--danger);font-size:10px">${esc(x.detail)}</td></tr>`}`).join('')}</tbody>`;
+}
+
+/* ==========================================================================
+   N · 带走：导出单文件 / 复制令牌 / 打印
+   ========================================================================== */
+function download(name, text, mime) {
+  const blob = new Blob([text], { type: mime || 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1200);
+}
+function exportHTML() {
+  const clone = document.documentElement.cloneNode(true);
+  $$('script', clone).forEach((n) => n.remove());
+  $$('.rail,.notes,.top,.foot,.toasts,.lightbox', clone).forEach((n) => n.remove());
+  $$('.view', clone).forEach((n) => { if (n.id !== `view-${WB.view}`) n.remove(); else n.classList.add('on'); });
+  $$('[data-menu],[data-pop],.ask,.gridlay', clone).forEach((n) => n.remove());
+  $$('.dw', clone).forEach((n) => { n.classList.remove('has-pop'); n.style.display = ''; });
+  $$('.reopen', clone).forEach((n) => n.remove());
+  clone.setAttribute('data-theme', WB.theme);
+  const st = document.createElement('style');
+  st.textContent = '.shell{display:block}.stage{padding:24px}.dw{animation:none}'
+    + '.cmp-stage .dw,.state-cell .dw{transform:none!important;width:var(--edit-window-w)!important;max-width:100%!important}'
+    + '.dw-scale{width:auto!important;height:auto!important}';
+  clone.querySelector('head').appendChild(st);
+  const name = `编辑浮窗-${WB.scheme}-${WB.theme}.html`;
+  download(name, `<!DOCTYPE html>\n${clone.outerHTML}`, 'text/html;charset=utf-8');
+  toast('已导出单文件', name);
+}
+function tokenText() {
+  const root = document.documentElement;
+  const grab = (sel) => {
+    const probe = document.createElement('div');
+    probe.setAttribute('style', 'position:absolute;visibility:hidden');
+    if (sel) probe.setAttribute('data-theme', sel);
+    document.body.appendChild(probe);
+    const cs = getComputedStyle(probe);
+    const names = ['--bg', '--surface', '--surface-2', '--surface-3', '--border', '--border-strong', '--control-line', '--field-bg', '--text', '--text-2', '--muted', '--flag-high', '--flag-mid', '--flag-low', '--flag-high-soft', '--flag-mid-soft', '--flag-low-soft', '--flag-mid-ink', '--accent', '--accent-fg', '--accent-soft', '--danger', '--danger-soft', '--warn', '--ok', '--sheet-bg', '--sheet-line', '--sheet-gutter', '--sheet-no', '--keycap-bg', '--keycap-line'];
+    const out = names.map((n) => `  ${n}: ${cs.getPropertyValue(n).trim()};`).join('\n');
+    probe.remove();
+    return out;
+  };
+  return `/* 取自 todolist-gui/src/index.css §1，明暗两套 */\n:root{\n${grab(null)}\n}\n:root[data-theme="dark"]{\n${grab('dark')}\n}\n\n/* 本次评审用的可调参数 */\n:root{\n  --edit-window-w: ${WB.width}px;\n  --dens: ${(WB.dens / 100).toFixed(3)};\n  --fs-val: ${WB.fsVal}px;\n  --fs-label: ${WB.fsLabel}px;\n  --r: ${WB.radius}px;\n  --ctl-line: ${cssVar('--ctl-line', root)};\n  --scrim: ${(WB.scrim / 100).toFixed(2)};\n  --dur: ${WB.dur}ms;\n  --dw-maxh: ${WB.maxh}px;\n}\n`;
+}
+function copyTokens() {
+  const text = tokenText();
+  const done = () => toast('令牌已复制', `${text.split('\n').length} 行`);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done));
+  } else fallbackCopy(text, done);
+}
+function fallbackCopy(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); done(); } catch (_) { toast('复制失败', '请手动选择'); }
+  ta.remove();
+}
+const rint = (a, b, s = 1) => a + Math.round((Math.random() * (b - a)) / s) * s;
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+function randomize() {
+  WB.scheme = pick(['a', 'b', 'c']);
+  WB.seed = pick(SEED_KEYS);
+  WB.width = rint(340, 460, 4);
+  WB.dens = rint(88, 118, 2);
+  WB.fsVal = rint(12, 15);
+  WB.fsLabel = rint(10, 12);
+  WB.radius = pick([4, 6, 8]);
+  WB.ctl = pick(['#6b675f', '#837f75', '#77736a', '#525047', '#8a867c', '#45433d']);
+  WB.scrim = rint(18, 52);
+  WB.maxh = rint(420, 680, 10);
+  WB.force = 'default';
+  refresh();
+  toast('随机了一组参数', `${SCHEMES[WB.scheme].name} · ${WB.width}px`);
+}
+function resetAll() { Object.assign(WB, DEFAULTS); refresh(); toast('已回到评审基线', '400px · 12/10 · r6 · 480'); }
+
+/* ==========================================================================
+   O · 启动
+   ========================================================================== */
+function boot() {
+  buildRail();
+  $('#notes').innerHTML = `
+    <div class="n-card"><h3>${ic('sliders', 14)}<span id="n-scheme"></span><span class="mono" id="n-tag"></span></h3><p id="n-idea"></p><ul id="n-points"></ul></div>
+    <div class="n-card"><h3>${ic('ruler', 14)}实测<span class="mono" id="n-when"></span></h3><dl class="meas" id="n-meas"></dl></div>
+    <div class="n-card"><h3>${ic('eye', 14)}对比度 · 当场算<span class="mono">WCAG 2.1</span></h3><table class="ct" id="n-ct"></table><p id="n-ct-sum" style="margin-top:8px"></p></div>
+    <div class="n-card"><h3>${ic('checkCircle', 14)}自检<span class="mono" id="n-test-sum"></span></h3>
+      <div class="n-actions"><button class="btn btn-sm btn-primary" id="btnTest" type="button">跑一遍自检</button><button class="btn btn-sm" id="btnTestDark" type="button">深色再跑</button></div>
+      <table class="ct" id="n-test" style="margin-top:10px"></table></div>
+    <div class="n-card"><h3>${ic('download', 14)}带走</h3>
+      <div class="n-actions"><button class="btn btn-sm" id="btnExport2" type="button">导出样张 HTML</button><button class="btn btn-sm" id="btnTokens2" type="button">复制令牌</button><button class="btn btn-sm" id="btnPrint2" type="button">打印 / PDF</button></div>
+      <p style="margin-top:8px">PNG 效果图在「效果图」页，由无头 Chrome 从本页实拍。</p></div>`;
+  refresh();
+
+  $('#rail').addEventListener('input', (e) => {
+    const el = e.target.closest('[data-p]'); if (!el) return;
+    const p = el.dataset.p;
+    WB[p] = el.type === 'checkbox' ? el.checked : (el.type === 'color' ? el.value : Number(el.value));
+    if (p === 'both' || (p === 'width' && (WB.view === 'compare' || WB.view === 'states'))) { refresh(); return; }
+    applyParams(); syncRail(); renderAll(); measureNotes();
+  });
+  $('#rail').addEventListener('click', (e) => {
+    const pre = e.target.closest('button[data-ctl]');
+    if (pre) { WB.ctl = pre.dataset.ctl; applyParams(); syncRail(); renderAll(); measureNotes(); return; }
+    const el = e.target.closest('button[data-p]'); if (!el) return;
+    WB[el.dataset.p] = el.dataset.v;
+    refresh();
+  });
+  $('#viewTabs').addEventListener('click', (e) => {
+    const el = e.target.closest('[data-view]'); if (!el) return;
+    WB.view = el.dataset.view; refresh();
+  });
+  $('#themeSeg').addEventListener('click', (e) => {
+    const el = e.target.closest('[data-theme]'); if (!el) return;
+    WB.theme = el.dataset.theme; applyParams(); syncTop(); measureNotes();
+  });
+  const wire = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
+  ['#btnExport', '#btnExport2', '#btnExportRail'].forEach((id) => wire(id, exportHTML));
+  ['#btnTokens', '#btnTokens2', '#btnTokensRail'].forEach((id) => wire(id, copyTokens));
+  ['#btnPrint', '#btnPrint2'].forEach((id) => wire(id, () => window.print()));
+  wire('#btnReset', resetAll);
+  wire('#btnRandom', randomize);
+  wire('#btnTest', () => runSelfTest(WB.theme));
+  wire('#btnTestDark', () => runSelfTest('dark'));
+  let rz = 0;
+  window.addEventListener('resize', () => {
+    clearTimeout(rz);
+    rz = setTimeout(() => { if (WB.view === 'compare' || WB.view === 'states') buildView(); measureNotes(); }, 220);
+  });
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
+</script>
+</body>
+</html>

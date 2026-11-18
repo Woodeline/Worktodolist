@@ -1,0 +1,867 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>编辑浮窗 · UI 优化方案（2026-11-17）</title>
+<style>
+/* ============================================================================
+   文档外壳（不进 src/index.css，不影响产品）
+   基准：src/index.css §1 令牌层（暖纸面 / 墨绿强调）。文档自己只用中性色，
+   彩色一律留给「建议样张」，避免说明文字抢戏。
+   ========================================================================== */
+:root{
+  --d-bg:#edebe6; --d-paper:#f7f6f2; --d-paper2:#efede8; --d-line:#dcd9d1; --d-line2:#b7b3a9;
+  --d-ink:#1d1c19; --d-ink2:#45433d; --d-mut:#63605a;
+  --d-accent:#1e6b4f; --d-accent-soft:#e2eee7; --d-accent-line:#b9d4c6;
+  --d-danger:#b3261e; --d-danger-soft:#fbe9e7;
+  --d-ui:"Segoe UI","Microsoft YaHei UI","Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif;
+  --d-mono:"Cascadia Mono",Consolas,"SF Mono","DejaVu Sans Mono",monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--d-bg); color:var(--d-ink); font-family:var(--d-ui);
+  font-size:14px; line-height:1.65; -webkit-font-smoothing:antialiased;
+}
+.doc{max-width:1060px;margin:0 auto;padding:44px 32px 96px}
+.doc-head{padding-bottom:22px;border-bottom:1px solid var(--d-line2)}
+.doc-head h1{margin:0 0 10px;font-size:26px;font-weight:600;letter-spacing:-0.01em;line-height:1.3}
+.meta{display:flex;flex-wrap:wrap;gap:6px 18px;font-family:var(--d-mono);font-size:11px;color:var(--d-mut)}
+.meta b{font-weight:500;color:var(--d-ink2)}
+.sec{margin-top:46px}
+.sec>h2{
+  display:flex;align-items:baseline;gap:10px;margin:0 0 6px;font-size:18px;font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--d-line);
+}
+.sec>h2 i{
+  font-family:var(--d-mono);font-style:normal;font-size:11px;font-weight:400;
+  color:var(--d-mut);letter-spacing:0.06em;transform:translateY(-1px);
+}
+.lead{margin:12px 0 18px;font-size:14.5px;line-height:1.75;color:var(--d-ink2);max-width:78ch}
+p{margin:12px 0;max-width:78ch}
+h3{margin:26px 0 8px;font-size:14px;font-weight:600;color:var(--d-ink)}
+h3 small{font-family:var(--d-mono);font-size:10.5px;font-weight:400;color:var(--d-mut);margin-left:8px;letter-spacing:0.04em}
+ul,ol{margin:10px 0;padding-left:22px;max-width:80ch}
+li{margin:5px 0}
+code{font-family:var(--d-mono);font-size:12px;background:var(--d-paper2);border:1px solid var(--d-line);
+  border-radius:4px;padding:1px 5px;color:var(--d-ink2);white-space:nowrap}
+b,strong{font-weight:600}
+em{font-style:normal;background:linear-gradient(transparent 62%,var(--d-accent-soft) 62%);color:var(--d-ink)}
+
+/* --- 表格 --- */
+.tbl{width:100%;border-collapse:collapse;margin:14px 0 6px;font-size:13px;background:var(--d-paper)}
+.tbl th,.tbl td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--d-line)}
+.tbl th{font-family:var(--d-mono);font-size:10.5px;font-weight:500;letter-spacing:0.06em;color:var(--d-mut);
+  background:var(--d-paper2);border-bottom:1px solid var(--d-line2);white-space:nowrap}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.n{font-family:var(--d-mono);font-size:11px;color:var(--d-mut);white-space:nowrap;width:44px}
+.tbl td.v{font-family:var(--d-mono);font-size:11px;color:var(--d-ink2);white-space:nowrap}
+.tbl code{white-space:normal}
+.tbl-wrap{border:1px solid var(--d-line);border-radius:8px;overflow:hidden;background:var(--d-paper)}
+
+/* --- 结论条 / 提示 --- */
+.callout{
+  display:flex;gap:12px;margin:16px 0;padding:14px 16px;border-radius:8px;
+  background:var(--d-paper);border:1px solid var(--d-line);border-left:2px solid var(--d-accent);
+  font-size:13.5px;line-height:1.7;color:var(--d-ink2);
+}
+.callout b{color:var(--d-ink)}
+.warn{border-left-color:var(--d-danger)}
+
+/* --- 截图 --- */
+.shot{margin:16px 0;border:1px solid var(--d-line);border-radius:8px;overflow:hidden;background:var(--d-paper)}
+.shot img{display:block;width:100%;height:auto}
+.shot figcaption{font-family:var(--d-mono);font-size:10.5px;color:var(--d-mut);padding:7px 11px;border-top:1px solid var(--d-line)}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:820px){.duo{grid-template-columns:1fr}}
+
+/* --- 优先级徽标 --- */
+.p0,.p1,.p2{
+  display:inline-block;font-family:var(--d-mono);font-size:10px;font-weight:500;letter-spacing:0.06em;
+  padding:1px 6px;border-radius:4px;border:1px solid;white-space:nowrap;transform:translateY(-1px);
+}
+.p0{color:var(--d-danger);border-color:#f0c8c4;background:var(--d-danger-soft)}
+.p1{color:#8a5a00;border-color:#e6cfa0;background:#f7ecd8}
+.p2{color:var(--d-accent);border-color:var(--d-accent-line);background:var(--d-accent-soft)}
+
+/* --- 规格块 --- */
+.spec{
+  margin:14px 0;padding:12px 14px;background:#22211d;color:#dcd9d1;border-radius:8px;
+  font-family:var(--d-mono);font-size:11.5px;line-height:1.85;overflow-x:auto;
+}
+.spec b{color:#eceae3;font-weight:500}
+.spec i{color:#7f8a7f;font-style:normal}
+
+/* ============================================================================
+   样张（mockup）：两组，.b-* = 现状（按 index.css 实测值复刻），.a-* = 建议。
+   令牌只在 .tk-light / .tk-dark 里换成色，几何与字号共用 .tk —— 于是明暗两套
+   样张是同一份 DOM，只换一层色。深色那组由页尾脚本克隆，不手抄第二遍。
+   ========================================================================== */
+.tk{
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px;
+  --r-sm:6px; --r-lg:12px;
+  --fs-2xs:11px; --fs-xs:12px; --fs-sm:13px; --fs-md:14px; --fs-lg:16px;
+  --h-control:28px; --h-control-lg:32px;
+  width:392px; flex:0 0 auto;
+  display:flex; flex-direction:column;
+  font-family:var(--d-ui); font-size:var(--fs-sm); line-height:1.45;
+  border-radius:var(--r-lg); overflow:hidden;
+}
+.tk-light{
+  --surface:#f7f6f2; --surface-2:#efede8; --surface-3:#e5e2db;
+  --border:#dcd9d1; --border-strong:#b7b3a9; --row-line:#e4e2db; --control-line:#837f75;
+  --field-bg:#f2f0ea;
+  --text:#1d1c19; --text-2:#45433d; --muted:#63605a;
+  --accent:#1e6b4f; --accent-fg:#fff; --accent-soft:#e2eee7; --accent-line:#b9d4c6;
+  --danger:#b3261e; --danger-soft:#fbe9e7; --danger-line:#f0c8c4;
+  --flag-high:#b3261e; --flag-mid:#b5700c; --flag-low:#15509b;
+  --flag-high-soft:#f8e5e2; --flag-mid-soft:#f7ecdb; --flag-low-soft:#e5edf8;
+  --ring:0 0 0 2px rgba(30,107,79,.4);
+  --float:0 12px 28px rgba(30,28,22,.18), 0 2px 6px rgba(30,28,22,.1);
+  background:var(--surface); border:1px solid var(--border-strong); color:var(--text);
+  box-shadow:var(--float);
+}
+.tk-dark{
+  --surface:#1e1d18; --surface-2:#26251f; --surface-3:#302e27;
+  --border:#31302a; --border-strong:#525047; --row-line:#2b2a25; --control-line:#8f8c81;
+  --field-bg:#141310;
+  --text:#eceae3; --text-2:#c6c3b9; --muted:#9d9a8f;
+  --accent:#6cc59c; --accent-fg:#0d1f17; --accent-soft:#1b3229; --accent-line:#2f5443;
+  --danger:#f0968d; --danger-soft:#3a211d; --danger-line:#5f3430;
+  --flag-high:#f0968d; --flag-mid:#e8ad68; --flag-low:#86b6f0;
+  --flag-high-soft:#3a211d; --flag-mid-soft:#352b16; --flag-low-soft:#1c2a3d;
+  --ring:0 0 0 2px rgba(108,197,156,.4);
+  --float:0 12px 28px rgba(0,0,0,.6), 0 2px 6px rgba(0,0,0,.4);
+  background:var(--surface); border:1px solid var(--border-strong); color:var(--text);
+  box-shadow:var(--float);
+}
+/* 深色样张里演示「建议改法」的第二组：描边压回 3.57 */
+.tk-dark.tk-fixed{--control-line:#77736a}
+
+.tk input{font-family:inherit}
+.mock-stage{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start;margin:18px 0 6px}
+.mock-stage>figure{margin:0;display:flex;flex-direction:column;gap:8px}
+.mock-stage figcaption{
+  font-family:var(--d-mono);font-size:10.5px;color:var(--d-mut);
+  display:flex;gap:8px;align-items:center;
+}
+.mock-tag{font-family:var(--d-mono);font-size:10px;letter-spacing:.06em;padding:1px 6px;border-radius:4px;border:1px solid var(--d-line2);color:var(--d-mut)}
+.mock-tag.is-new{color:var(--d-accent);border-color:var(--d-accent-line);background:var(--d-accent-soft)}
+
+/* ---- 现状（before） ---- */
+.b-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 20px 12px;flex-shrink:0}
+.b-title{flex:1;min-width:0;padding:4px 0;border:1px solid transparent;border-radius:var(--r-sm);
+  background:transparent;font-size:var(--fs-md);color:var(--text);outline:none}
+.b-x{display:inline-flex;align-items:center;justify-content:center;min-width:26px;min-height:26px;
+  border:1px solid transparent;background:transparent;color:var(--text-2);border-radius:var(--r-sm);
+  font-size:13px;line-height:1;padding:0}
+.b-body{padding:0 20px 8px;font-size:var(--fs-sm)}
+.b-row{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-2)}
+.b-row.is-prio{grid-template-columns:2fr 1fr}
+.b-field{display:block;font-size:var(--fs-sm);color:var(--muted);margin-top:var(--sp-2);min-width:0}
+.b-field>span{display:block;margin-bottom:4px}
+.b-ctl{display:flex;gap:var(--sp-1);flex-wrap:nowrap}
+.b-ctl>button{flex:1;min-width:0;height:var(--h-control-lg);border:1px solid var(--control-line);
+  border-radius:var(--r-sm);background:var(--surface);font-size:var(--fs-sm);color:var(--text-2);font-family:inherit}
+.b-ctl>button.sel-low{border-color:var(--flag-low);background:var(--flag-low-soft);color:var(--flag-low)}
+.b-sel,.b-date,.b-tag{display:flex;align-items:center;gap:var(--sp-2);height:var(--h-control-lg);
+  padding:0 var(--sp-2);border:1px solid var(--control-line);border-radius:var(--r-sm);
+  background:var(--surface);font-size:var(--fs-sm);color:var(--text);min-width:0}
+.b-date .val,.b-tag .val,.b-sel .val{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}
+.b-date.is-empty .val{color:var(--muted)}
+.b-date .ic,.b-tag .ic,.b-sel .ic{color:var(--muted);flex-shrink:0;font-size:12px;line-height:1}
+.b-sep{height:1px;margin:16px 0 12px;border:0;background:var(--border)}
+.b-add{display:flex;gap:var(--sp-2)}
+.b-in{flex:1;min-width:0;height:var(--h-control);display:flex;align-items:center;padding:0 var(--sp-2);
+  border:1px solid var(--control-line);border-radius:var(--r-sm);background:var(--surface);color:var(--muted);font-size:var(--fs-sm)}
+.b-btn{height:var(--h-control-lg);display:inline-flex;align-items:center;justify-content:center;
+  padding:0 var(--sp-3);border:1px solid var(--control-line);border-radius:var(--r-sm);
+  background:var(--surface);font-size:var(--fs-sm);color:var(--text);font-family:inherit}
+.b-btn.is-off{opacity:.5;color:var(--muted);background:var(--surface-2);border-color:var(--border)}
+.b-sub{display:flex;align-items:center;gap:var(--sp-2);height:24px;font-size:var(--fs-sm)}
+.b-cb{width:14px;height:14px;border-radius:3px;border:1px solid var(--control-line);flex-shrink:0;position:relative}
+.b-cb.on{background:var(--accent);border-color:var(--accent)}
+.b-cb.on::after{content:"";position:absolute;inset:0;background:var(--accent-fg);
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E") center/8px 8px no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E") center/8px 8px no-repeat}
+.b-note-btn{display:inline-flex;align-items:center;gap:var(--sp-1);height:26.32px;padding:0 var(--sp-2);
+  border:1px solid var(--border);border-radius:var(--r-sm);background:transparent;
+  color:var(--text-2);font-size:var(--fs-sm);font-family:inherit}
+.b-note-txt{margin-top:8px;padding:var(--sp-2);border:1px solid var(--border);border-radius:var(--r-sm);
+  background:var(--surface-2);font-size:var(--fs-sm);line-height:1.45;color:var(--text-2)}
+.b-acts{display:flex;align-items:center;gap:var(--sp-2);height:39.9px;padding:0 20px;
+  border-top:1px solid var(--border);background:var(--surface-2);margin-top:8px}
+.b-acts .b-btn,.b-acts .b-primary,.b-acts .b-danger{height:25.6px;min-height:25.6px}
+.b-danger{display:inline-flex;align-items:center;justify-content:center;padding:0 var(--sp-3);
+  border:1px solid var(--danger-line);border-radius:var(--r-sm);background:transparent;
+  color:var(--danger);font-size:var(--fs-sm);font-family:inherit}
+.b-primary{display:inline-flex;align-items:center;justify-content:center;padding:0 var(--sp-3);
+  border:1px solid var(--accent);border-radius:var(--r-sm);background:var(--accent);
+  color:var(--accent-fg);font-size:var(--fs-sm);font-family:inherit}
+.push{flex:1}
+
+/* ---- 建议（after） ---- */
+.a-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 20px 14px;flex-shrink:0}
+.a-title{flex:1;min-width:0;padding:2px 0;border:0;background:transparent;outline:none;
+  font-size:var(--fs-lg);font-weight:500;color:var(--text);letter-spacing:-0.005em}
+.a-x{display:inline-flex;align-items:center;justify-content:center;min-width:26px;min-height:26px;
+  border:1px solid transparent;background:transparent;color:var(--text-2);border-radius:var(--r-sm);padding:0;font-size:13px;line-height:1}
+.a-body{padding:0 20px 16px}
+.a-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.a-field{display:block;min-width:0}
+.a-lbl{display:block;margin-bottom:6px;font-size:var(--fs-2xs);color:var(--muted);line-height:1.35}
+.a-ctl{height:var(--h-control-lg);border:1px solid var(--control-line);border-radius:var(--r-sm);
+  background:var(--field-bg);display:flex;align-items:center;gap:var(--sp-2);padding:0 var(--sp-2);
+  font-size:var(--fs-sm);color:var(--text);min-width:0}
+.a-ctl .val{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-family:var(--d-mono);font-size:var(--fs-sm);font-variant-numeric:tabular-nums}
+.a-ctl.is-empty .val{color:var(--muted)}
+.a-ctl .ic{color:var(--muted);flex-shrink:0;font-size:12px;line-height:1}
+.a-seg{display:flex;height:var(--h-control-lg);border:1px solid var(--control-line);
+  border-radius:var(--r-sm);background:var(--field-bg);overflow:hidden}
+.a-seg>button{flex:1 1 0;min-width:0;border:0;border-left:1px solid var(--row-line);
+  background:transparent;font-family:inherit;font-size:var(--fs-sm);color:var(--text-2);padding:0}
+.a-seg>button:first-child{border-left:0}
+.a-seg>button.sel-low{background:var(--flag-low-soft);color:var(--flag-low);box-shadow:inset 0 0 0 1px var(--flag-low)}
+.a-seg>button.sel-none{background:var(--surface-3);color:var(--text);box-shadow:inset 0 0 0 1px var(--control-line)}
+.a-sep{height:1px;margin:18px 0 14px;border:0;background:var(--row-line)}
+.a-subhead{display:flex;align-items:center;gap:var(--sp-2);margin-bottom:6px}
+.a-subhead .a-lbl{margin:0;flex-shrink:0}
+.a-prog{flex:1;height:4px;border-radius:999px;background:var(--surface-3);overflow:hidden;
+  box-shadow:inset 0 0 0 1px var(--border)}
+.a-prog>i{display:block;height:100%;width:50%;background:var(--accent);border-radius:999px}
+.a-sub{display:flex;align-items:center;gap:var(--sp-2);height:26px;font-size:var(--fs-sm);color:var(--text)}
+.a-sub .b-cb{width:14px;height:14px}
+.a-sub .b-cb.on{background:var(--accent);border-color:var(--accent)}
+.a-sub .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.a-sub .t.done{color:var(--muted);text-decoration:line-through}
+.a-sub .del{color:var(--muted);font-size:11px;opacity:.45}
+.a-add{display:flex;gap:var(--sp-2);margin-top:8px}
+.a-in{flex:1;min-width:0;height:var(--h-control);display:flex;align-items:center;padding:0 var(--sp-2);
+  border:1px solid var(--control-line);border-radius:var(--r-sm);background:var(--field-bg);
+  color:var(--muted);font-size:var(--fs-sm)}
+.a-ghost{display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-1);
+  height:var(--h-control);padding:0 var(--sp-2);border:1px solid transparent;border-radius:var(--r-sm);
+  background:transparent;color:var(--text-2);font-family:inherit;font-size:var(--fs-sm)}
+.a-ghost:disabled,.a-ghost.is-off{opacity:.45;color:var(--muted)}
+.a-ghost.is-danger{color:var(--danger)}
+.a-note-btn{margin-top:16px}
+.a-note-txt{margin-top:8px;padding:var(--sp-2) var(--sp-2);border:1px solid var(--border);
+  border-radius:var(--r-sm);background:var(--surface-2);font-size:var(--fs-sm);
+  line-height:1.5;color:var(--text-2)}
+.a-acts{display:flex;align-items:center;gap:var(--sp-2);height:40px;padding:0 20px;
+  border-top:1px solid var(--border);background:var(--surface-2);flex-shrink:0}
+.a-acts .a-ghost{height:var(--h-control)}
+.a-primary{display:inline-flex;align-items:center;justify-content:center;height:var(--h-control);
+  padding:0 var(--sp-3);border:1px solid var(--accent);border-radius:var(--r-sm);
+  background:var(--accent);color:var(--accent-fg);font-family:inherit;font-size:var(--fs-sm)}
+.a-extra{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.a-chip{font-family:var(--d-mono);font-size:var(--fs-2xs);color:var(--muted);
+  background:var(--surface-2);border-radius:4px;padding:1px 6px}
+</style>
+</head>
+<body>
+<div class="doc">
+
+<div class="doc-head">
+  <h1>编辑浮窗 · UI 优化方案</h1>
+  <div class="meta">
+    <span><b>2026-11-17</b></span>
+    <span>状态 <b>方案稿 · 未实施</b></span>
+    <span>影响 <b>src/index.css §1 / §5</b>、<b>components/EditDrawer.jsx</b></span>
+    <span>基准 <b>392×auto 居中对话框</b></span>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="sec">
+  <h2><i>00</i>一句话结论</h2>
+  <div class="callout">
+    <div>
+      编辑浮窗<b>不缺功能，缺层级</b>。窗口里所有控件共用同一个高度（32px）、同一个底色（<code>--surface</code>）、
+      同一档字号（13px）、同一条描边（<code>--control-line</code>），于是「题头 / 值 / 刻度 / 动作」四层信息被压成了一层，
+      读起来像 6 个等价的字段格子加两块动作区，底栏还被削薄了一层。<br>
+      优化的主线只有一句：<em>把控制权从「框线」交还给「字号 + 底色 + 留白」</em> ——
+      全窗实心色块上限压到 2 枚（保存按钮、当前优先级档），其余控件一律退成安静的凹槽。
+    </div>
+  </div>
+  <p>令牌层本身是健康的：中性色有暖度、强调色守得住「只表选中 / 今天 / 焦点」、明暗两套语义对齐。
+  这轮<b>不动色相</b>，只重排层级与几何。所有建议都可落成 CSS 变量或单条规则，不需要改数据层。</p>
+</div>
+
+<!-- ============================================================ -->
+<div class="sec">
+  <h2><i>01</i>现状</h2>
+  <p class="lead">下图是 <code>styleguide.html?view=drawer</code> 的真实渲染（900×800 视口，明暗各用 <code>Emulation.setEmulatedMedia</code> 钉死一次），
+  也就是 <code>EditDrawer.jsx</code> 现在的关系。</p>
+  <div class="duo">
+    <figure class="shot"><img src="assets/2026-11-17/edit-drawer-light.png" alt="编辑浮窗 · 浅色现状"><figcaption>浅色 · 现状</figcaption></figure>
+    <figure class="shot"><img src="assets/2026-11-17/edit-drawer-dark.png" alt="编辑浮窗 · 深色现状"><figcaption>深色 · 现状</figcaption></figure>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="sec">
+  <h2><i>02</i>诊断：十二处不精致</h2>
+  <p class="lead">每条都附实测值（读自 <code>src/index.css</code>，不是目测），以及它为什么让人读着难受。</p>
+  <div class="tbl-wrap">
+  <table class="tbl">
+    <thead><tr><th>#</th><th>现象</th><th>实测</th><th>为什么难受</th></tr></thead>
+    <tbody>
+      <tr><td class="n">D1</td><td>三行字段三个切分点</td><td class="v">2fr/1fr · 1fr/1fr</td>
+        <td>优先级行在 66.7% 切一刀，日期行与分类行在 50% 各切一刀 —— 表单里出现<b>两条互不重合的竖线</b>，眼睛顺着列扫会发现「列在跳」。</td></tr>
+      <tr><td class="n">D2</td><td>刻度标签与值同字号</td><td class="v">13px / 13px</td>
+        <td><code>.edit-window .field{font-size:13px}</code> 被 <code>.field&gt;span</code> 继承，于是「优先级」和「从不」一样大，只剩颜色一层差。</td></tr>
+      <tr><td class="n">D3</td><td>控件与窗体同底色</td><td class="v">#f7f6f2 ×4</td>
+        <td>输入框 / 下拉 / 按钮底都等于 <code>--surface</code>（就是窗体的底），全靠 1px 描边定形 → 392px 里读成「一片线框」，没有「可点区域」的面。</td></tr>
+      <tr><td class="n">D4</td><td>题头没有题头感</td><td class="v">14px / 400</td>
+        <td>只比正文高 1px，下方也没有任何分隔或留白落差。窗口一开，视线找不到起点。</td></tr>
+      <tr><td class="n">D5</td><td>底栏被压成小数</td><td class="v">39.9 / 25.6</td>
+        <td>两个值都是 <code>calc()</code> 乘出来的（57×0.7、32×0.8）。小数高度让 1px 描边落在半像素上；按钮又比正文控件矮一档，读作「这一栏被削了一层」。</td></tr>
+      <tr><td class="n">D6</td><td>子任务「添加」不等高</td><td class="v">28 vs 32</td>
+        <td>输入框 <code>--h-control</code>、按钮 <code>--h-control-lg</code>，同一动作的两半相差 4px，右边那颗明显往下多一截。</td></tr>
+      <tr><td class="n">D7</td><td>备注入口是孤儿按钮</td><td class="v">26.32px 描边钮</td>
+        <td>单独一行、孤零零一颗，和「添加子任务」是同类动作却是两种长相（一个描边幽灵、一个实底+禁用态）。全窗「往某块加内容」共有三种长相。</td></tr>
+      <tr><td class="n">D8</td><td>没有脏状态</td><td class="v">0 处提示</td>
+        <td>取消 / Esc 静默丢弃全部修改；保存按钮恒为实底绿，改没改过都长一样。</td></tr>
+      <tr><td class="n">D9</td><td>删除没有缓冲</td><td class="v">单击即删</td>
+        <td><code>remove()</code> 直接 <code>deleteTask</code>，且与「取消」只隔 24px 的 spacer。在一张要连着点七八下的表单里，误触代价不可逆。</td></tr>
+      <tr><td class="n">D10</td><td>入场没有过程</td><td class="v">仅 fade 160ms</td>
+        <td>遮罩淡入，浮窗本体纹丝不动 —— 在浅色大底上像「凭空闪了一下」。</td></tr>
+      <tr><td class="n">D11</td><td>深色描边过亮</td><td class="v">5.01:1</td>
+        <td><code>--control-line</code> #8f8c81 对 <code>--surface</code> 是 5.01（阈值 3:1），控件边界全部「发光」。明暗两套读起来不像同一个界面。</td></tr>
+      <tr><td class="n">D12</td><td>空标题可以写盘</td><td class="v">无守卫</td>
+        <td><code>save()</code> 直接把 <code>form.title.trim()</code> 写回，标题清空后保存会得到一行只有属性的任务 —— 不是样式问题，但属于同一张窗口的完工度。</td></tr>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="sec">
+  <h2><i>03</i>设计基调：一页纸、刻度优先、一枚主按钮</h2>
+  <p class="lead">「工作登记簿」的灵魂不变。只是把它翻译到一块 392px 的弹层上，需要三条比现状更硬的约束。</p>
+
+  <h3>① 一页纸，不是一堆框 <small>PAPER, NOT BOXES</small></h3>
+  <p><b>意图：</b>编辑窗是「从账簿里抽出、放大书写的那一页」，不是 Web 表单。一页纸只有两层物理关系：<b>纸面</b>与<b>凹槽</b>。
+  凹槽靠底色下沉表达，不靠描边围合 —— 描边只在「被指着」（悬停）与「被选中 / 正在写」（焦点）时出现。</p>
+  <p><b>适用：</b>字段数 ≥4、宽度 ≤420px 的密集表单。字段少于 3 个的轻量弹窗（例如确认框）不需要凹槽，纯纸面 + 一条横线就够。</p>
+
+  <h3>② 刻度优先 <small>LABELS ARE SCALE MARKS</small></h3>
+  <p><b>意图：</b>窗口里只有三种文字量级 —— <b>题头</b>（16 / 500）、<b>读数</b>（13 / 400，数字走 mono）、<b>刻度</b>（11 / 400，muted）。
+  这就是列表读数行在用的同一套落差：字数不一样多，但「读得懂」和「看得见刻度」是两件事。层级靠字号分开，<b>不靠加粗、不靠框</b>。</p>
+  <p><b>适用：</b>所有带字段标签的面板。反例：将来若把编辑窗放宽到 560px 或降到 3 个字段，11px 刻度会显得过小 —— 那时应该整档抬到 12，而不是把落差取消。</p>
+
+  <h3>③ 一枚主按钮 <small>ONE SOLID BLOCK</small></h3>
+  <p><b>意图：</b>整扇窗的实心色块上限 = 2：<b>保存</b>（墨绿实底）与<b>当前优先级档</b>（旗标色淡底）。
+  危险动作只留红字，不留红框 —— 红框会与「逾期」抢同一支红，而红在这个产品里只该有一个意思。</p>
+  <p><b>适用：</b>任何带「确认 + 取消 + 销毁」三动作的底栏。若将来加第三个主动作（如「拆分」），它必须走 ghost，不许再加实底。</p>
+</div>
+
+<!-- ============================================================ -->
+<div class="sec">
+  <h2><i>04</i>布局与间距</h2>
+
+  <h3>B1 · 一行只切一刀：全表同一条竖线 <small>ONE VERTICAL LINE</small></h3>
+  <p><b>意图：</b>三行字段统一成 <code>1fr 1fr</code>，让整张表单只有一条贯穿的竖线。优先级行从 <code>2fr 1fr</code> 收到半栏后，
+  四档按钮不必再挤成四颗独立小方块 —— 把它们收进一枚<b>分段控件</b>（见 6.1），视觉上它就是一个控件，不是四个字段，
+  于是「列」这件事从头到尾只有一个答案。</p>
+  <p><b>适用：</b>所有双列字段组。单列（「截止日期独占整行」）也可以，但会多出 40–60px 高度，392px 窗口里不值得。</p>
+
+  <h3>B2 · 纵向节奏：4 / 8 / 16 改成 6 / 10 / 18 <small>VERTICAL RHYTHM</small></h3>
+  <p><b>意图：</b>刻度与凹槽之间 4→<b>6px</b>（让标签真正「贴」在它的控件上，而不是浮在两行之间）；
+  同一组内两列 8→<b>10px</b>（两个凹槽之间需要一道看得见但不必数的缝）；组与组 12→<b>18px</b>（时间组 / 归档组 / 子任务 / 备注）。
+  这几档加起来<b>字段区本身只变 ±4px</b> —— 拿层级不拿高度。</p>
+  <p><b>要说清的总账：</b>窗口整体会比现在高 <b>约 30px（+7%）</b>，来源不在节奏，而在另外三处刻意加的呼吸：
+  题头升档（+5）、备注块前的上边距（+16）、body 底部内边距 8→16（+8）。
+  如果高度是硬约束，按这个顺序往回退：先撤备注前那 16px（改回 8），再撤 body 底 padding —— <b>不要</b>去压字段行的 10px，那会把刚建立的组内关系又揉平。</p>
+
+  <h3>B3 · 分隔线预算不增 <small>LINE BUDGET</small></h3>
+  <p><b>意图：</b>保留现有两道 <code>.field-sep</code>（标签区→子任务→备注），但把 body 底部内边距 8→<b>16px</b>，
+  让备注块和底栏之间有呼吸而不是「贴着底栏被切掉」。<b>刻意不在题头下方加第三条线</b>：题头的层级交给字号与 14px 内边距，
+  再加一条线就变成三条横线把一个 392px 的窗口切碎。</p>
+
+  <h3>B4 · 底栏取整：40 / 28 <small>INTEGER BAR</small></h3>
+  <p><b>意图：</b><code>--drawer-actions-h</code> 39.9→<b>40px</b>，<code>--drawer-action-h</code> 25.6→<b>28px</b>（即 <code>--h-control</code>）。
+  1px 描边回到整数像素、按钮与全站控件同尺。仍然比 11-17 之前的 57 / 32 矮 30%，只是把那 30% 落在整数字上。</p>
+
+  <h3>B5 · 子任务新增行等高 <small>ALIGN TO ONE RULER</small></h3>
+  <p><b>意图：</b>输入框与「添加」都取 <code>--h-control</code>（28）。同一动作的两半必须共用一把尺子，这是 D6 的直接修复。</p>
+
+  <h3>B6 · 明暗两组样张 <small>SIDE BY SIDE</small></h3>
+  <p class="lead">下面是按上面五条重排后的样张，右边一组同时落了 6.1–6.3 的组件规格。同一份内容、同一个宽度，可以直接对比。</p>
+
+  <div class="mock-stage">
+    <figure>
+      <div class="tk tk-light" data-mock="main">
+        <!-- BEFORE -->
+        <div class="b-head">
+          <div class="b-title">核对军信股份的周线信号</div>
+          <button class="b-x">✕</button>
+        </div>
+        <div class="b-body">
+          <div class="b-row is-prio">
+            <div class="b-field"><span>优先级</span>
+              <div class="b-ctl"><button>无</button><button>高</button><button>中</button><button class="sel-low">低</button></div>
+            </div>
+            <div class="b-field"><span>重复</span><div class="b-sel"><span class="val">从不</span><span class="ic">⌄</span></div></div>
+          </div>
+          <div class="b-row">
+            <div class="b-field"><span>截止日期</span><div class="b-date"><span class="val">2026/10/10</span><span class="ic">▤</span></div></div>
+            <div class="b-field"><span>提醒时刻</span><div class="b-date is-empty"><span class="val">未设置</span><span class="ic">◷</span></div></div>
+          </div>
+          <div class="b-row">
+            <div class="b-field"><span>@分类</span><div class="b-tag"><span class="val">工作, 生活</span><span class="ic">⌄</span></div></div>
+            <div class="b-field"><span>+标签</span><div class="b-tag"><span class="val">回测</span><span class="ic">⌄</span></div></div>
+          </div>
+          <hr class="b-sep">
+          <div class="b-field"><span>子任务 · 1/2</span>
+            <div class="b-sub"><i class="b-cb on"></i><span>整理周线数据</span></div>
+            <div class="b-sub"><i class="b-cb"></i><span>核对信号点</span></div>
+            <div class="b-add"><div class="b-in">添加子任务</div><button class="b-btn is-off">添加</button></div>
+          </div>
+          <hr class="b-sep">
+          <button class="b-note-btn">添加备注</button>
+          <div class="b-note-txt">周线 MACD 刚金叉，等回踩 10 周线再确认一次。</div>
+        </div>
+        <div class="b-acts">
+          <button class="b-danger">删除</button><span class="push"></span>
+          <button class="b-btn">取消</button><button class="b-primary">保存</button>
+        </div>
+      </div>
+      <figcaption><span class="mock-tag">现状</span>392px · 按 index.css 实测值复刻</figcaption>
+    </figure>
+
+    <figure>
+      <div class="tk tk-light" data-mock="main">
+        <!-- AFTER -->
+        <div class="a-head">
+          <div class="a-title">核对军信股份的周线信号</div>
+          <button class="a-x">✕</button>
+        </div>
+        <div class="a-body">
+          <div class="a-row">
+            <div class="a-field"><span class="a-lbl">优先级</span>
+              <div class="a-seg"><button>无</button><button>高</button><button>中</button><button class="sel-low">低</button></div>
+            </div>
+            <div class="a-field"><span class="a-lbl">重复</span><div class="a-ctl"><span class="val">从不</span><span class="ic">⌄</span></div></div>
+          </div>
+          <div class="a-row" style="margin-top:10px">
+            <div class="a-field"><span class="a-lbl">截止日期</span><div class="a-ctl"><span class="val">2026/10/10</span><span class="ic">▤</span></div></div>
+            <div class="a-field"><span class="a-lbl">提醒时刻</span><div class="a-ctl is-empty"><span class="val">未设置</span><span class="ic">◷</span></div></div>
+          </div>
+          <div class="a-row" style="margin-top:10px">
+            <div class="a-field"><span class="a-lbl">@分类</span><div class="a-ctl"><span class="val">工作, 生活</span><span class="ic">⌄</span></div></div>
+            <div class="a-field"><span class="a-lbl">+标签</span><div class="a-ctl"><span class="val">回测</span><span class="ic">⌄</span></div></div>
+          </div>
+          <hr class="a-sep">
+          <div class="a-subhead"><span class="a-lbl">子任务 · 1/2</span><span class="a-prog"><i></i></span></div>
+          <div class="a-sub"><i class="b-cb on"></i><span class="t done">整理周线数据</span><span class="del">✕</span></div>
+          <div class="a-sub"><i class="b-cb"></i><span class="t">核对信号点</span><span class="del">✕</span></div>
+          <div class="a-add"><div class="a-in">添加子任务</div><button class="a-ghost is-off">添加</button></div>
+          <button class="a-ghost a-note-btn">添加备注</button>
+          <div class="a-note-txt">周线 MACD 刚金叉，等回踩 10 周线再确认一次。</div>
+        </div>
+        <div class="a-acts">
+          <button class="a-ghost is-danger">删除</button><span class="push"></span>
+          <button class="a-ghost">取消</button><button class="a-primary">保存</button>
+        </div>
+      </div>
+      <figcaption><span class="mock-tag is-new">建议</span>同内容 · 同宽度 · 总高 ≈ +30px（+7%）</figcaption>
+    </figure>
+  </div>
+  <p class="lead" style="margin-top:14px">读差异时的四个抓手：<b>①</b> 竖线只有一条了；<b>②</b> 凹槽比纸面暗一档，控件不再与窗体同底；
+  <b>③</b> 标签退到 11px 刻度、题头升到 16px；<b>④</b> 底栏只剩一枚实心块，删除退成红字。</p>
+</div>
+
+<!-- ============================================================ -->
+<div class="sec">
+  <h2><i>05</i>排版与配色</h2>
+
+  <h3>C1 · 题头 16 / 500 <small>TITLE</small></h3>
+  <p><b>意图：</b><code>--fs-md</code>(14) → <code>--fs-lg</code>(16)，字重 <code>--fw-body</code> → <code>--fw-emph</code>(500)。
+  16px 是窗口里唯一大于读数的量级，一眼就能锚住「我在改哪一条」。</p>
+  <p><b>注意：</b>不要用 600。600 在本项目是<b>白名单</b>（<code>qa-typography</code> 逐条核对选择器），
+  <code>.drawer-title-input</code> 不在名单里；而且 500 在 392px 里已经足够压住 13px 的正文。</p>
+
+  <h3>C2 · 刻度标签 11px <small>LABEL SCALE</small></h3>
+  <p><b>意图：</b>把 <code>.edit-window .field{font-size:13px}</code> 这条覆盖撤掉，标签回到 <code>--fs-2xs</code>(11) + <code>--muted</code>，
+  值保持 13px + <code>--text</code>。这正是列表读数行在用的那组值 —— 同一个产品里「刻度」只该有一种大小。</p>
+  <p><b>为什么不是 12：</b>12 与 13 只差 1px，在 1.45 行高下几乎读不出落差；11 与 13 才是「两档」。中文 11px 已在本项目大面积使用（读数行、键位、计数），不是新风险。
+  若实拍后觉得 11 太细，<b>整档退到 12</b>，但不要再回到 13 —— 那等于取消层级。</p>
+
+  <h3>C3 · 读数走 mono <small>NUMERALS</small></h3>
+  <p><b>意图：</b>日期值、时刻值、子任务计数、重复档位 —— 这些是「读数」，改用 <code>--font-mono</code> + <code>tabular-nums</code>，
+  与列表里的 <code>2026/10/10</code>、<code>1/2</code> 保持同一支笔。汉字标签一律留在 <code>--font-ui</code>。
+  这是账簿签名的另一半：<b>刻度用正文字族，数字用等宽族</b>。</p>
+
+  <h3>C4 · 颜色预算 <small>COLOR BUDGET</small></h3>
+  <div class="tbl-wrap">
+  <table class="tbl">
+    <thead><tr><th>色相</th><th>窗口内的唯一用途</th><th>禁止</th></tr></thead>
+    <tbody>
+      <tr><td><b>墨绿</b> <code>--accent</code></td><td>焦点环、保存按钮、子任务进度填充</td><td>不做 hover 描边（现状 <code>.tag-input:hover</code> / <code>.date-field-btn:hover</code> 是绿的 —— 这与「accent 只表选中 / 焦点」自相矛盾）</td></tr>
+      <tr><td><b>红</b> <code>--danger</code></td><td>逾期读数、删除按钮<b>文字</b></td><td>不做删除按钮的常驻红框（会与逾期抢同一支红）</td></tr>
+      <tr><td><b>四档旗标</b> <code>--flag-*</code></td><td>优先级选中段（底 soft / 字实色）</td><td>不做正文染色、不做图标着色</td></tr>
+      <tr><td><b>中性墨</b> <code>--text/--text-2/--muted</code></td><td>题头 / 值 / 刻度</td><td>不再引入第五种灰</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>C5 · 额外标签胶囊弱化 <small>RAW TAGS</small></h3>
+  <p><b>意图：</b><code>task.extraTags</code>（<code>t:</code>、<code>star:</code> 这类本工具不认识的键）是「给机器看的原文」，
+  现在借用 <code>.chip</code> 的胶囊长相，容易被读成用户标签。改成 <code>mono 11px</code> + <code>--surface-2</code> 底 + 无描边 + muted 字，
+  排在备注下方 —— 它属于「这一行的原样」，不属于可编辑字段。</p>
+</div>
+
+<!-- ============================================================ -->
+<div class="sec">
+  <h2><i>06</i>组件规格</h2>
+
+  <h3>6.1 · 优先级：四颗按钮 → 一枚分段控件 <small>SEGMENTED · P1</small></h3>
+  <p><b>意图：</b>「优先级」是一个属性的四档取值，不是四个独立动作。分段控件把这条语义直接画出来：
+  一个外框、四段等分、段间一根本色发丝线、选中段填旗标淡底 + 同色字 + 1px 内描边。它同时解决三件事 ——
+  D1 的第三刀消失、hover 不再是一排各自变色的方块、键盘可以用 <code>←/→</code> 在一组里选。</p>
+  <div class="spec">
+.a-seg { display:flex; height:<b>var(--h-control-lg)</b>; border:1px solid <b>var(--control-line)</b>;
+         border-radius:<b>var(--r-sm)</b>; background:<b>var(--field-bg)</b>; overflow:hidden; }
+.a-seg &gt; button { flex:1 1 0; border:0; border-left:1px solid <b>var(--row-line)</b>; background:transparent; }
+.a-seg &gt; button:first-child { border-left:0; }
+.a-seg &gt; button.sel  { background:<b>var(--flag-*-soft)</b>; color:<b>var(--flag-*)</b>;
+                          box-shadow:inset 0 0 0 1px <b>var(--flag-*)</b>; }
+<i>/* 「无」选中：surface-3 底 + text 字 + control-line 内描边，不冒充任何一档 */</i>
+  </div>
+  <p><b>这不算推翻 11-17 的决定：</b>那轮定的是「选中档用旗标同色」，配色原样保留；这轮只换容器形态（四颗方按钮 → 一枚控件）。
+  无障碍上建议配 <code>role="radiogroup"</code> + roving tabindex：Tab 只停 1 次，<code>←/→</code> 换档 —— 焦点陷阱的站数因此从 4 降到 1，<code>EditDrawer.test.jsx</code> 里数 Tab 次数的断言要一起改。</p>
+
+  <h3>6.2 · 输入框 / 下拉 / 日期按钮：凹槽 <small>INPUT</small></h3>
+  <ul>
+    <li><b>底</b>：新增令牌 <code>--field-bg</code>（浅 <code>#f2f0ea</code> / 深 <code>#141310</code>）。控件不再是纸面本身，而是纸面上挖下去的一格。</li>
+    <li><b>描边</b>：静态 <code>--control-line</code>；<b>hover 只提一档底色</b>（浅色向 <code>--surface</code>、深色向 <code>--surface-2</code>），描边不动 —— 与项目里「桌面按钮 hover 只变灰不变色」是同一条规则。</li>
+    <li><b>焦点</b>：<code>border-color:var(--accent)</code> + <code>box-shadow:var(--ring)</code>。accent 在这一刻才出场。</li>
+    <li><b>焦点环</b> 保持 2px / 40% 不透明，不要加宽到 3px：392px 里 3px 环会把相邻字段的缝吃掉。</li>
+  </ul>
+
+  <h3>6.3 · 按钮四族 <small>BUTTON FAMILIES</small></h3>
+  <div class="tbl-wrap">
+  <table class="tbl">
+    <thead><tr><th>族</th><th>长相</th><th>窗口内的用途</th></tr></thead>
+    <tbody>
+      <tr><td><code>.btn</code> 默认</td><td>1px <code>--control-line</code> + <code>--surface</code> 底</td><td>需要「明显是个按钮」的地方（子任务添加的空态可保留）</td></tr>
+      <tr><td><code>.btn-primary</code></td><td>墨绿实底 + <code>--accent-fg</code></td><td><b>只有保存</b>。全窗唯一实心块</td></tr>
+      <tr><td><code>.btn-ghost</code> <span class="mock-tag is-new">新</span></td><td>无描边无底，字 <code>--text-2</code>，hover 才浮 <code>--surface-2</code></td><td>添加备注 / 子任务「添加」/ 底栏「取消」</td></tr>
+      <tr><td><code>.btn-ghost.is-danger</code> <span class="mock-tag is-new">新</span></td><td>同上，字 <code>--danger</code>，hover 浮 <code>--danger-soft</code></td><td><b>只有删除</b>。红字不红框</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p><b>意图：</b>底栏现在三颗按钮的边界都是 1px <code>--control-line</code>（3:1），在 25.6px 高、6px 圆角下三块硬边并排，谁也不让谁。
+  收成「1 实底 + 2 幽灵」之后，视线只会落在保存上，而这正是底栏唯一该问的问题。</p>
+
+  <h3>6.4 · 子任务区 <small>SUBTASKS</small></h3>
+  <ul>
+    <li>行高 24 → <b>26px</b>，与 <code>--row-child-h</code>（主行 −6）同口径，勾选框仍 14px（对齐列表里的子任务行）。</li>
+    <li>「添加」改 ghost，空态 <code>disabled</code>（opacity .45）。它现在是全窗第二重的实底块，而它八成时间不可点。</li>
+    <li>进度条从「label 右侧」保持不动 —— 但把 label 与进度条放进独立的 <code>.fields-head</code> 行，高度锁 15px，别让进度条把行高顶成 26。</li>
+  </ul>
+
+  <h3>6.5 · 备注 <small>NOTE</small></h3>
+  <p><b>意图：</b>「添加备注」改 ghost、并与子任务「添加」同族；展开后的 textarea 沿用输入框的凹槽底与焦点环。
+  折叠态显示 <code>.note-display</code>（<code>--surface-2</code> 底、无描边），读作「一段抄录」而不是「一个空输入框」——
+  这会顺手修掉 D7 里「同一动作三种长相」的问题。</p>
+</div>
+
+<!-- ============================================================ -->
+<div class="sec">
+  <h2><i>07</i>图标与动效</h2>
+
+  <h3>E1 · 图标 <small>ICONS</small></h3>
+  <p>现状已合规：16px、描边 1.5、<code>--muted</code>。两条补充 ——</p>
+  <ul>
+    <li>日期 / 时刻控件里的图标从 16 降到 <b>14</b>：它躺在 32px 高的凹槽里，16 会与 13px 读数抢重心。</li>
+    <li><b>不要</b>给「添加」「添加备注」配 <code>plus</code> 图标。窗口里已经有一枚 <code>+标签</code> 的加号语义，再加两颗会让人分不清哪个加号加什么。</li>
+  </ul>
+
+  <h3>E2 · 入场 <small>ENTRANCE</small></h3>
+  <p><b>意图：</b>浮窗本体补 <code>opacity 0→1</code> + <code>translateY(6px)→0</code>，<code>var(--dur-2)</code> / <code>var(--ease-out)</code>，
+  与遮罩同帧开始。物理上只是「这张纸被放到桌面上」，不是缩放弹跳 —— 后者在这个安静的产品里会显得吵。</p>
+  <p><b>安全：</b><code>index.css</code> 末尾已有全局 <code>@media (prefers-reduced-motion: reduce)</code> 兜底，无需额外处理。
+  <b>注意：</b>用 <code>transform</code> + <code>opacity</code>，不要动 <code>height</code> / <code>margin</code> —— 这条与列表行的结论同源（改盒尺寸会每帧重排）。</p>
+
+  <h3>E3 · 分段控件切换 <small>SEGMENT SWITCH</small></h3>
+  <p>只在底色与文字色上做 <code>120ms</code> 过渡，<b>不做</b>滑块位移。四段加起来 190px，滑块的位移量太小，动起来像是抖了一下。</p>
+</div>
+
+<!-- ============================================================ -->
+<div class="sec">
+  <h2><i>08</i>交互反馈与状态提示</h2>
+
+  <h3>F1 · 空标题守卫 <small>P0 · 修 bug</small></h3>
+  <p><code>save()</code> 现在直接写 <code>form.title.trim()</code>。清空标题后保存，<code>todo.txt</code> 里会出现一行只有 <code>due:</code> / <code>+项目</code> 的空任务，
+  列表上是一条看不见文字的空白行 —— 比样式问题更该先修。做法：<code>trim()</code> 为空时禁用保存按钮，并给标题输入框一道 <code>--danger</code> 描边（不弹 toast，别打断书写）。</p>
+
+  <h3>F2 · 删除二次确认 <small>P0 · 数据安全</small></h3>
+  <p><b>意图：</b>底栏「删除」第一次点击进入<b>内联确认态</b>：按钮文字变「确认删除」，底色 <code>--danger-soft</code>，2.5 秒无操作自动回退。
+  理由：这张表单是「要连着改七八处」的地方，弹一个 <code>.modal-card</code> 会打断节奏；而单击即删又不可逆。<b>不要</b>用 <code>window.confirm</code>（阻断且不可样式化）。</p>
+
+  <h3>F3 · 脏状态读数 <small>P1</small></h3>
+  <ul>
+    <li>底栏左端（删除右侧）出现 11px mono 读数 <b>「未保存」</b> —— 它是一条读数，不是一句说明，符合「少写说明」的边界。</li>
+    <li>有改动时 <kbd>Esc</kbd> / 取消 走一次 <code>.modal-card</code>（「放弃修改？」）。无改动时直接关，不添一步。</li>
+  </ul>
+
+  <h3>F4 · 保存反馈 <small>P2</small></h3>
+  <p>关窗后补一条 toast「已保存」。列表行本身会变，但在「今天」等多个视图下改动可能不在本屏可见；一条轻提示补上闭环。</p>
+
+  <h3>F5 · 键盘 <small>KEEP</small></h3>
+  <p>Enter 保存 / Esc 关闭 / Tab 陷阱保持不变。分段控件改 roving 后，Tab 停靠点从 <b>19</b> 降到 <b>16</b>：四颗优先级按钮并成 1 个停靠点，其余不动
+  （题头 → 关闭 → 优先级组 → 重复 → 截止 → 提醒 → 分类输入 / 分类箭头 → 标签输入 / 标签箭头 → 子任务输入 / 添加 → 备注 → 删除 / 取消 / 保存）。
+  <code>EditDrawer.test.jsx</code> 与依赖 <code>lib/focusTrap</code> 数站数的断言需同步。</p>
+</div>
+
+<!-- ============================================================ -->
+<div class="sec">
+  <h2><i>09</i>深色 / 浅色适配</h2>
+  <p class="lead">明暗不是两套皮肤，是同一条语义的两次明度书写。这轮只加<b>一个</b>新令牌（<code>--field-bg</code>），
+  另外建议重调深色 <code>--control-line</code> 一支值。下表是对比度实测（<code>node</code> 按 WCAG 2.1 公式跑出来的真值）。</p>
+  <div class="tbl-wrap">
+  <table class="tbl">
+    <thead><tr><th>用途</th><th>浅色</th><th>对 <code>--field-bg</code></th><th>深色</th><th>对 <code>--field-bg</code></th><th>阈值</th></tr></thead>
+    <tbody>
+      <tr><td>凹槽底 <code>--field-bg</code></td><td class="v">#f2f0ea</td><td class="v">—</td><td class="v">#141310</td><td class="v">—</td><td>—</td></tr>
+      <tr><td>控件描边 <code>--control-line</code></td><td class="v">#837f75</td><td class="v">3.50 ✓</td><td class="v">#8f8c81 → #77736a</td><td class="v">5.28 → 3.76 ✓</td><td>≥3.0</td></tr>
+      <tr><td>刻度 <code>--muted</code></td><td class="v">#63605a</td><td class="v">5.50 ✓</td><td class="v">#9d9a8f</td><td class="v">6.31 ✓</td><td>≥4.5</td></tr>
+      <tr><td>值 <code>--text</code></td><td class="v">#1d1c19</td><td class="v">14.95 ✓</td><td class="v">#eceae3</td><td class="v">14.77 ✓</td><td>≥4.5</td></tr>
+      <tr><td>焦点 / 保存 <code>--accent</code></td><td class="v">#1e6b4f</td><td class="v">5.63 ✓</td><td class="v">#6cc59c</td><td class="v">8.56 ✓</td><td>≥4.5</td></tr>
+      <tr><td>删除 <code>--danger</code></td><td class="v">#b3261e</td><td class="v">5.74 ✓</td><td class="v">#f0968d</td><td class="v">8.01 ✓</td><td>≥4.5</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>G1 · 深色描边要压回去 <small>P2 · 全局副作用</small></h3>
+  <p>深色 <code>--control-line</code> #8f8c81 对纸面是 <b>5.01:1</b>，几乎两倍于 3:1 阈值 —— 于是每个控件都在发光描边，
+  一屏 8 个框就是一圈圈亮线。建议改成 <b>#77736a</b>：对 <code>--surface</code> 3.57、对 <code>--surface-2</code> 3.25、对 <code>--field-bg</code> 3.76，三处都过线且留余量。
+  <br><b>代价：</b>这是全局令牌，深色下所有按钮 / 输入框边界都会同时变安静 —— 方向是对的，但属于「顺手改了别处」，
+  所以放 P2 单独立项；若想只动编辑窗，退路是在窗内覆盖 <code>--control-line:#77736a</code>（不推荐，会分裂口径）。</p>
+
+  <h3>G2 · 深色窗体外框 <small>P2</small></h3>
+  <p>深色 <code>--sh-3</code> 没有 1px 描边分量（浅色的 <code>--sh-2</code> 有），<code>--border-strong</code> #525047 对 <code>--bg</code> #161511 只有约 2.2:1，
+  窗口边界实际全靠 <code>--overlay</code> 0.58 压暗分开。建议深色下给 <code>.edit-window</code> 补一道
+  <code>0 0 0 1px var(--border-strong)</code>，让它在遮罩上也有边 —— 与浅色的双线语言对齐。</p>
+
+  <h3>G3 · 明暗两组样张 <small>DARK PAIR</small></h3>
+  <p class="lead">下面两张由上面那份 DOM 克隆而来（只换 <code>tk-light</code> → <code>tk-dark</code>），所以两套样张的内容、几何完全一致，差异只有色。</p>
+  <div class="mock-stage" id="dark-stage"></div>
+</div>
+
+<!-- ============================================================ -->
+<div class="sec">
+  <h2><i>10</i>落地优先级</h2>
+  <p class="lead">拆成三档。<b>P0 全是修错位与风险</b>，CSS 改不到 40 行 + 两处守卫，当天能完；<b>P1 是设计语言的升级</b>，一次成型、一起验收；
+  <b>P2 是体感</b>，可以按下次改动顺手带走。</p>
+  <div class="tbl-wrap">
+  <table class="tbl">
+    <thead><tr><th>档</th><th>动作</th><th>落点</th><th>收益</th></tr></thead>
+    <tbody>
+      <tr><td><span class="p0">P0</span></td><td>空标题禁止保存 + 标题 danger 描边</td><td><code>EditDrawer.save()</code></td><td>不再写出空任务行</td></tr>
+      <tr><td><span class="p0">P0</span></td><td>删除改内联二次确认</td><td><code>.drawer-actions</code></td><td>误触可撤</td></tr>
+      <tr><td><span class="p0">P0</span></td><td>子任务 add 行等高 28 / 28</td><td><code>.edit-window .subtask-add .btn</code></td><td>修 D6 的 4px 错位</td></tr>
+      <tr><td><span class="p0">P0</span></td><td>底栏取整 40 / 28</td><td><code>--drawer-actions-h</code></td><td>1px 描边回到整数像素</td></tr>
+      <tr><td><span class="p0">P0</span></td><td>hover 不再跳 accent（改提底色）</td><td><code>.tag-input / .date-field-btn</code></td><td>回到自家颜色契约</td></tr>
+      <tr><td><span class="p1">P1</span></td><td>列网格统一 <code>1fr 1fr</code> + 优先级分段控件</td><td><code>.field-row-prio</code>、新 <code>.prio-seg</code></td><td>D1 + 组件语义</td></tr>
+      <tr><td><span class="p1">P1</span></td><td>新增 <code>--field-bg</code>（明暗两套）</td><td><code>§1</code></td><td>D3 的“一片线框”</td></tr>
+      <tr><td><span class="p1">P1</span></td><td>题头 16/500；标签 11 / 值 13</td><td><code>.drawer-title-input</code>、<code>.field</code></td><td>D2 / D4 的层级</td></tr>
+      <tr><td><span class="p1">P1</span></td><td>按钮四族（ghost 收编备注 / 添加 / 取消 / 删除）</td><td><code>§6</code></td><td>D7 + 底栏只剩一枚实心块</td></tr>
+      <tr><td><span class="p1">P1</span></td><td>纵向节奏 6 / 10 / 18；body 底 padding 16</td><td><code>.field / .field-row</code></td><td>B2 / B3</td></tr>
+      <tr><td><span class="p2">P2</span></td><td>入场 <code>translateY(6px)</code> + fade</td><td><code>.edit-window</code></td><td>D10</td></tr>
+      <tr><td><span class="p2">P2</span></td><td>脏状态读数 + 丢弃确认</td><td>底栏 / <code>.modal-card</code></td><td>D8</td></tr>
+      <tr><td><span class="p2">P2</span></td><td>日期 / 计数走 mono</td><td><code>.date-field-text</code> 等</td><td>C3</td></tr>
+      <tr><td><span class="p2">P2</span></td><td>深色 <code>--control-line</code> → #77736a + 窗外框补 1px</td><td><code>§1</code></td><td>D11 / G2</td></tr>
+      <tr><td><span class="p2">P2</span></td><td>extraTags 胶囊弱化</td><td><code>.extra-tags</code></td><td>C5</td></tr>
+      <tr><td><span class="p2">P2</span></td><td>保存 toast</td><td>store</td><td>F4</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>建议的提交顺序 <small>SEQUENCE</small></h3>
+  <ol>
+    <li><b>提交 1（P0 守卫）</b>：空标题 + 删除确认。只碰 <code>EditDrawer.jsx</code>，补两条渲染测试。</li>
+    <li><b>提交 2（P0 几何）</b>：等高 / 取整 / hover。只碰 <code>index.css</code>，跑 <code>test:ui</code>。</li>
+    <li><b>提交 3（P1 一次成型）</b>：<code>--field-bg</code> + 列网格 + 分段控件 + 字号 + 按钮族 + 节奏。这一批互相依赖（例如分段控件依赖 194px 列宽），拆开做会来回改。</li>
+    <li><b>P2 按需</b>：每项独立，进同一轮的顺手改动。</li>
+  </ol>
+
+  <h3>门禁影响 <small>GATES</small></h3>
+  <ul>
+    <li><code>qa-css-check</code>：新增 <code>.prio-seg</code> / <code>.btn-ghost</code> / <code>.fields-head</code> 必须在 <code>index.css</code> 里真的有定义，否则 JSX 用了会静默失效。</li>
+    <li><code>qa-contrast</code>：<code>--field-bg</code> 是新的底，必须把它加进「控件边界」的检查对（<code>--control-line</code> vs <code>--field-bg</code> ≥3:1），否则新底色上的对比度无人守。</li>
+    <li><code>qa-typography</code>：题头用 500 不用 600；11px 标签必须走 <code>--fs-2xs</code> 令牌，不许写裸 <code>11px</code>。</li>
+    <li><code>npm test</code>：分段控件改 roving 后，<code>EditDrawer.test.jsx</code> 里数 Tab 站数、断言 <code>.field-row-prio</code> 网格比例的用例会失败 —— 这些是契约，改实现时同步改断言，别绕。</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+<div class="sec">
+  <h2><i>11</i>验收口径</h2>
+  <ul>
+    <li><b>几何不动</b>：明暗各截一张 392×auto，静止态与 hover 态逐元素比 <code>top</code>/<code>height</code>；表格外所有元素 <code>layout-shift</code> 为 0（沿用列表行的取证口径）。</li>
+    <li><b>对比度</b>：<code>npm run test:ui</code> 全绿，且上表每一行都有一条脚本内的检查对。</li>
+    <li><b>Tab 契约</b>：从题头开始数到「保存」的停靠点数（改前 19、改后 16，子任务输入为空时 15 —— 「添加」disabled 不吃 Tab），逐站核对顺序，别只看总数。</li>
+    <li><b>宽度</b>：392 / 320（<code>max-width:100%</code> 兜底）/ 400% 缩放三档不出现横向滚动。</li>
+    <li><b>空态</b>：无子任务、无备注、无分类候选时，窗口高度与有内容时相差不超过一行 —— 否则用户每加一条都会看到窗口“跳”一下。</li>
+  </ul>
+  <div class="callout warn" style="margin-top:22px">
+    <div><b>一句话验收：</b>把截图缩到 30% 看，如果还能一眼分出「标题 / 字段 / 动作」三层，且只看到两枚彩色块，这轮就算成了。</div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="sec">
+  <h2><i>12</i>实施记录</h2>
+  <p class="lead">按 P0 → P1 → P2 三档推进，全部落地。三档各自独立可跑门禁：P0 只碰守卫与几何，
+  P1 一次成型（互相依赖），P2 逐项带走。下面是落地后的真机渲染（同一份演示数据、同一台机器，
+  明暗都用 CDP 钉死媒体特性，与上面 01 节的两张是同一条件）。</p>
+
+  <div class="duo">
+    <figure class="shot"><img src="assets/2026-11-17/edit-drawer-after-light.png" alt="编辑浮窗 · 浅色落地效果"><figcaption>浅色 · 落地</figcaption></figure>
+    <figure class="shot"><img src="assets/2026-11-17/edit-drawer-after-dark.png" alt="编辑浮窗 · 深色落地效果"><figcaption>深色 · 落地</figcaption></figure>
+  </div>
+
+  <div class="tbl-wrap">
+  <table class="tbl">
+    <thead><tr><th>档</th><th>项</th><th>落点</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td><span class="p0">P0</span></td><td>空标题禁止保存 + 标题危险描边</td><td><code>EditDrawer.save()</code> · <code>.drawer-title-input.is-error</code></td><td class="v">已落地</td></tr>
+      <tr><td><span class="p0">P0</span></td><td>删除改内联二次确认（Esc / 点别处可反悔）</td><td><code>.drawer-delete.is-armed</code></td><td class="v">已落地</td></tr>
+      <tr><td><span class="p0">P0</span></td><td>子任务新增行等高 28 / 28</td><td><code>.edit-window .field .subtask-add input</code></td><td class="v">已落地</td></tr>
+      <tr><td><span class="p0">P0</span></td><td>底栏取整 40 / 28</td><td><code>--drawer-actions-h</code> / <code>--drawer-action-h</code></td><td class="v">已落地</td></tr>
+      <tr><td><span class="p0">P0</span></td><td>hover 不再跳 accent（只提底色）</td><td><code>.tag-input:hover</code> / <code>.edit-window .date-field-btn:hover</code></td><td class="v">已落地</td></tr>
+      <tr><td><span class="p1">P1</span></td><td>三行统一 <code>1fr 1fr</code> + 优先级分段控件</td><td><code>.prio-seg</code>（radiogroup + roving）</td><td class="v">已落地</td></tr>
+      <tr><td><span class="p1">P1</span></td><td>新增 <code>--field-bg</code>（明暗两套）</td><td>§1 令牌 + <code>.edit-window</code> 内控件</td><td class="v">已落地</td></tr>
+      <tr><td><span class="p1">P1</span></td><td>题头 16/500；标签 11 / 值 13</td><td><code>.drawer-title-input</code> / <code>.field &gt; span</code></td><td class="v">已落地</td></tr>
+      <tr><td><span class="p1">P1</span></td><td>按钮四族（ghost 收编备注 / 添加 / 取消 / 删除）</td><td><code>.btn-ghost</code> / <code>.btn-ghost.is-danger</code></td><td class="v">已落地</td></tr>
+      <tr><td><span class="p1">P1</span></td><td>纵向节奏 6 / 10 / 18；body 底 padding 16</td><td><code>--dr-label-gap</code> / <code>--dr-col-gap</code> / <code>--dr-group-gap</code></td><td class="v">已落地</td></tr>
+      <tr><td><span class="p2">P2</span></td><td>入场 <code>translateY(6px)</code> + fade</td><td><code>@keyframes window-in</code></td><td class="v">已落地</td></tr>
+      <tr><td><span class="p2">P2</span></td><td>脏状态读数 + 丢弃确认</td><td><code>.drawer-dirty</code> / <code>.drawer-confirm</code></td><td class="v">已落地</td></tr>
+      <tr><td><span class="p2">P2</span></td><td>日期 / 计数走 mono</td><td><code>.date-field-text</code> / <code>.subtask-count</code></td><td class="v">已落地</td></tr>
+      <tr><td><span class="p2">P2</span></td><td>深色 <code>--control-line</code> → <code>#77736a</code> + 窗外框补 1px</td><td>§1 暗色令牌 / <code>:root[data-theme="dark"] .edit-window</code></td><td class="v">已落地</td></tr>
+      <tr><td><span class="p2">P2</span></td><td>extraTags 胶囊弱化</td><td><code>.edit-window .extra-tags .chip</code></td><td class="v">已落地</td></tr>
+      <tr><td><span class="p2">P2</span></td><td>保存 toast</td><td><code>store.showToast('已保存')</code></td><td class="v">已落地</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>四处与方案不一致（实施时才发现的） <small>DEVIATIONS</small></h3>
+  <div class="tbl-wrap">
+  <table class="tbl">
+    <thead><tr><th>#</th><th>方案</th><th>实际</th><th>为什么</th></tr></thead>
+    <tbody>
+      <tr><td class="n">R1</td><td>D6：子任务「添加」28 vs 输入框 32</td><td class="v">改前其实是 32 / 32</td>
+        <td><code>.field input:not([type="checkbox"])</code> 的 32px 一直压着 <code>.edit-window .subtask-add input</code> 的 28px，两者同特异性、源码序后者更早，所以「不等高」这件事当时并不成立。按方案统一到 28 之后它才真的是 28 —— 于是<strong>选择器必须补上 <code>.field</code> 才压得住那 32</strong>，否则改完反而错位。</td></tr>
+      <tr><td class="n">R2</td><td>总高 +约 30px（+7%）</td><td class="v">392 × 467 → 392 × 450</td>
+        <td>题头升档 +5、body 底 +8 被三处抵扣掉了：标签 13→11 每行省约 3px（五行）、首行去掉 8px 组间距。结论是<strong>拿层级不必拿高度</strong>，这条比预估更划算。</td></tr>
+      <tr><td class="n">R3</td><td>未列新令牌</td><td class="v">+ <code>--danger-fg</code> / <code>--ring-danger</code></td>
+        <td>实心「确认删除」上的字与「空标题」的焦点环都需要各自一对明暗值；借 <code>--accent-fg</code> 在语义上说不通，索性各开一枚（qa-contrast 里有「字 / 实心危险底」一组守着）。</td></tr>
+      <tr><td class="n">R4</td><td>「放弃修改？」未指定按钮主次</td><td class="v">绿色给「继续编辑」</td>
+        <td>按 Esc 的人本来就想回到表单，把「放弃」做成实心绿等于给丢数据铺红毯。破坏性的那个放左边、红字无框 —— 与底栏「删除在左、保存在右」同一读法。</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>刻意没做的一件事 <small>DELIBERATE OMISSION</small></h3>
+  <p><b>重复下拉不走 mono。</b>方案把「重复档位」也列进读数，但它显示的是「从不 / 每日 / 每周 / 每月」四个中文词 ——
+  <code>--font-mono-cjk</code> 的中文回退就是系统黑体，套上去视觉与正文完全一样，只是多一层无意义的声明。
+  真正需要等宽的是日期、时刻、计数这些会上下对齐的数字，它们都改了。</p>
+
+  <div class="callout warn" style="margin-top:22px">
+    <div><b>门禁实测（P0–P2 收尾时）：</b>823 条单测全绿（编辑浮窗 44 条，其中 P0 五条、P1 十一条、P2 九条为本轮新增）；
+    <code>test:ui</code> 的对比度从 146 组增到 <b>154 组</b>（新增 <code>field-bg</code> 四组、<code>danger-fg</code> 一组），失败 0；
+    <code>qa-css-check</code> 无未定义类名；<code>vite build</code> 通过。Tab 停靠点实测 <b>15</b>（改前 19）——
+    子任务输入为空时「添加」处于 disabled 不吃 Tab，敲进一个字后回到 <b>16</b>，与方案口径一致。</div>
+  </div>
+
+  <h3>追加：重复档位改自绘下拉 <small>FOLLOW-UP</small></h3>
+  <p>落地之后又发现一处漏网：<b>原生 <code>select</code> 的弹出层由系统绘制</b>，macOS 上是一块深灰长菜单配系统对勾 ——
+  既不认本项目的明暗令牌，也和这扇「一页纸」两个语气，一展开整页就像被人贴了一张别处的截图。它换成与
+  @分类 / +标签 候选清单<b>同一套</b>的自绘下拉：触发器是一枚和隔壁输入框齐平的凹槽控件，展开面复用
+  <code>.tag-menu</code> / <code>.tag-option</code> 与同一套先量后放，当前档打绿勾。</p>
+
+  <div class="duo">
+    <figure class="shot"><img src="assets/2026-11-17/recurrence-select-light.png" alt="重复下拉 · 浅色"><figcaption>浅色 · 展开态</figcaption></figure>
+    <figure class="shot"><img src="assets/2026-11-17/recurrence-select-dark.png" alt="重复下拉 · 深色"><figcaption>深色 · 展开态</figcaption></figure>
+  </div>
+
+  <div class="tbl-wrap">
+  <table class="tbl">
+    <thead><tr><th>项</th><th>实测</th></tr></thead>
+    <tbody>
+      <tr><td>触发器几何</td><td class="v">174 × 32，与同一行的 <code>.tag-input</code> 同宽同高（32 / 32）</td></tr>
+      <tr><td>底色 / 描边</td><td class="v"><code>--field-bg</code> <code>#f2f0ea</code>；展开态描边转 accent（浅色 <code>#1e6b4f</code>）</td></tr>
+      <tr><td>展开面</td><td class="v">174 × 122、圆角 6、<code>--surface</code> 底 + <code>--sh-2</code>；四档各 28 高</td></tr>
+      <tr><td>键盘</td><td class="v">↓ 展开并聚焦当前档；Tab → 截止日期；Shift+Tab → 优先级「低」；Enter 选中后焦点回触发器</td></tr>
+      <tr><td>Esc</td><td class="v">只收菜单，浮窗仍在（捕获阶段截断）</td></tr>
+      <tr><td>窗高</td><td class="v">仍是 450.2 —— 菜单是浮层，不撑浮窗</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>三个坑记在这里：① 菜单挂 body，<b>Tab 落点必须从触发器自己算</b>（<code>nextInTrap(queryFocusable(容器), 触发器, shift)</code>）——
+  交给浏览器会从「菜单项」起算，Shift+Tab 一路退到「保存」；② <b>Enter / Space 要显式 <code>click()</code></b>，
+  别指望 button 的默认激活；③ <code>is-open</code> 只把描边转 accent，hover 仍只抬底色。门禁补到
+  <b>51 文件 / 830 条</b>（浮窗 51 条，其中 7 条守这一处），对比度仍是 154 组 0 失败。</p>
+
+  <h3>追加：选中态去掉矩形内描边 <small>FIX</small></h3>
+  <p>又一处「精致不起来」：四段控件的选中段原本画一圈 <code>box-shadow: inset 0 0 0 1px</code> 的实色描边，
+  可 <b>inset 描边永远贴着按钮的矩形边</b> —— 首段「无」的两个外角、末段「低」的两个外角都落在
+  外框 6px 圆角里，那条直线拐不过弯：<b>要么被 <code>overflow:hidden</code> 裁掉一截留下缺口，要么戳出直角</b>。
+  默认态正好是「无」选中，所以一开窗就看得见。</p>
+
+  <div class="duo">
+    <figure class="shot"><img src="assets/2026-11-17/prio-seg-before-light.png" alt="选中态带矩形内描边（改前）"><figcaption>改前 · 局部放大：灰框在圆角处被裁断</figcaption></figure>
+    <figure class="shot"><img src="assets/2026-11-17/prio-seg-after-light.png" alt="选中态只上底色（改后）"><figcaption>改后 · 局部放大：底色顺着圆角收进去</figcaption></figure>
+  </div>
+
+  <p>解法不是把描边修圆，而是<b>不画描边</b>：底色由父容器的圆角裁剪，天然贴合，不需要跟几何打架。
+  选中感改由三重给出 —— <b>同色相淡底</b>（<code>--flag-*-soft</code>）+ <b>实色字</b>（<code>--flag-*</code>，
+  中档用压深的 <code>--flag-mid-ink</code>）+ <b>半粗 500</b>；「无 / 其它」保持中性（<code>--surface-3</code> 底 + <code>--text</code> 字）。
+  比一圈细框更安静，也更贴近「颜色只编码状态」这条红线。</p>
+
+  <div class="duo">
+    <figure class="shot"><img src="assets/2026-11-17/prio-seg-before-dark.png" alt="深色 · 改前"><figcaption>深色 · 局部放大 · 改前</figcaption></figure>
+    <figure class="shot"><img src="assets/2026-11-17/prio-seg-after-dark.png" alt="深色 · 改后"><figcaption>深色 · 局部放大 · 改后</figcaption></figure>
+  </div>
+
+  <div class="callout warn" style="margin-top:22px">
+    <div><b>回归线：</b>单测新增一条「选中态只上底色，不画矩形内描边」——逐档检查
+    <code>.prio-seg &gt; button.sel.prio-*</code> 里<b>不许出现 <code>inset</code> / <code>box-shadow</code></b>，
+    同时钉住外框的 <code>border-radius: var(--r-sm)</code> 与 <code>overflow: hidden</code>（底色靠它裁圆角）。
+    实测四档 <code>box-shadow</code> 均为 <code>none</code>，窗高仍 450.2；门禁 <b>51 文件 / 831 条</b>、
+    对比度 154 组 0 失败。</div>
+  </div>
+</div>
+
+</div>
+
+<script>
+// 深色样张：克隆浅色那份 DOM，只换一层色变量，保证两套样张内容与几何完全一致。
+(function () {
+  const stage = document.getElementById('dark-stage');
+  const src = document.querySelector('.mock-stage .tk-light');
+  if (!stage || !src) return;
+  const labels = ['现状 · 深色', '建议 · 深色'];
+  [false, true].forEach((fixed, i) => {
+    const fig = document.createElement('figure');
+    const cap = document.createElement('figcaption');
+    cap.innerHTML = '<span class="mock-tag' + (i ? ' is-new' : '') + '">' + labels[i] + '</span>392px · 同一份 DOM';
+    const clone = src.cloneNode(true);
+    clone.classList.remove('tk-light');
+    clone.classList.add('tk-dark');
+    if (fixed) clone.classList.add('tk-fixed');
+    fig.appendChild(clone);
+    fig.appendChild(cap);
+    stage.appendChild(fig);
+  });
+})();
+</script>
+</body>
+</html>
