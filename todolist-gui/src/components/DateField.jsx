@@ -29,6 +29,7 @@ export default function DateField({
   placeholder = '未设置',
   hideLabel = false,
   className = '',
+  suffix = null,
 }) {
   // 所有 Hook 无条件调用：弹层开关只影响渲染分支，不影响 Hook 数量。
   const [open, setOpen] = useState(false);
@@ -136,6 +137,7 @@ export default function DateField({
           onClick={toggle}
         >
           <span className="date-field-text">{display || placeholder}</span>
+          {suffix}
           <Icon name={withTime ? 'clock' : 'calendar'} size={16} />
         </button>
       </div>

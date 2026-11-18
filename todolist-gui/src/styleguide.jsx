@@ -48,6 +48,7 @@ import { ContextMenuProvider } from './hooks/useContextMenu.jsx';
 import { useTheme } from './hooks/useTheme';
 import { useAlwaysOnTop } from './hooks/useAlwaysOnTop.js';
 import { initTheme } from './lib/theme.js';
+import { initSkin } from './lib/skin.js';
 import { initDensity } from './lib/readingDensity.js';
 import { buildTodoSnapshot } from './lib/todoSnapshot.js';
 
@@ -883,6 +884,7 @@ function Root() {
 // 主题同样要走真实链路：QA 脚本用 CDP 模拟 prefers-color-scheme 截暗色图，
 // 而暗色令牌只认 <html data-theme>，所以这一页也要先把档位投上去。
 initTheme();
+initSkin();
 // 阅读密度走同一条链路：设置页预览换档时，外壳的字号 / 行距也要真的跟着变。
 initDensity();
 

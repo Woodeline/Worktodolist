@@ -60,6 +60,34 @@ export function formatDateShort(value, withTime) {
   return t ? `${base} ${t[1]}:${t[2]}` : base;
 }
 
+/** 截止日相对今天的人话读数：今天 / 明天 / 后天 / 昨天 / 逾期 N 天 / N 天后；无日期为空串。
+ *  base 省略时取本机今天（仅运行时用）；单测传固定 base，不读时钟。 */
+export function describeDueRel(value, base) {
+  const { date } = parseDateValue(value);
+  if (!date) return '';
+  const day = base instanceof Date && !Number.isNaN(base.getTime())
+    ? new Date(base.getFullYear(), base.getMonth(), base.getDate())
+    : new Date();
+  day.setHours(0, 0, 0, 0);
+  const n = Math.round((date - day) / 86400000);
+  if (n === 0) return '今天';
+  if (n === 1) return '明天';
+  if (n === 2) return '后天';
+  if (n === -1) return '昨天';
+  return n < 0 ? `逾期 ${-n} 天` : `${n} 天后`;
+}
+
+/** 逾期 = 截止日严格早于今天（与列表 / 日历同一口径）。无日期不算逾期。 */
+export function isDueOverdue(value, base) {
+  const { date } = parseDateValue(value);
+  if (!date) return false;
+  const day = base instanceof Date && !Number.isNaN(base.getTime())
+    ? new Date(base.getFullYear(), base.getMonth(), base.getDate())
+    : new Date();
+  day.setHours(0, 0, 0, 0);
+  return date < day;
+}
+
 /** 快捷预设。base 省略时取本机今天（仅运行时用）。 */
 export function makePresets(base) {
   const day = base instanceof Date && !Number.isNaN(base.getTime())

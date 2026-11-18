@@ -4,12 +4,16 @@ import App from './App.jsx';
 import AppBoundary from './components/AppBoundary.jsx';
 import { ContextMenuProvider } from './hooks/useContextMenu.jsx';
 import { initTheme } from './lib/theme.js';
+import { initSkin } from './lib/skin.js';
 import { initDensity } from './lib/readingDensity.js';
 import './index.css';
 
 // 主题要在第一帧之前就落到 <html data-theme> 上：暗色令牌只认这个属性，
 // 晚一步就是一屏亮色。
 initTheme();
+
+// 外观主题同理：皮肤令牌只认 <html data-skin>，晚一步会先闪一帧原版。
+initSkin();
 
 // 阅读密度同理：字号 / 行距偏好要在第一帧就投到 --pref-* 上，晚一步会先闪一帧默认档。
 initDensity();

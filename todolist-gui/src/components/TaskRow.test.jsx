@@ -461,10 +461,20 @@ describe('TaskRow 子任务行：独立版式（2026-11-15）', () => {
       path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'index.css'),
       'utf8'
     );
-    // 明暗两套令牌都要在：只加一套，另一主题会退回旧线
-    expect((css.match(/\n  --row-line:/g) || []).length).toBe(2);
-    expect((css.match(/\n  --row-line-child:/g) || []).length).toBe(2);
-    expect((css.match(/\n  --row-line-halo:/g) || []).length).toBe(2);
+    // 明暗两套令牌都要在：只加一套，另一主题会退回旧线。
+    // 2026-11-18 四档皮肤后：基线明暗 2 套 + 素纸/夜航/园庭 各明暗 2 套 = 8 处；
+    // 皮肤暗块漏重述就会漏浅色值进深色，所以逐档检查暗块里真的有这条令牌。
+    expect((css.match(/\n  --row-line:/g) || []).length).toBe(8);
+    expect((css.match(/\n  --row-line-child:/g) || []).length).toBe(8);
+    expect((css.match(/\n  --row-line-halo:/g) || []).length).toBe(8);
+    for (const skin of ['paper', 'night', 'garden']) {
+      const at = css.indexOf(`:root[data-skin="${skin}"][data-theme="dark"] {`);
+      expect(at).toBeGreaterThan(-1);
+      const body = css.slice(at, css.indexOf('}', at));
+      expect(body).toContain('--row-line:');
+      expect(body).toContain('--row-line-child:');
+      expect(body).toContain('--row-line-halo:');
+    }
     const rowAt = css.indexOf('.task-row {');
     const rowBody = css.slice(rowAt, css.indexOf('}', rowAt));
     expect(rowBody).toContain('border-bottom: 1px solid var(--row-line)');

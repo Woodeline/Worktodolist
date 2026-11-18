@@ -246,6 +246,11 @@ async function main() {
       densityPreviewRows: document.querySelectorAll('.density-preview .dp-row').length,
       densityReset: document.querySelectorAll('.density-reset').length,
       // 主题只有一枚按钮，点一次轮换一档；按钮画的是当前档，不再有实心底。
+      // 外观主题：四枚样张按钮 × 三枚小样；恰好一档按下。
+      skinBtns: document.querySelectorAll('.skin-switch .skin-btn').length,
+      skinPressed: Array.from(document.querySelectorAll('.skin-switch .skin-btn')).map((b) => b.getAttribute('aria-pressed')),
+      skinLabels: Array.from(document.querySelectorAll('.skin-switch .skin-btn')).map((b) => b.textContent.trim()),
+      skinSwatches: document.querySelectorAll('.skin-switch .skin-sw i').length,
       themeBtns: document.querySelectorAll('.tabs .tab[data-mode]').length,
       themeMode: (document.querySelector('.tabs .tab[data-mode]') || {}).dataset?.mode || '',
       themeSolid: document.querySelectorAll('.tabs .tab[data-mode].is-solid').length,
@@ -259,9 +264,10 @@ async function main() {
   // 2026-11-14 数据节加入（底栏删除后，「手动重载 / 切换目录」搬到这里）：
   // 仍是严格顺序比较，少一节、多一节、换顺序都会红。
   // 2026-11-14 阅读密度节加入（侧栏 / 列表的字号与行距，插在列表外观之后）：七节。
-  const WANT_GROUPS = ['列表外观', '阅读密度', '显示模式', '数据', '全局', '列表页', '日历'];
+  // 2026-11-18 外观主题节加入（四档皮肤，插在显示模式之后）：八节。
+  const WANT_GROUPS = ['列表外观', '阅读密度', '显示模式', '外观主题', '数据', '全局', '列表页', '日历'];
   check(
-    '分组为「列表外观 / 阅读密度 / 显示模式 / 数据 / 全局 / 列表页 / 日历」',
+    '分组为「列表外观 / 阅读密度 / 显示模式 / 外观主题 / 数据 / 全局 / 列表页 / 日历」',
     JSON.stringify(shape.groupTitles) === JSON.stringify(WANT_GROUPS),
     JSON.stringify(shape.groupTitles)
   );
@@ -339,6 +345,50 @@ async function main() {
     densityReset && densityReset.resetGone && densityReset.pressedLabel.includes('标准')
     && densityReset.rootVar === '' && densityReset.navH === '26px',
     JSON.stringify(densityReset));
+
+  check('外观主题：四枚样张按钮（原版/素纸/夜航/园庭）、恰好一档按下、每枚三枚小样',
+    shape.skinBtns === 4 && shape.skinPressed.filter((v) => v === 'true').length === 1
+    && JSON.stringify(shape.skinLabels) === JSON.stringify(['原版', '素纸', '夜航', '园庭'])
+    && shape.skinSwatches === 12,
+    JSON.stringify({ btns: shape.skinBtns, pressed: shape.skinPressed, labels: shape.skinLabels, sw: shape.skinSwatches }));
+
+  // 外观主题交互链路：点「夜航」→ data-skin 投影 + 落盘 + 令牌真的换；
+  // 点回「原版」→ 基线宽度恢复。只证明按钮画出来不够，要证明偏好 → 投影 → 令牌这条链是通的。
+  // 2026-11-18 二改：侧栏四档同形 —— 换档不许动侧栏宽度与行高（夜航早期收到 56px
+  // 图标轨、行高 36，走的就是这里这条断言的反面），所以这里盯的是「换了档也不变」。
+  const skinPick = await evalJs(`(() => {
+    const btn = document.querySelector('.skin-btn[data-skin="night"]');
+    if (!btn) return null;
+    btn.click();
+    return new Promise((res) => setTimeout(() => {
+      const root = getComputedStyle(document.documentElement);
+      res({
+        attr: document.documentElement.dataset.skin,
+        stored: localStorage.getItem('worktodolist.skin'),
+        pressed: (document.querySelector('.skin-btn[aria-pressed="true"]') || {}).textContent || '',
+        sideW: root.getPropertyValue('--sidebar-w').trim(),
+        navH: root.getPropertyValue('--nav-h').trim(),
+      });
+    }, 250));
+  })()`);
+  check('外观主题：点夜航 → data-skin 投影 + 落盘 + 侧栏仍 176 / 行高仍 26',
+    skinPick && skinPick.attr === 'night' && (skinPick.stored || '').includes('night')
+    && skinPick.pressed.includes('夜航') && skinPick.sideW === '176px' && skinPick.navH === '26px',
+    JSON.stringify(skinPick));
+  const skinBack = await evalJs(`(() => {
+    const btn = document.querySelector('.skin-btn[data-skin="classic"]');
+    if (!btn) return null;
+    btn.click();
+    return new Promise((res) => setTimeout(() => {
+      res({
+        attr: document.documentElement.dataset.skin,
+        sideW: getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w').trim(),
+      });
+    }, 250));
+  })()`);
+  check('外观主题：点回原版 → 侧栏仍 176（换档不改骨架）',
+    skinBack && skinBack.attr === 'classic' && skinBack.sideW === '176px',
+    JSON.stringify(skinBack));
 
   if (WANT_SHOTS) await shot('settings-1280.png');
 

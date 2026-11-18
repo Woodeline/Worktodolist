@@ -297,6 +297,26 @@ const PATHS = {
       <circle cx="15" cy="19" r="1" />
     </>
   ), // lucide:grip-vertical —— 排序「手动」（文件行序，可拖拽）
+  'repeat': (
+    <>
+      <path d="m17 2 4 4-4 4" />
+      <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+      <path d="m7 22-4-4 4-4" />
+      <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+    </>
+  ), // lucide:repeat —— 编辑浮窗读数条的「重复」
+  'bell': (
+    <>
+      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+    </>
+  ), // lucide:bell —— 编辑浮窗读数条的「提醒」
+  'file': (
+    <>
+      <path d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5Z" />
+      <path d="M15 3v6h6" />
+    </>
+  ), // lucide:file —— 编辑浮窗备注入口（notes.md 那张纸）
 };
 
 export default function Icon({ name, size = 16, title, className = '', ...rest }) {

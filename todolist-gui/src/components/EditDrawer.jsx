@@ -5,6 +5,7 @@ import { computeTagMenuPlacement } from '../lib/placement.js';
 import { PRIORITY_LABELS, sidebarStats } from '../lib/sortFilter';
 import { priorityClass } from '../lib/priority';
 import { buildNesting, childrenOf } from '../lib/subtasks.js';
+import { describeDueRel, formatDateShort, isDueOverdue } from '../lib/dateField.js';
 import { nextInTrap, pickRestoreTarget, queryFocusable } from '../lib/focusTrap.js';
 import DateField from './DateField.jsx';
 import Icon from './Icon.jsx';
@@ -16,6 +17,9 @@ import Icon from './Icon.jsx';
 // 加完就能核对，不必回到列表里找它们缩进在哪。
 function SubtaskField({ store, task }) {
   const [text, setText] = useState('');
+  // 「添加子任务」平时是一条加号线；点它才长出输入框 —— 清单是"看"的地方，
+  // 常驻一个空输入框会让这块读起来像还没填完的表单。
+  const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState('');
   const cancelEditRef = useRef(false);
@@ -67,11 +71,16 @@ function SubtaskField({ store, task }) {
   };
 
   return (
-    <div className="field field-subtasks">
-      <div className="subtask-head">
-        <span className="field-subtasks-label">
-          子任务{kids.length > 0 ? ` · ${doneCount}/${kids.length}` : ''}
-        </span>
+    <div className="drawer-block">
+      <div className="drawer-bhead">
+        <span className="drawer-key">子任务</span>
+        {/* 计数是一条读数：走等宽族，与列表里的 1/2 同一支笔。 */}
+        {kids.length > 0 && (
+          <span className="subtask-count">
+            {doneCount}/{kids.length}
+          </span>
+        )}
+        <span className="drawer-bhead-sp" />
         {kids.length > 0 && (
           <div className="subtask-progress" aria-hidden="true">
             <span style={{ width: `${pct}%` }} />
@@ -134,32 +143,47 @@ function SubtaskField({ store, task }) {
           })}
         </ul>
       )}
-      <div className="subtask-add">
-        <input
-          type="text"
-          value={text}
-          placeholder="添加子任务"
-          aria-label="添加子任务"
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            // 回车在这里是"加一条"，不是"保存整个浮窗" —— 不拦住的话
-            // 每加一个子任务都会顺手把浮窗关掉。
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              e.stopPropagation();
+      {adding ? (
+        <div className="subtask-add">
+          <input
+            type="text"
+            value={text}
+            placeholder="添加子任务"
+            aria-label="添加子任务"
+            autoFocus
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              // 回车在这里是"加一条"，不是"保存整个浮窗" —— 不拦住的话
+              // 每加一个子任务都会顺手把浮窗关掉。加完留在输入态，连着加不必再点一次。
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                add();
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                setText('');
+                setAdding(false);
+              }
+            }}
+            onBlur={() => {
               add();
-            }
-          }}
-        />
-        <button type="button" className="btn btn-sm" onClick={add} disabled={!text.trim()}>
-          添加
+              setAdding(false);
+            }}
+          />
+        </div>
+      ) : (
+        <button type="button" className="subtask-addline" onClick={() => setAdding(true)}>
+          <Icon name="plus" size={14} />
+          <span>添加子任务</span>
         </button>
-      </div>
+      )}
     </div>
   );
 }
 
-const PRIORITY_ORDER = ['A', 'B', 'C'];
+// 优先级刻度尺的段序：从低到高（无 → 低 → 中 → 高），与尺子的读法一致。
+const PRIORITY_ORDER = ['C', 'B', 'A'];
 
 function toList(text, prefix) {
   return text
@@ -170,15 +194,30 @@ function toList(text, prefix) {
     .filter(Boolean);
 }
 
-// @分类 / +标签 字段：文本输入照旧可手打；右侧箭头展开**已保存**的候选清单，
-// 点候选即勾选/取消。候选与手输写回同一个逗号分隔的字符串，只有一份真相。
+// @分类 / +标签 字段：已选的值是一排胶囊（点 × 移除），「+分类」点开一条下划线输入
+// 手打新值（回车提交、可连打），最右一枚小箭头展开**已保存**的候选清单，点候选即勾选/取消。
+// 胶囊、手输、候选写回同一个逗号分隔的字符串，只有一份真相。
 //
 // 清单用 createPortal 挂到 body：它原来绝对定位在 .drawer-body 里，向上翻时
 // 顶部一行会被那个 overflow-y:auto 的滚动容器裁掉，还把上方两行字段整片盖住。
 // 挂出去之后按实测空间决定上下方向、收缩高度并自身滚动，首行永远完整可见。
-function TagField({ label, prefix, placeholder, value, onChange, options, emptyHint }) {
+function TagField({
+  label,
+  prefix,
+  placeholder,
+  value,
+  onChange,
+  options,
+  emptyHint,
+  hideLabel = false,
+  className = '',
+  addLabel,
+  dot = false,
+}) {
   const [open, setOpen] = useState(false);
   const [placement, setPlacement] = useState(null);
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState('');
   const boxRef = useRef(null);
   const menuRef = useRef(null);
   const selected = toList(value, prefix);
@@ -217,6 +256,17 @@ function TagField({ label, prefix, placeholder, value, onChange, options, emptyH
     onChange(next.join(', '));
   };
 
+  // 手打提交：逗号 / 空格分隔一次加多个，去重后并入已选；提交后清空但留在输入态。
+  const commitDraft = () => {
+    const names = toList(draft, prefix);
+    if (names.length) {
+      const next = [...selected];
+      for (const n of names) if (!next.includes(n)) next.push(n);
+      onChange(next.join(', '));
+    }
+    setDraft('');
+  };
+
   // 先量后放：下方不够才向上翻，两个方向都夹在视口内（纯函数见 lib/placement.js）。
   const openMenu = () => {
     const box = boxRef.current;
@@ -249,20 +299,66 @@ function TagField({ label, prefix, placeholder, value, onChange, options, emptyH
     }
   };
 
+  // 先算成变量再挂到根节点：静态门禁按模板反引号配对取值，
+  // 直接在属性里拼模板会让扫描器把后面的 JSX 一起吞成伪类名。
+  const rootClass = 'field field-tags' + (className ? ' ' + className : '');
+
   return (
-    <div className="field field-tags" ref={boxRef}>
-      <span>{label}</span>
-      <div className="tag-input">
-        <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+    <div className={rootClass} ref={boxRef}>
+      {hideLabel ? null : <span>{label}</span>}
+      <div className="tag-chips">
+        {selected.map((name) => (
+          <span className="chip" key={name}>
+            {dot && <i className="chip-dot" aria-hidden="true" />}
+            <b>
+              {prefix}
+              {name}
+            </b>
+            <button type="button" aria-label={`移除 ${prefix}${name}`} onClick={() => toggle(name)}>
+              <Icon name="x" size={12} />
+            </button>
+          </span>
+        ))}
+        {adding ? (
+          <input
+            className="chip-input"
+            value={draft}
+            placeholder={placeholder}
+            aria-label={`添加${label}`}
+            autoFocus
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                commitDraft();
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                setDraft('');
+                setAdding(false);
+              }
+            }}
+            onBlur={() => {
+              commitDraft();
+              setAdding(false);
+            }}
+          />
+        ) : (
+          <button type="button" className="chip-add" onClick={() => setAdding(true)}>
+            <Icon name="plus" size={12} />
+            <span>{addLabel || label}</span>
+          </button>
+        )}
         <button
           type="button"
-          className={'tag-toggle' + (open ? ' is-open' : '')}
+          className={'chip-add is-icon' + (open ? ' is-open' : '')}
           aria-haspopup="listbox"
           aria-expanded={open}
-          aria-label="展开候选"
+          aria-label={`展开${label}候选`}
           onClick={() => (open ? setOpen(false) : openMenu())}
         >
-          <Icon name="chevron-down" size={16} />
+          <Icon name="chevron-down" size={12} />
         </button>
       </div>
       {open && placement && typeof document !== 'undefined' && createPortal(
@@ -304,6 +400,182 @@ function TagField({ label, prefix, placeholder, value, onChange, options, emptyH
               );
             })
           )}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
+// 重复档位：自绘单选下拉。
+//
+// 为什么不用原生 select：它的**弹出层由系统绘制**（macOS 上是深灰长菜单 + 系统对勾），
+// 既不认本项目的明暗令牌，也和这扇「一页纸」浮窗完全两个语气 —— 一展开，整页像被人贴了
+// 一张别处的截图。这里换成与 @分类 / +标签 候选清单同一套外观（.tag-menu / .tag-option）
+// 和同一套先量后放（computeTagMenuPlacement）：菜单挂 body 不被滚动区裁切，选中项打勾，
+// 触发器仍是一枚凹槽控件（同高、同底、同描边，与隔壁输入框齐平）。
+//
+// 键盘：触发器 ↑ / ↓ 展开；菜单里 ↑↓ Home End 移动、Enter / Space 选定（button 原生语义）、
+// Tab 关闭并把焦点交给触发器的下 / 上一个控件 —— 单选选完就走，不像多选清单那样把 Tab 困住。
+function SelectField({ label, value, options, onChange, containerRef, hideLabel = false, className = '' }) {
+  const [open, setOpen] = useState(false);
+  const [placement, setPlacement] = useState(null);
+  const boxRef = useRef(null);
+  const menuRef = useRef(null);
+  const triggerRef = useRef(null);
+  const current = options.find((o) => o.value === value) || options[0];
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDocDown = (e) => {
+      // 菜单挂在 body 上，不在 boxRef 内，必须单独放行：否则 mousedown 先把菜单收掉，
+      // 随后的 click 就落空了。
+      if (boxRef.current?.contains(e.target) || menuRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      // 捕获阶段：菜单的 Esc 只收菜单，不把整个编辑浮窗一起关掉。
+      e.stopPropagation();
+      setOpen(false);
+      triggerRef.current?.focus();
+    };
+    const onDismiss = () => setOpen(false);
+    document.addEventListener('mousedown', onDocDown);
+    document.addEventListener('keydown', onKey, true);
+    window.addEventListener('scroll', onDismiss, true);
+    window.addEventListener('resize', onDismiss);
+    return () => {
+      document.removeEventListener('mousedown', onDocDown);
+      document.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('scroll', onDismiss, true);
+      window.removeEventListener('resize', onDismiss);
+    };
+  }, [open]);
+
+  // 打开后焦点落在当前档上：键盘用户不必再按一次方向键才知道自己在哪一档。
+  useEffect(() => {
+    if (!open) return;
+    const menu = menuRef.current;
+    if (!menu) return;
+    const target = menu.querySelector('[aria-selected="true"]') || menu.querySelector('[role="option"]');
+    if (target) target.focus();
+  }, [open]);
+
+  // 先量后放：高度按实际档位估算，别用统一上限 —— 否则四个档位的小菜单明明放得下，
+  // 也会因为「下方不如上方宽裕」被翻到触发器头顶。
+  const openMenu = () => {
+    const box = boxRef.current;
+    if (!box) return;
+    setPlacement(
+      computeTagMenuPlacement(
+        box.getBoundingClientRect(),
+        { width: window.innerWidth, height: window.innerHeight },
+        options.length * 28 + 12
+      )
+    );
+    setOpen(true);
+  };
+
+  const choose = (next) => {
+    onChange(next);
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  const onTriggerKeyDown = (e) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    openMenu();
+  };
+
+  const onMenuKeyDown = (e) => {
+    if (e.key === 'Tab') {
+      // 单选选完就走：关菜单，再把焦点交给**触发器**的下 / 上一个控件。
+      // 落点自己算，不交给浏览器的默认 Tab —— 菜单挂在 body 末尾，
+      // 浏览器的默认行为会从「菜单项」起算，Shift+Tab 会一路退到「保存」。
+      const target = nextInTrap(queryFocusable(containerRef?.current), triggerRef.current, e.shiftKey);
+      e.preventDefault();
+      e.stopPropagation();
+      setOpen(false);
+      if (target) target.focus();
+      return;
+    }
+    if (e.key === 'Enter' || e.key === ' ') {
+      // 显式激活：不依赖「button 对 Enter 的默认激活」—— 那条路径在长按 / 输入法
+      // 组合下偶尔不触发，而这里按一下就该定下来，落了空会让人以为菜单坏了。
+      e.preventDefault();
+      e.stopPropagation();
+      const cur = document.activeElement;
+      if (cur && cur.getAttribute('role') === 'option') cur.click();
+      return;
+    }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return;
+    const items = menuRef.current ? Array.from(menuRef.current.querySelectorAll('[role="option"]')) : [];
+    if (items.length === 0) return;
+    e.preventDefault();
+    const at = items.indexOf(document.activeElement);
+    const next =
+      e.key === 'Home'
+        ? items[0]
+        : e.key === 'End'
+          ? items[items.length - 1]
+          : e.key === 'ArrowDown'
+            ? items[Math.min(items.length - 1, at + 1)]
+            : items[Math.max(0, at - 1)];
+    if (next) next.focus();
+  };
+
+  const rootClass = 'field field-select' + (className ? ' ' + className : '');
+
+  return (
+    <div className={rootClass} ref={boxRef}>
+      {hideLabel ? null : <span>{label}</span>}
+      <button
+        type="button"
+        className={'select-trigger' + (open ? ' is-open' : '')}
+        ref={triggerRef}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={label}
+        onClick={() => (open ? setOpen(false) : openMenu())}
+        onKeyDown={onTriggerKeyDown}
+      >
+        <span className="select-value">{current ? current.label : ''}</span>
+        <span className="select-caret">
+          <Icon name="chevron-down" size={16} />
+        </span>
+      </button>
+      {open && placement && typeof document !== 'undefined' && createPortal(
+        <div
+          className="tag-menu"
+          ref={menuRef}
+          role="listbox"
+          aria-label={label}
+          onKeyDown={onMenuKeyDown}
+          style={{
+            top: placement.top,
+            left: placement.left,
+            width: placement.width,
+            maxHeight: placement.maxHeight,
+          }}
+        >
+          {options.map((o) => {
+            const on = o.value === value;
+            return (
+              <button
+                type="button"
+                key={o.value || 'none'}
+                role="option"
+                aria-selected={on}
+                className={'tag-option' + (on ? ' sel' : '')}
+                onClick={() => choose(o.value)}
+              >
+                <span className="tag-option-check">{on ? <Icon name="check" size={16} /> : null}</span>
+                <span className="tag-option-name">{o.label}</span>
+              </button>
+            );
+          })}
         </div>,
         document.body
       )}
@@ -358,10 +630,43 @@ export default function EditDrawer({ store }) {
   return <EditForm key={task.id} task={task} store={store} />;
 }
 
+/**
+ * 表单指纹：只取 save() 真正会写回文件的那些字段。
+ * 用途是「有没有改动」这一条读数 —— 分类 / 标签先按逗号归一，
+ * 否则多敲一个空格也会点亮「未保存」，提示就失去意义。
+ * 提成纯函数是为了能被单测锁住：它必须和 save() 提交的字段同源。
+ */
+export function formSignature(form) {
+  return JSON.stringify([
+    form.title.trim(),
+    form.priority,
+    form.dueDate,
+    form.remindAt,
+    form.recurrence,
+    toList(form.contexts, '@').join(','),
+    toList(form.projects, '+').join(','),
+    form.note,
+    Boolean(form.starred),
+  ]);
+}
+
 function EditForm({ task, store }) {
   const [form, setForm] = useState(() => formFromTask(task, store));
   const [editingNote, setEditingNote] = useState(false);
+  // 空标题守卫：todo.txt 的行首就是标题，清空标题保存会写出一行只剩属性的空任务 ——
+  // 它不再显示任何文字，只能靠 id: 找回来。所以保存前拦一道，并把标题框标成危险态。
+  const [titleError, setTitleError] = useState(false);
+  // 删除的二次确认：这个浮窗里没有撤销，误触一次就是一条记录没了。
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  // 关闭前的放弃确认：只在真的改过东西时才多问一句，没改就直接关，不添步数。
+  const [discardAsk, setDiscardAsk] = useState(false);
   const winRef = useRef(null);
+  const titleRef = useRef(null);
+  const prioRef = useRef(null);
+  const confirmRef = useRef(null);
+  // 打开时的指纹。惰性算一次就够（表单的初始值此后不会再回到"原始态"）。
+  const initialRef = useRef(null);
+  if (initialRef.current === null) initialRef.current = formSignature(form);
 
   // 已保存的分类 / 标签候选：复用侧栏统计，取的就是 todo.txt 里的真实值。
   const { contexts: contextOptions, projects: projectOptions } = useMemo(
@@ -393,6 +698,32 @@ function EditForm({ task, store }) {
   const priorities = [...PRIORITY_ORDER];
   if (task.priority && !priorities.includes(task.priority)) priorities.push(task.priority);
 
+  // 优先级四档（含「无」与手写的非标准档）：分段控件的段序就是这里的顺序。
+  const prioOptions = [
+    { value: '', label: '无', cls: 'prio-none' },
+    ...priorities.map((p) => ({ value: p, label: PRIORITY_LABELS[p] || p, cls: priorityClass(p) })),
+  ];
+  const prioIndex = Math.max(
+    0,
+    prioOptions.findIndex((o) => o.value === form.priority)
+  );
+
+  // roving tabindex：整组只停一次 Tab，←/→（以及 ↑/↓、Home/End）换档并同步移动焦点。
+  // 这是 radiogroup 的标准行为；四颗各自可 Tab 的按钮会让"跳过这组"变成四次按键。
+  const onPriorityKeyDown = (e) => {
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    let next = null;
+    if (step) next = (prioIndex + step + prioOptions.length) % prioOptions.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = prioOptions.length - 1;
+    if (next === null) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setForm((f) => ({ ...f, priority: prioOptions[next].value }));
+    const btn = prioRef.current?.querySelectorAll('button')[next];
+    if (btn) btn.focus();
+  };
+
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
   // 手写的规则（rec:+5d、rec:mon,wed）可能不在预设里，补一个选项进去，
@@ -403,11 +734,57 @@ function EditForm({ task, store }) {
     return [...RECURRENCE_CHOICES, { value: cur, label: describeRecurrence(cur) || cur }];
   }, [form.recurrence]);
 
+  // 读数条与刻度行共用同一份表单值：条上是摘要，行里是可编辑的控件。
+  const dueRel = describeDueRel(form.dueDate);
+  const dueOverdue = isDueOverdue(form.dueDate);
+  const prioCurrent = prioOptions[prioIndex];
+  const recCurrent =
+    recurrenceOptions.find((o) => o.value === form.recurrence) || recurrenceOptions[0];
+
+  // 读数条是捷径：点它去打开 / 聚焦对应那一行的控件，不另养第二份弹层状态。
+  const jumpField = (field, selector) => {
+    const el =
+      winRef.current && winRef.current.querySelector('[data-field="' + field + '"] ' + selector);
+    if (el) el.click();
+  };
+  const focusPrio = () => {
+    const btn = prioRef.current && prioRef.current.querySelector('[aria-checked="true"]');
+    if (btn) btn.focus();
+  };
+
+  // 「未保存」是一条读数，不是一句说明：只在真有改动时出现。
+  const dirty = formSignature(form) !== initialRef.current;
+
+  // 关闭的所有路径（Esc / 取消 / 点遮罩 / 右上角 ×）都经过这里：
+  // 改过东西就多问一句，没改就直接关 —— 不给没改动的人添步数。
+  const requestClose = () => {
+    if (dirty) {
+      setDiscardAsk(true);
+      return;
+    }
+    store.closeEditor();
+  };
+
+  // 从「放弃修改？」退回表单：先把焦点交回浮窗，再卸掉这一层 ——
+  // 否则被卸掉的那颗按钮会把焦点一起带走，用户下一次按 Tab 会从页面顶部开始。
+  const closeDiscardAsk = () => {
+    setDiscardAsk(false);
+    winRef.current?.focus();
+  };
+
   const save = async () => {
     // 只提交表单里有的字段；未列出的（如 t: 阈值日期）由 applyPatch 原样保留，
     // 编辑一次不该把已有数据抹掉。
+    const title = form.title.trim();
+    if (!title) {
+      // 空标题不是一个可以保存的状态：拦下来、标红、把焦点送回标题框。
+      // 保存按钮不禁用 —— 禁用只会让「点了没反应」变得没有解释。
+      setTitleError(true);
+      titleRef.current?.focus();
+      return;
+    }
     store.updateTask(task.id, {
-      title: form.title.trim(),
+      title,
       priority: form.priority || null,
       dueDate: form.dueDate || null,
       remindAt: form.remindAt || null,
@@ -421,6 +798,9 @@ function EditForm({ task, store }) {
     if (form.note !== noteOf(store, task.stableId) && typeof store.saveNote === 'function') {
       store.saveNote(task.id, form.note);
     }
+    // 关窗后补一条轻提示：改动写在文件里，但「今天」等多个视图下这一行可能不在本屏，
+    // 没有反馈的话，「保存」和「没保存」在画面上是一样的。
+    if (typeof store.showToast === 'function') store.showToast('已保存');
     store.closeEditor();
   };
 
@@ -432,7 +812,12 @@ function EditForm({ task, store }) {
   const handleKeyDown = (e) => {
     if (e.key === 'Escape') {
       e.stopPropagation();
-      store.closeEditor();
+      // 已进入待确认的删除：Esc 先撤掉那一步，而不是顺手把整个浮窗关掉。
+      if (deleteArmed) {
+        setDeleteArmed(false);
+        return;
+      }
+      requestClose();
       return;
     }
     // Tab 焦点陷阱：到头循环，不让焦点穿过浮窗落到背后的列表上。
@@ -453,7 +838,14 @@ function EditForm({ task, store }) {
   };
 
   const handleBackdrop = (e) => {
-    if (e.target === e.currentTarget) store.closeEditor();
+    if (e.target === e.currentTarget) requestClose();
+  };
+
+  // 待确认的删除被「别处的操作」撤掉：点窗内任何非删除按钮、或点遮罩，都算反悔。
+  const handleWindowMouseDown = (e) => {
+    if (!deleteArmed) return;
+    if (e.target.closest && e.target.closest('.drawer-delete')) return;
+    setDeleteArmed(false);
   };
 
   return (
@@ -466,125 +858,209 @@ function EditForm({ task, store }) {
         tabIndex={-1}
         ref={winRef}
         onKeyDown={handleKeyDown}
+        onMouseDown={handleWindowMouseDown}
       >
         <div className="drawer-header">
-          <input
-            className="drawer-title-input"
-            value={form.title}
-            onChange={set('title')}
-            placeholder="任务标题"
-            aria-label="任务标题"
-            autoFocus
-          />
-          {/* 标题栏那枚旗标按钮已于 2026-11-15 退场：旗标此后只表示优先级
-              （列表标题左侧的中空旗），同一处再摆一枚「加旗标」开关会让两个概念
-              撞在一起。star: 数据本身仍原样保留（form.starred 直接透传保存）。 */}
-          <button className="icon-btn" onClick={store.closeEditor} aria-label="关闭">
-            <Icon name="x" size={16} />
-          </button>
+          {/* 标题行：标题与关闭钮同处一行（2026-11-18 四改）。
+              `id:` 与 `L行号` 那组文件坐标已撤（三改）—— 用户改的是任务，不是那一行的地址。
+              关闭钮原先是独立一行，撤掉坐标后那行只剩一枚叉号，卡顶到标题之间空出 44px，
+              读起来像少渲染了一行；现在两者共用一行，标题就是这张卡的第一行字。 */}
+          <div className="drawer-headline">
+            <input
+              className={'drawer-title-input' + (titleError ? ' is-error' : '')}
+              ref={titleRef}
+              value={form.title}
+              onChange={(e) => {
+                if (titleError) setTitleError(false);
+                set('title')(e);
+              }}
+              placeholder="任务标题"
+              aria-label="任务标题"
+              aria-invalid={titleError || undefined}
+              autoFocus
+            />
+            <button className="drawer-close" onClick={requestClose} aria-label="关闭">
+              <Icon name="x" size={16} />
+            </button>
+          </div>
+          {/* 读数条：四个属性摘要常驻卡头，不滚走；点一枚去打开对应那一行的控件。 */}
+          <div className="drawer-strip">
+            <button
+              type="button"
+              className="drawer-read"
+              onClick={focusPrio}
+              aria-label={`优先级：${prioCurrent.label}`}
+            >
+              {prioCurrent.value ? (
+                <Icon name="flag" size={14} className={'flag ' + prioCurrent.cls} />
+              ) : null}
+              <span>{prioCurrent.label}</span>
+            </button>
+            <button
+              type="button"
+              className={
+                'drawer-read' + (dueOverdue ? ' is-overdue' : form.dueDate ? '' : ' is-empty')
+              }
+              onClick={() => jumpField('due', '.date-field-btn')}
+              aria-label={`截止日期：${formatDateShort(form.dueDate) || '未设置'}`}
+            >
+              <Icon name="calendar" size={14} />
+              <span className="drawer-num">{formatDateShort(form.dueDate) || '未设置'}</span>
+              {dueRel ? <span className="drawer-read-rel">{dueRel}</span> : null}
+            </button>
+            <button
+              type="button"
+              className={'drawer-read' + (form.recurrence ? '' : ' is-empty')}
+              onClick={() => jumpField('rec', '.select-trigger')}
+              aria-label={`重复：${recCurrent.label}`}
+            >
+              <Icon name="repeat" size={14} />
+              <span>{recCurrent.label}</span>
+            </button>
+            <button
+              type="button"
+              className={'drawer-read' + (form.remindAt ? '' : ' is-empty')}
+              onClick={() => jumpField('rem', '.date-field-btn')}
+              aria-label={`提醒时刻：${formatDateShort(form.remindAt, true) || '未设置'}`}
+            >
+              <Icon name="bell" size={14} />
+              <span className="drawer-num">{formatDateShort(form.remindAt, true) || '未设置'}</span>
+            </button>
+          </div>
         </div>
 
         <div className="drawer-body">
-          {/* 优先级与重复同一行，优先级占 2/3；两个日期在下一行并排。 */}
-          <div className="field-row field-row-prio">
-            <div className="field">
-              <span>优先级</span>
-              <div className="priority-picker">
-                <button
-                  type="button"
-                  className={'prio-none' + (form.priority === '' ? ' sel' : '')}
-                  onClick={() => setForm((f) => ({ ...f, priority: '' }))}
-                >
-                  无
-                </button>
-                {priorities.map((p) => (
+          {/* 刻度行：左列是刻度（10px mono），右列平时是读数、hover 才浮出可编辑的底。 */}
+          <div className="drawer-rows">
+            <div className="drawer-row" data-field="prio">
+              <span className="drawer-key">优先级</span>
+              {/* 刻度尺：一条基线 + 四档，选中档下方一道 2px 本色刻度。
+                  它是「一个属性的四档」，roving tabindex 整组只停一次 Tab。 */}
+              <div
+                className="prio-ruler"
+                role="radiogroup"
+                aria-label="优先级"
+                ref={prioRef}
+                onKeyDown={onPriorityKeyDown}
+              >
+                {prioOptions.map((o) => (
                   <button
+                    key={o.value || 'none'}
                     type="button"
-                    key={p}
-                    className={priorityClass(p) + (form.priority === p ? ' sel' : '')}
-                    onClick={() => setForm((f) => ({ ...f, priority: p }))}
+                    role="radio"
+                    aria-checked={form.priority === o.value}
+                    tabIndex={form.priority === o.value ? 0 : -1}
+                    className={o.cls + (form.priority === o.value ? ' sel' : '')}
+                    onClick={() => setForm((f) => ({ ...f, priority: o.value }))}
                   >
-                    {PRIORITY_LABELS[p] || p}
+                    {o.value ? <Icon name="flag" size={14} className={'flag ' + o.cls} /> : null}
+                    <span>{o.label}</span>
                   </button>
                 ))}
               </div>
             </div>
 
-            <label className="field">
-              <span>重复</span>
-              <select value={form.recurrence} onChange={set('recurrence')}>
-                {recurrenceOptions.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="drawer-row" data-field="rec">
+              <span className="drawer-key">重复</span>
+              <SelectField
+                hideLabel
+                className="drawer-cell"
+                label="重复"
+                value={form.recurrence}
+                options={recurrenceOptions}
+                onChange={(v) => setForm((f) => ({ ...f, recurrence: v }))}
+                containerRef={winRef}
+              />
+            </div>
+
+            <div className="drawer-row" data-field="due">
+              <span className="drawer-key">截止</span>
+              <DateField
+                hideLabel
+                className="drawer-cell"
+                label="截止日期"
+                value={form.dueDate}
+                onChange={(v) => setForm((f) => ({ ...f, dueDate: v }))}
+                suffix={dueRel ? <span className="drawer-cell-rel">{dueRel}</span> : null}
+              />
+            </div>
+
+            <div className="drawer-row" data-field="rem">
+              <span className="drawer-key">提醒</span>
+              <DateField
+                hideLabel
+                className="drawer-cell"
+                withTime
+                label="提醒时刻"
+                value={form.remindAt}
+                onChange={(v) => setForm((f) => ({ ...f, remindAt: v }))}
+              />
+            </div>
+
+            <div className="drawer-row" data-field="ctx">
+              <span className="drawer-key">分类</span>
+              <TagField
+                hideLabel
+                className="drawer-cell"
+                label="分类"
+                addLabel="分类"
+                prefix="@"
+                placeholder="工作, 生活"
+                value={form.contexts}
+                onChange={(v) => setForm((f) => ({ ...f, contexts: v }))}
+                options={contextOptions}
+                emptyHint="暂无已保存的分类"
+              />
+            </div>
+
+            <div className="drawer-row" data-field="prj">
+              <span className="drawer-key">标签</span>
+              <TagField
+                hideLabel
+                className="drawer-cell"
+                dot
+                label="标签"
+                addLabel="标签"
+                prefix="+"
+                placeholder="回测, 量化"
+                value={form.projects}
+                onChange={(v) => setForm((f) => ({ ...f, projects: v }))}
+                options={projectOptions}
+                emptyHint="暂无已保存的标签"
+              />
+            </div>
           </div>
-
-          <div className="field-row">
-            <DateField
-              label="截止日期"
-              value={form.dueDate}
-              onChange={(v) => setForm((f) => ({ ...f, dueDate: v }))}
-            />
-            <DateField
-              label="提醒时刻"
-              value={form.remindAt}
-              onChange={(v) => setForm((f) => ({ ...f, remindAt: v }))}
-              withTime
-            />
-          </div>
-
-          <div className="field-row">
-            <TagField
-              label="@分类"
-              prefix="@"
-              placeholder="工作, 生活"
-              value={form.contexts}
-              onChange={(v) => setForm((f) => ({ ...f, contexts: v }))}
-              options={contextOptions}
-              emptyHint="暂无已保存的分类"
-            />
-
-            <TagField
-              label="+标签"
-              prefix="+"
-              placeholder="回测, 量化"
-              value={form.projects}
-              onChange={(v) => setForm((f) => ({ ...f, projects: v }))}
-              options={projectOptions}
-              emptyHint="暂无已保存的标签"
-            />
-          </div>
-
-          {/* 子任务与上方标签、下方备注各一道分隔：三组动作不是同一件事。 */}
-          <div className="field-sep" role="separator" />
 
           <SubtaskField store={store} task={task} />
 
-          {/* 子任务与备注之间一道分隔：两组动作不是同一件事。 */}
-          <div className="field-sep" role="separator" />
-
-          <div className="field field-note">
-            <button
-              type="button"
-              className="note-edit-btn"
-              onClick={() => setEditingNote((v) => !v)}
-            >
-              {editingNote ? <Icon name="check" size={12} /> : null}
-              {editingNote ? '完成' : form.note ? '编辑备注' : '添加备注'}
-            </button>
+          <div className="drawer-block">
+            <div className="drawer-bhead">
+              <span className="drawer-key">备注</span>
+              <span className="drawer-bhead-sp" />
+              <button
+                type="button"
+                className="btn btn-ghost note-edit-btn"
+                onClick={() => setEditingNote((v) => !v)}
+              >
+                <Icon name={editingNote ? 'check' : 'file'} size={12} />
+                <span>{editingNote ? '完成' : form.note ? '编辑备注' : '添加备注'}</span>
+              </button>
+            </div>
             {editingNote ? (
-              <textarea
-                className="note-input"
-                rows={4}
-                value={form.note}
-                onChange={set('note')}
-                autoFocus
-              />
+              <div className="note-paper">
+                <textarea
+                  className="note-input"
+                  rows={3}
+                  value={form.note}
+                  onChange={set('note')}
+                  aria-label="备注正文"
+                  autoFocus
+                />
+              </div>
             ) : form.note ? (
-              <div className="note-display">{form.note}</div>
+              <div className="note-paper note-display">
+                <span className="note-clip">{form.note}</span>
+              </div>
             ) : null}
           </div>
 
@@ -601,11 +1077,28 @@ function EditForm({ task, store }) {
         </div>
 
         <div className="drawer-actions">
-          <button className="btn btn-danger" onClick={remove}>
-            删除
+          <button
+            className={'btn btn-ghost is-danger drawer-delete' + (deleteArmed ? ' is-armed' : '')}
+            onClick={() => {
+              // 第一下只是把按钮换成「确认删除」，第二下才真的删 ——
+              // 底栏这一格与「取消」只隔 8px，一次误触不该等于一条记录消失。
+              if (!deleteArmed) {
+                setDeleteArmed(true);
+                return;
+              }
+              remove();
+            }}
+          >
+            {deleteArmed ? '确认删除' : '删除'}
           </button>
+          {/* 一条读数，不是一句说明：真有改动才出现，位置固定在删除右侧。 */}
+          {dirty && (
+            <span className="drawer-dirty" aria-live="polite">
+              未保存
+            </span>
+          )}
           <span className="spacer" />
-          <button className="btn" onClick={store.closeEditor}>
+          <button className="btn btn-ghost" onClick={requestClose}>
             取消
           </button>
           <button className="btn btn-primary" onClick={save}>
@@ -613,6 +1106,55 @@ function EditForm({ task, store }) {
           </button>
         </div>
       </div>
+
+      {/* 放弃修改的确认：只在有改动时出现，且压在浮窗上再问一句。
+          放在 .edit-window 之外是为了不继承它的 Tab 陷阱 —— 这一层只有两颗按钮，
+          自己循环一次就够（否则 Tab 会穿到背后的列表上）。 */}
+      {discardAsk && (
+        <div
+          className="drawer-confirm"
+          onMouseDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.stopPropagation();
+              closeDiscardAsk();
+              return;
+            }
+            if (e.key === 'Tab') {
+              const target = nextInTrap(
+                queryFocusable(confirmRef.current),
+                document.activeElement,
+                e.shiftKey
+              );
+              if (target) {
+                e.preventDefault();
+                target.focus();
+              }
+            }
+          }}
+        >
+          <div
+            className="modal-card"
+            role="alertdialog"
+            aria-modal="true"
+            aria-label="放弃修改？"
+            ref={confirmRef}
+          >
+            <h3>放弃修改？</h3>
+            <p>这一条还有没保存的改动。关闭浮窗不会把它们写进 todo.txt。</p>
+            <div className="modal-actions">
+              {/* 破坏性的那个放左边、红字无框；绿色的「继续编辑」才是默认答案 ——
+                  按下 Esc / 回车的人本来就该回到表单，而不是丢掉刚写的东西。 */}
+              <button className="btn btn-ghost is-danger" onClick={() => store.closeEditor()}>
+                放弃修改
+              </button>
+              <button className="btn btn-primary" autoFocus onClick={closeDiscardAsk}>
+                继续编辑
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -22,6 +22,7 @@ import {
   useReadingDensity,
 } from '../lib/readingDensity.js';
 import Icon from './Icon.jsx';
+import { SKINS, SKIN_LABELS, useSkin } from '../lib/skin.js';
 
 // 键帽：把 "Ctrl + 1 / 2 / 3" 拆成一枚枚可扫的键，分隔符留在中间。
 // 纯函数，便于单测与复用；不改变原有字符串内容（速查表的断言仍成立）。
@@ -308,6 +309,41 @@ function DisplayModeSection() {
   );
 }
 
+// 外观主题：四档皮肤（原版 / 素纸 / 夜航 / 园庭），与明暗档位正交。
+// 按钮上那三枚小样读 §1 的 --sw-* 样张令牌：画的是「目标档长什么样」，
+// 不是当前生效色 —— 否则在夜航里看夜航的样张就只剩一片黑。
+function SkinSection() {
+  const [skin, pick] = useSkin();
+  return (
+    <section className="settings-group">
+      <div className="settings-group-side">
+        <h3 className="settings-group-title">外观主题</h3>
+      </div>
+      <div className="settings-fields">
+        <div className="skin-switch" role="group" aria-label="外观主题（本机偏好）">
+          {SKINS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              data-skin={s}
+              className={'skin-btn' + (skin === s ? ' active' : '')}
+              aria-pressed={skin === s}
+              onClick={() => pick(s)}
+            >
+              <span className="skin-sw" aria-hidden="true">
+                <i className="sw-bg" />
+                <i className="sw-surface" />
+                <i className="sw-accent" />
+              </span>
+              <span>{SKIN_LABELS[s]}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // 数据：保存状态 + 两个以前挂在底栏上的动作。
 //
 // 2026-11-14 底栏整行删掉后，主界面不再报「已保存 / 上次保存」，
@@ -370,6 +406,7 @@ export default function SettingsPage({ onClose, projects, store }) {
         <ListStyleSection projects={projects} />
         <DensitySection />
         <DisplayModeSection />
+        <SkinSection />
         <DataSection store={store} />
         {GROUPS.map((g) => (
           <section className="settings-group" key={g.title}>

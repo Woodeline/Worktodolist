@@ -60,6 +60,12 @@
   --row-line-halo: rgba(30, 28, 22, 0.05);
   --control-line: #837f75; /* 对 surface / bg ≥3:1，WCAG 1.4.11 */
 
+  /* 输入控件的「凹槽底」（2026-11-17 二改）：编辑浮窗里的输入框 / 下拉 / 日期按钮 /
+     分段控件不再是纸面本身，而是纸面上挖下去的一格。比 --surface 深一档，
+     于是控件靠**底色**定形，描边只在焦点时出场 —— 392px 里才不会变成一片线框。
+     明暗各一套；对 --surface 与 --field-bg 的组都要过 qa-contrast。 */
+  --field-bg: #f2f0ea;
+
   /* --- 文字：锚点 #1d1c19 暖墨，对 surface ≈15:1 --- */
   --text: #1d1c19;
   --text-2: #45433d;
@@ -116,6 +122,9 @@
   --danger: #b3261e;
   --danger-soft: #fbe9e7;
   --danger-line: #f0c8c4;
+  /* 实心危险按钮上的字（编辑浮窗「确认删除」）：明色反白、暗色用墨底字，
+     与 --accent-fg 同一套翻转逻辑，但语义独立 —— 别互相引用。 */
+  --danger-fg: #ffffff;
   --warn: #8a5a00;
   --warn-soft: #f7ecd8;
   --ok: #146b41;
@@ -147,6 +156,11 @@
   --fs-2xl: 24px;
   --fs-3xl: 32px;
   --fs-display: 22px;
+  /* 8 档之外的两个专用档（与 --fs-display 同一先例，不动冻结的 8 档）：
+     --fs-3xs 只给编辑浮窗的刻度标签（10px mono，登记簿的「刻度」）；
+     --fs-drawer-title 只给浮窗标题（18px，比正文控件拉开一档）。 */
+  --fs-3xs: 10px;
+  --fs-drawer-title: 18px;
 
   /* --- 阅读密度（设置页「阅读密度」节）：列表正文 / 侧栏条目的默认字号档。
          8 档数值冻结，这里只选「用哪一档」；运行时往 documentElement 写 --pref-fs-*，
@@ -185,6 +199,27 @@
   --r-lg: 12px;
   --r-xl: 16px;
   --r-pill: 999px;
+  /* 侧栏行的圆角单独提一枚令牌（2026-11-18 二改）：四档外观主题共用同一套侧栏骨架，
+     皮肤改 --r-sm 时不许把这行也跟着改圆 —— 否则「同一份目录」在不同档下形状不同。
+     数值即基线 --r-sm，皮肤块不得覆盖本令牌。 */
+  --r-nav: 6px;
+
+  /* --- 外观主题样张色（2026-11-18 四档皮肤）：设置页「外观主题」那排按钮上的
+         三枚小样（底 / 面 / 主色）读这里，而不是读当前生效令牌 —— 样张要画
+         「目标档长什么样」，不是「我现在长什么样」。夜航样张取其签名深色。
+         只供样张消费，产品任何表面都不许引用这组令牌。 --- */
+  --sw-classic-bg: #edebe6;
+  --sw-classic-surface: #f7f6f2;
+  --sw-classic-accent: #1e6b4f;
+  --sw-paper-bg: #f6f4ef;
+  --sw-paper-surface: #fbfaf7;
+  --sw-paper-accent: #1f6f4a;
+  --sw-night-bg: #141311;
+  --sw-night-surface: #1c1a17;
+  --sw-night-accent: #d9a441;
+  --sw-garden-bg: #f3f1ec;
+  --sw-garden-surface: #ffffff;
+  --sw-garden-accent: #2f7e68;
 
   /* --- 动效：仪表响应「立刻」—— dur-2 100ms（原 140）、dur-3 140ms（原 180），
          抽屉/模态保留过程感 --- */
@@ -213,16 +248,21 @@
   /* --- 控件高度：让"按钮/输入框/菜单项"共用同一把尺子 --- */
   --h-control: 28px;
   --h-control-lg: 32px;
-  /* 编辑浮窗底栏（2026-11-17）：旧高 57（32 按钮 + 12 上下留白 + 1 顶边），
-     收 30% 到 39.9；按钮同步收 20% 到 25.6。两项都从控件尺子派生，别手写。 */
-  --drawer-actions-h: calc((var(--h-control-lg) + var(--sp-3) * 2 + 1px) * 0.7);
-  --drawer-action-h: calc(var(--h-control-lg) * 0.8);
+  /* 编辑浮窗底栏（2026-11-17 二改）：旧高 57（32 按钮 + 12 上下留白 + 1 顶边），
+     先收 30% 到 39.9、按钮 25.6 —— 两个都是 calc 乘出来的小数，1px 顶边落在半像素上，
+     按钮还比正文控件矮一档。现在落回整数：底栏 40、按钮取 --h-control(28)。
+     仍然比 57 / 32 矮 30%，只是把那 30% 落在整数字上。 */
+  --drawer-actions-h: 40px;
+  --drawer-action-h: var(--h-control);
 
   /* --- 布局尺寸 --- */
   --sidebar-w: 176px;
   --rail-max: 900px; /* 阅读栏宽上限：避免超宽屏上行长失控 */
   --tool-rail: 1120px; /* 工具区宽上限：数据密集的表格与图表比正文更宽 */
-  --edit-window-w: 392px; /* 编辑任务浮窗：由 560px 收窄 30%（560 × 0.7） */
+  --edit-window-w: 400px; /* 编辑任务浮窗（登记卡版式，2026-11-18）：392→400，卡头读数条四枚要放得下 */
+  /* 登记卡正文的滚动上限：卡头（id/标题/读数条）与底栏常驻，只有刻度行与备注在滚。
+     480 是评审定稿值 —— 再高会把「一页纸」读成一张长表单。 */
+  --drawer-body-max-h: 480px;
 
   /* --- 外壳骨架（原型 v2）：46px 活动栏 + 36px 上下文条。
          这几个数字是外壳的唯一口径 —— 组件里不要再手写轨道宽度或条高。 --- */
@@ -313,6 +353,9 @@
   --dot-edge: rgba(30, 28, 22, 0.16);
 
   --ring: 0 0 0 2px rgba(30,107,79,.4); /* 焦点环跟随强调色换墨绿 */
+  /* 错误态的焦点环（2026-11-17）：空标题被拦下时，标题框要同时表达「这里错了」
+     与「焦点在这」。与 --ring 同一几何，只换色相 —— 别加宽到 3px。 */
+  --ring-danger: 0 0 0 2px rgba(179,38,30,.32);
 
   /* --- 图表：数据可视化有自己的配色需求（多系列要互相可辨、要能在深浅两种底上
          读出来），借 UI 语义色会立刻捉襟见肘，所以单开一组。
@@ -366,7 +409,14 @@
   --row-line: #2b2a25;
   --row-line-child: #23221d;
   --row-line-halo: rgba(236, 234, 227, 0.035);
-  --control-line: #8f8c81;
+  /* 深色描边（2026-11-17 二改）：#8f8c81 对纸面是 5.01:1，几乎两倍于 3:1 阈值，
+     一屏八个控件就是八圈发光的线。#77736a 对 surface 3.57、surface-2 3.25、
+     field-bg 3.76，三处都过线且留余量。这是全局令牌，深色下所有边界一起变安静。 */
+  --control-line: #77736a;
+
+  /* 凹槽底（暗色）：比 surface 再暗一档，控件沉下去；对 --surface 有明确明度差，
+     否则深色下输入框和窗体会糊成一片（见 qa-contrast 的 field-bg 组）。 */
+  --field-bg: #141310;
 
   --text: #eceae3;
   --text-2: #c6c3b9;
@@ -403,6 +453,7 @@
   --danger: #f0968d;
   --danger-soft: #3a211d;
   --danger-line: #5f3430;
+  --danger-fg: #0d1f17;
   --warn: #dfb567;
   --warn-soft: #352b16;
   --ok: #7dd3a2;
@@ -417,6 +468,7 @@
   --overlay: rgba(0,0,0,.58);
 
   --ring: 0 0 0 2px rgba(108,197,156,.4);
+  --ring-danger: 0 0 0 2px rgba(240,150,141,.32);
 
   /* 选中块在暗底上要"提亮"而不是"压暗" */
   --sel: rgba(255, 255, 255, 0.06);
@@ -461,6 +513,176 @@
   --ramp-3: #2b5440;
   --ramp-4: #4a8a68;
   --ramp-5: #86cda8;
+}
+
+/* --- 外观主题令牌（2026-11-18 四档皮肤）：皮肤也是令牌层的一部分 ——
+   明暗各一套、逐档重述，放在基线暗块之后保证特异性账成立（见 §9.5 头注）。
+   裸色值只允许出现在这里与基线令牌里，门禁按节标题定位令牌层。 --- */
+:root[data-skin="paper"] {
+  --bg: #f6f4ef;
+  --surface: #fbfaf7;
+  --surface-2: #efece4;
+  --surface-3: #e5e1d6;
+  --border: #e3ded2;
+  --border-strong: #cfc9ba;
+  --row-line: #eae6dc;
+  --row-line-child: #f2efe7;
+  --row-line-halo: rgba(32, 29, 24, 0.05);
+  --control-line: #6b675f;
+  --field-bg: #f1eee6;
+  --text: #201d18;
+  --text-2: #4c483f;
+  --muted: #6e6a60;
+  --accent: #1f6f4a;
+  --accent-hover: #175c3c;
+  --accent-fg: #ffffff;
+  --accent-soft: #e2ede6;
+  --accent-line: #b9d4c6;
+  --chip-none-bg: #dcd7cb;
+  --chip-none-fg: #3d3b35;
+  --r-lg: 10px;
+  --r-xl: 12px;
+}
+:root[data-skin="paper"][data-theme="dark"] {
+  --bg: #171613;
+  --surface: #1e1c18;
+  --surface-2: #26231e;
+  --surface-3: #322e27;
+  --border: #2c2924;
+  --border-strong: #403c34;
+  --row-line: #26231e;
+  --row-line-child: #211f1a;
+  --row-line-halo: rgba(0, 0, 0, 0.35);
+  --control-line: #77736a;
+  --field-bg: #242119;
+  --text: #e9e4d8;
+  --text-2: #c4beb0;
+  --muted: #948d7e;
+  --accent: #7fb894;
+  --accent-hover: #93c8a6;
+  --accent-fg: #171613;
+  --accent-soft: #23302a;
+  --accent-line: #35493d;
+  --chip-none-bg: #322e27;
+  --chip-none-fg: #c4beb0;
+  --r-lg: 10px;
+  --r-xl: 12px;
+}
+:root[data-skin="night"] {
+  --bg: #efece4;
+  --surface: #f7f4ec;
+  --surface-2: #e7e3d8;
+  --surface-3: #dbd6c8;
+  --border: #ddd6c8;
+  --border-strong: #c4bcab;
+  --row-line: #e4ded0;
+  --row-line-child: #ece7db;
+  --row-line-halo: rgba(35, 32, 26, 0.05);
+  --control-line: #6b675f;
+  --field-bg: #ece8dd;
+  --text: #23201a;
+  --text-2: #4e4a41;
+  --muted: #6e6858;
+  --accent: #8a6420;
+  --accent-hover: #7a5716;
+  --accent-fg: #ffffff;
+  --accent-soft: #ece2cd;
+  --accent-line: #d3c193;
+  --chip-none-bg: #d8d2c2;
+  --chip-none-fg: #3d3b35;
+  --row-h: var(--pref-row-h, 36px);
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 12px;
+  --r-xl: 14px;
+}
+:root[data-skin="night"][data-theme="dark"] {
+  --bg: #141311;
+  --surface: #1c1a17;
+  --surface-2: #252219;
+  --surface-3: #322e24;
+  --border: #2c2924;
+  --border-strong: #453f34;
+  --row-line: #242119;
+  --row-line-child: #201d17;
+  --row-line-halo: rgba(0, 0, 0, 0.4);
+  --control-line: #77736a;
+  --field-bg: #221f19;
+  --text: #e9e4d8;
+  --text-2: #c2bcae;
+  --muted: #9a9384;
+  --accent: #d9a441;
+  --accent-hover: #e2b45c;
+  --accent-fg: #141311;
+  --accent-soft: #332a18;
+  --accent-line: #4a3d24;
+  --chip-none-bg: #322e24;
+  --chip-none-fg: #c2bcae;
+  --row-h: var(--pref-row-h, 36px);
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 12px;
+  --r-xl: 14px;
+}
+:root[data-skin="garden"] {
+  --bg: #f3f1ec;
+  --surface: #ffffff;
+  --surface-2: #f0ede6;
+  --surface-3: #e6e2d8;
+  --border: #e8e4db;
+  --border-strong: #d3cec2;
+  --row-line: #edeae2;
+  --row-line-child: #f4f1ea;
+  --row-line-halo: rgba(38, 36, 31, 0.06);
+  --control-line: #6b675f;
+  --field-bg: #f4f1ea;
+  --text: #26241f;
+  --text-2: #55524a;
+  --muted: #6f6b62;
+  --accent: #2f7e68;
+  --accent-hover: #256b58;
+  --accent-fg: #ffffff;
+  --accent-soft: #e2efea;
+  --accent-line: #b6d4c9;
+  --chip-none-bg: #dcd8ce;
+  --chip-none-fg: #3d3b35;
+  --row-h: var(--pref-row-h, 40px);
+  --r-xs: 6px;
+  --r-sm: 10px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 18px;
+}
+:root[data-skin="garden"][data-theme="dark"] {
+  --bg: #191813;
+  --surface: #211f1a;
+  --surface-2: #2a2822;
+  --surface-3: #35322a;
+  --border: #2e2c26;
+  --border-strong: #434036;
+  --row-line: #2a2822;
+  --row-line-child: #26241e;
+  --row-line-halo: rgba(0, 0, 0, 0.4);
+  --control-line: #77736a;
+  --field-bg: #26241e;
+  --text: #ece7db;
+  --text-2: #c6c1b4;
+  --muted: #979284;
+  --accent: #6fbf9f;
+  --accent-hover: #82cbab;
+  --accent-fg: #191813;
+  --accent-soft: #21302a;
+  --accent-line: #33493d;
+  --chip-none-bg: #35322a;
+  --chip-none-fg: #c6c1b4;
+  --row-h: var(--pref-row-h, 40px);
+  --r-xs: 6px;
+  --r-sm: 10px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 18px;
 }
 
 /* ============================================================================
@@ -1420,8 +1642,8 @@ code {
   width: 100%;
   height: var(--nav-h);
   border: 1px solid transparent;
+  border-radius: var(--r-nav);
   background: transparent;
-  border-radius: var(--r-sm);
   padding: 0 var(--sp-2);
   text-align: left;
   color: var(--muted);
@@ -1462,7 +1684,7 @@ code {
   background: transparent;
   height: var(--nav-h);
   padding: 0 var(--sp-2);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-nav);
   color: var(--text-2);
   text-align: left;
   gap: var(--sp-2);
@@ -2417,43 +2639,33 @@ code {
 /* 重复标记：2026-11-16 十四改起并入 .meta-field —— 一枚 ↻ 后面带上规则正文
    （每周 / 每个工作日），不再只是图标。旧的胶囊样式已整条删除，别引回来。 */
 
-/* 编辑浮窗里的子任务区块 */
-.field-subtasks {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
-  /* 上方新增一道 .field-sep，底下不再叠 .field 的 8px 上间距。 */
-  margin-top: 0;
-}
+/* 编辑浮窗里的子任务区块（登记卡版式，2026-11-18）：
+   块头 = 刻度 + 计数 + 右端一条进度线；清单行是三列网格，行间一道几乎不可见的细线。 */
 
-/* 读数与进度线同一行：左边「子任务 · 1/3」，右边一条细线，不再各占一行。 */
-.subtask-head {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-}
-
-.field-subtasks-label {
-  flex-shrink: 0;
-  font-size: var(--fs-sm);
-  color: var(--text-2);
+/* 计数是读数不是文字：走等宽族 + 表格数字，与列表里的 1/2 同一支笔。 */
+.subtask-count {
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .subtask-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
 }
 
 .subtask-list li {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) 20px;
   gap: var(--sp-2);
+  align-items: center;
   min-height: 26px;
+  border-bottom: 1px solid var(--row-line-child);
 }
+
+.subtask-list li:last-child { border-bottom: 0; }
 
 /* 子任务行的勾选框不属于 .task-row，拿不到列表那套圆形样式；这里单独画。
    16px 圆环 + 选中实心 + mask 对勾，悬停提亮边框，焦点环跟按钮同一档。 */
@@ -2490,9 +2702,8 @@ code {
 }
 
 .subtask-title {
-  flex: 1;
   min-width: 0;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2504,26 +2715,22 @@ code {
   text-decoration: line-through;
 }
 
-/* 单击子任务文本就地改标题；与列表行的行内编辑同一套边框 / 焦点环。
-   选择器带 .edit-window 前缀是为了压过 .field input 的全局高度 ——
-   否则这里的 24px 会被那条 32px 的规则吃掉，点开编辑又要把浮窗顶高。 */
+/* 单击子任务文本就地改标题：一条下划线输入，不再画方框 ——
+   清单是"看"的地方，编辑态只在被点的那一行浮出一道 accent 底线。 */
 .edit-window .subtask-list .subtask-title-input {
-  flex: 1;
+  width: 100%;
   min-width: 0;
-  width: auto;
-  height: 24px;
-  padding: 0 var(--sp-2);
-  border: 1px solid var(--accent);
-  border-radius: var(--r-sm);
-  background: var(--surface);
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--accent);
+  border-radius: 0;
+  background: transparent;
   color: var(--text);
   font-family: inherit;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   outline: none;
-}
-
-.edit-window .subtask-list .subtask-title-input:focus-visible {
-  box-shadow: var(--ring);
+  box-shadow: none;
 }
 
 .subtask-title:not(.completed) {
@@ -2533,14 +2740,19 @@ code {
 /* 删除钮默认藏起来：子任务列表是"看"的地方，把三个删除按钮常驻在那里
    会让浮窗看起来像在催人删东西。hover / 聚焦时才出现。 */
 .subtask-del {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
   border: 0;
   background: transparent;
   color: var(--muted);
-  padding: 2px;
-  border-radius: var(--r-sm);
+  padding: 0;
+  border-radius: var(--r-xs);
   cursor: pointer;
   opacity: 0;
-  transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+  transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out),
+    background var(--dur-1) var(--ease-out);
 }
 
 .subtask-list li:hover .subtask-del,
@@ -2550,34 +2762,53 @@ code {
 
 .subtask-del:hover {
   color: var(--danger);
+  background: var(--danger-soft);
 }
 
+/* 新增子任务：输入框是一条下划线（焦点时底线转 accent），与就地编辑同一支笔。 */
 .subtask-add {
   display: flex;
-  gap: var(--sp-2);
+  align-items: center;
+  min-height: 28px;
 }
 
-.edit-window .subtask-add input {
+.subtask-add input {
   flex: 1;
   min-width: 0;
-  height: var(--h-control);
-  font-size: var(--fs-sm);
+  height: 26px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
   color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--control-line);
-  border-radius: var(--r-sm);
-  padding: 0 var(--sp-2);
-}
-
-.edit-window .subtask-add .btn {
-  font-size: var(--fs-sm);
-}
-
-.subtask-add input:focus-visible {
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  padding: 0 2px;
   outline: none;
-  box-shadow: var(--ring);
-  border-color: var(--accent);
+  box-shadow: none;
 }
+
+.subtask-add input:focus { border-bottom-color: var(--accent); }
+.subtask-add input::placeholder { color: var(--muted); }
+
+/* 「添加子任务」平时是一条加号线；点它才长出上面那条输入框。 */
+.subtask-addline {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--sp-1) + 2px);
+  width: 100%;
+  min-height: 26px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: var(--fs-xs);
+  text-align: left;
+  transition: color var(--dur-1) var(--ease-out);
+}
+
+.subtask-addline:hover { color: var(--accent); }
 
 /* 截止日：读数行里的一枚等宽小字，**比标题小一档、颜色压到 muted**
    （2026-11-15：跟着读数行一起从"右对齐的正文色一列"退成"标题下方的浅字"）。
@@ -3158,9 +3389,10 @@ mark {
   animation: fade-in var(--dur-2) var(--ease-out) backwards;
 }
 
-/* --- 编辑任务浮窗：居中对话框（配套 .modal 遮罩），不再是右侧抽屉 ---
-   三段式：固定头 / 可滚 body / 固定底栏 —— 保存按钮永远在首屏可见，
-   不随字段增多被挤出视口。 */
+/* --- 编辑任务浮窗「登记卡」（2026-11-18 定稿）：居中对话框（配套 .modal 遮罩）。
+   三段式：固定卡头（id / 行号 / 标题 / 读数条）/ 可滚刻度行 / 固定底栏 ——
+   保存按钮永远在首屏可见，不随字段增多被挤出视口。
+   版式参照 docs/design/2026-11-17-编辑浮窗重设计-三套方案.html 的方案 A。 --- */
 .edit-window {
   display: flex;
   flex-direction: column;
@@ -3170,7 +3402,7 @@ mark {
   box-shadow: var(--sh-3);
   width: var(--edit-window-w);
   /* 作为 .modal 的 flex item，默认 min-width:auto 会被内容的 min-content 撑宽
-     （长标签 / 长标题时窗口从 392 长到 460+）。锁 0，宽度只认这一条令牌。 */
+     （长标签 / 长标题时窗口从 400 长到 460+）。锁 0，宽度只认这一条令牌。 */
   min-width: 0;
   flex: 0 0 var(--edit-window-w);
   max-width: 100%;
@@ -3178,61 +3410,289 @@ mark {
   overflow: hidden;
   padding: 0;
   font-family: var(--font-ui);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
+  /* 入场：这张纸被放到桌面上 —— 只动 opacity 与 transform，与遮罩同帧开始。
+     不缩放、不弹跳：后者在这个安静的产品里会显得吵。 */
+  animation: window-in var(--dur-2) var(--ease-out) backwards;
 }
 
+/* 深色窗体外框：--sh-3 没有 1px 描边分量（浅色的 --sh-2 有），
+   而 --border-strong 在暗底上只有约 2.2:1 —— 窗口边界实际全靠遮罩压暗分开。
+   补一道 1px 暗线，让它在遮罩上也有边，与浅色的双线语言对齐。 */
+:root[data-theme="dark"] .edit-window {
+  box-shadow: var(--sh-3), 0 0 0 1px var(--border-strong);
+}
+
+/* 卡头：标题行（标题 + 关闭钮）→ 属性摘要条。两段都常驻，不随 body 滚走。
+   上留白 18 是这一页纸自己的天头：标题是卡里唯一 18px 的字，它离卡顶太远
+   会读成「上面漏了一行」。 */
 .drawer-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--sp-3);
+  flex-direction: column;
   flex-shrink: 0;
-  padding: var(--sp-4) var(--row-pad) var(--sp-3);
-  margin-bottom: 0;
+  padding: 18px var(--row-pad) var(--sp-3);
 }
 
-/* 可滚动的表单主体：头与底栏固定，只有这里滚。 */
+/* 标题行（2026-11-18 四改）：关闭钮不再独占一行，与标题同行居中。
+   两者共用一行还顺手解决了两件事 —— 长标题不会跑到叉号底下（标题是 flex
+   项，宽度天然让出按钮），标题获得焦点时的 accent 底线也只画到叉号左侧就收住
+   （绝对定位方案要给 input 补 padding-right，底线会从叉号底下穿过去）。 */
+.drawer-headline {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.drawer-close {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  border-radius: var(--r-xs);
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+
+.drawer-close:hover { background: var(--danger-soft); color: var(--danger); }
+.drawer-close:focus-visible { outline: none; box-shadow: var(--ring); }
+
+/* 标题：18px 是窗口里唯一大于读数的量级，一眼锚住「我在改哪一条」。
+   平时无边框，hover 浮出一道底线、focus 转 accent —— 它是一行字，不是一个框。
+   在标题行里占满叉号左侧的余宽（flex 1 + min-width 0，长标题也不会把叉号顶走）。 */
+.drawer-title-input {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  padding: 2px 0 calc(var(--sp-1) + 2px);
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--fs-drawer-title);
+  font-weight: var(--fw-emph);
+  color: var(--text);
+  outline: none;
+  transition: border-color var(--dur-1) var(--ease-out);
+}
+.drawer-title-input:hover { border-bottom-color: var(--border); }
+.drawer-title-input:focus { border-bottom-color: var(--accent); }
+.drawer-title-input::placeholder { color: var(--muted); font-weight: var(--fw-body); }
+
+/* 空标题被拦下时的危险态：底线转红并补一道同色投影，焦点正好回到标题框。 */
+.drawer-title-input.is-error,
+.drawer-title-input.is-error:focus {
+  border-bottom-color: var(--danger);
+  box-shadow: 0 1px 0 var(--danger);
+}
+
+/* 读数条：四枚属性摘要（优先级 / 截止 / 重复 / 提醒），点一枚去打开对应刻度行。
+   它是捷径不是第二份状态：弹层仍由行内控件自己开，锚点也落在行上。 */
+.drawer-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--sp-1) + 2px);
+  margin-top: 10px;
+}
+
+.drawer-read {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--sp-1) + 2px);
+  height: 24px;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  color: var(--text-2);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+
+.drawer-read:hover { background: var(--surface-3); color: var(--text); }
+.drawer-read:focus-visible { outline: none; box-shadow: var(--ring); }
+.drawer-read .icon { flex-shrink: 0; }
+/* 逾期是这一条唯一的强色（与列表同一口径）；未设置退成透明底 + muted。 */
+.drawer-read.is-overdue { background: var(--danger-soft); color: var(--danger); }
+.drawer-read.is-empty { color: var(--muted); background: transparent; }
+
+/* 日期 / 时刻读数：等宽 + 表格数字。 */
+.drawer-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 相对日读数（今天 / 逾期 N 天）：比日期再弱一档，不抢状态色。 */
+.drawer-read-rel { color: var(--muted); }
+.drawer-read.is-overdue .drawer-read-rel { color: var(--danger); }
+
+/* 可滚动的正文：卡头与底栏固定，只有刻度行与备注在滚。
+   上限 --drawer-body-max-h（480）—— 再高就把「一页纸」读成一张长表单。 */
 .drawer-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 0 var(--row-pad) var(--sp-2);
+  max-height: var(--drawer-body-max-h);
+  padding: 0 var(--row-pad) 14px;
 }
 
-/* 双列字段行：优先级+截止日 / 提醒+重复 / 分类+标签，把 11 组字段收进一屏。 */
-.field-row {
+/* 刻度行：左列 84px 刻度（10px mono-cjk），右列是控件。
+   行间一道 --row-line 细线（比 --border 淡），整组顶上一道 --border 与卡头分开。 */
+.drawer-rows { border-top: 1px solid var(--border); }
+
+.drawer-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--sp-2);
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: var(--sp-3);
+  align-items: center;
+  min-height: 36px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--row-line);
 }
 
-/* 优先级四个汉字按钮占 2/3，重复下拉占 1/3；两个日期在下一行各占一半。 */
-.field-row-prio {
-  grid-template-columns: 2fr 1fr;
-}
+.drawer-row:last-child { border-bottom: 0; }
 
-/* 头部标题可直接编辑：滚动时头部固定，标题始终可见可改。 */
-.drawer-title-input {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  padding: var(--sp-1) 0;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: transparent;
-  font-family: inherit;
-  font-size: var(--fs-md);
+/* 刻度：登记簿的「刻度标签」—— 10px mono-cjk + muted，比任何值都小一档。 */
+.drawer-key {
+  font-family: var(--font-mono-cjk);
+  font-size: var(--fs-3xs);
+  color: var(--muted);
   font-weight: var(--fw-body);
-  color: var(--text);
-  outline: none;
-  transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out);
 }
-.drawer-title-input:hover { border-color: var(--border); }
-.drawer-title-input:focus { border-color: var(--accent); background: var(--surface); box-shadow: var(--ring); }
-.drawer-title-input::placeholder { color: var(--muted); font-weight: 400; }
 
-/* 标题栏那枚旗标按钮已于 2026-11-15 退场（样式一并删除）：
-   旗标此后只表示优先级，由列表行标题左侧的中空旗承担。 */
+/* 行内控件的公共底座：平时透明（读起来是纸上的字），hover 才浮出 field-bg，
+   focus / 展开时描边转 accent。margin-left 负 6px 让文字与刻度列左缘对齐。
+   带 .edit-window 前缀：.field / .date-field 的 margin-top 在源码序上更后，
+   单类压不住，会把整行控件往下顶 8px。 */
+.edit-window .drawer-cell { margin-top: 0; min-width: 0; }
+
+.drawer-cell .select-trigger,
+.drawer-cell .date-field-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  min-width: 0;
+  min-height: 28px;
+  height: auto;
+  padding: 2px calc(var(--sp-1) + 2px);
+  margin-left: calc(var(--sp-1) * -1 - 2px);
+  border: 1px solid transparent;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--text);
+  font-size: var(--fs-xs);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
+}
+
+.drawer-cell .select-trigger:hover,
+.drawer-cell .date-field-btn:hover { background: var(--field-bg); }
+
+.drawer-cell .select-trigger:focus-visible,
+.drawer-cell .date-field-btn:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+
+.drawer-cell .select-trigger.is-open,
+.drawer-cell .date-field-btn[aria-expanded="true"] {
+  background: var(--field-bg);
+  border-color: var(--accent);
+}
+
+.drawer-cell .date-field-btn .icon { color: var(--muted); }
+.drawer-cell .date-field-btn.is-empty .date-field-text { color: var(--muted); }
+
+/* 日期行里的相对日读数：跟在日期后面，muted 小字（逾期时由刻度行自己染红）。 */
+.drawer-cell-rel {
+  font-family: var(--font-mono-cjk);
+  font-size: var(--fs-3xs);
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+/* 优先级刻度尺：一条基线 + 四档旗，选中档下方一道 2px 本色刻度。
+   它是「一个属性的四档」，roving tabindex 整组只停一次 Tab，←/→ 换档。
+   取代旧 .prio-seg 分段控件：尺子读的是「档位」，不是四个并排的按钮。 */
+.prio-ruler {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  height: 30px;
+  margin-left: calc(var(--sp-1) * -1 - 2px);
+}
+
+.prio-ruler::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--border-strong);
+}
+
+.prio-ruler > button {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  padding: 0 2px;
+  transition: color var(--dur-1) var(--ease-out);
+}
+
+.prio-ruler > button .flag { opacity: 0.5; }
+.prio-ruler > button:hover { color: var(--text-2); }
+.prio-ruler > button:hover .flag { opacity: 0.8; }
+.prio-ruler > button:focus-visible { outline: none; box-shadow: var(--ring); border-radius: var(--r-xs); }
+
+.prio-ruler > button.sel { color: var(--text); font-weight: var(--fw-emph); }
+.prio-ruler > button.sel .flag { opacity: 1; }
+
+/* 选中刻度：currentColor 是一道 2px 短线，颜色随档位走（高红 / 中橙 / 低蓝）。 */
+.prio-ruler > button.sel::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 2px;
+  background: currentColor;
+}
+
+.prio-ruler > button.sel.prio-high { color: var(--flag-high); }
+.prio-ruler > button.sel.prio-mid { color: var(--flag-mid-ink); }
+.prio-ruler > button.sel.prio-low { color: var(--flag-low); }
+
+/* 旗标图标 inherits 档位色（.flag 类在列表 / 菜单里已有着色规则，这里补浮窗内的一份）。 */
+.prio-ruler .flag.prio-high,
+.drawer-read .flag.prio-high { color: var(--flag-high); }
+.prio-ruler .flag.prio-mid,
+.drawer-read .flag.prio-mid { color: var(--flag-mid); }
+.prio-ruler .flag.prio-low,
+.drawer-read .flag.prio-low { color: var(--flag-low); }
+.prio-ruler .flag.prio-other,
+.drawer-read .flag.prio-other { color: var(--text-2); }
 
 /* 日期字段：短日期读数 + 自绘弹层。
    行为（roving tabindex / 完整日期 aria / 方向键翻日翻月）由 react-day-picker 提供，
@@ -3265,10 +3725,22 @@ mark {
   cursor: pointer;
   transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
 }
-.date-field-btn:hover { border-color: var(--accent); }
+/* hover 只提一档底色，描边不动 —— 与「桌面按钮 hover 只变灰不变色」同一条规则。
+   2026-11-17 二改：原来这里把描边跳成 --accent，可 accent 在本项目只表
+   「选中 / 今天 / 焦点」，指针扫过就泛绿等于自己撕了这份契约。 */
+.date-field-btn:hover { background: var(--surface-2); }
 .date-field-btn:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
 .date-field-btn .icon { color: var(--muted); flex-shrink: 0; }
-.date-field-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.date-field-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* 日期 / 时刻是读数：等宽 + 表格数字，与列表读数行同一支笔（2026-11-17 二改） */
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
 .date-field-btn.is-empty .date-field-text { color: var(--muted); }
 /* 字段旁不再摆第二颗清除按钮：清除只留在弹层底部（DateField 的 is-clear）。 */
 .date-popover {
@@ -3360,68 +3832,53 @@ mark {
 /* 批量工具里已有「操作值」标签，日期控件只借它的结构，不再画第二层标签。 */
 .tool-date-field { margin-top: 0; }
 
-/* 子任务与备注之间的发丝线：两组动作不同，靠位置分开而不是再加一层标签。 */
-.field-sep {
-  height: 1px;
-  margin: var(--sp-4) 0 var(--sp-3);
-  border: 0;
-  background: var(--border);
-}
-
-/* 备注：只有一个按钮入口（添加 / 编辑 / 完成），不再叠一个「备注」文字标签。 */
-.edit-window .field-note {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-}
-.note-edit-btn {
+/* 备注入口：ghost 家族里的一枚小按钮（纸页图标 + 添加/编辑/完成），
+   住在备注块头右端。选择器带 .edit-window 前缀才压得住 .btn 的 32px。 */
+.edit-window .note-edit-btn {
   display: inline-flex;
   align-items: center;
-  align-self: flex-start;
-  gap: var(--sp-1);
-  height: calc(var(--h-control) * 0.94);
+  gap: calc(var(--sp-1) + 2px);
+  height: var(--h-control);
   padding: 0 var(--sp-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--text-2);
-  font-family: inherit;
-  font-size: var(--fs-sm);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: border-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+  font-size: var(--fs-xs);
 }
-.note-edit-btn:hover { border-color: var(--accent); color: var(--accent); }
-.note-display {
-  padding: var(--sp-2);
-  border: 1px solid var(--border);
+
+/* 备注纸页：notes.md 的那张纸 —— sheet 底色 + 细线框，正文 22px 行距。
+   编辑态是透明 textarea 写在纸上；收起态只夹两行（.note-clip）。 */
+.note-paper {
+  background: var(--sheet-bg);
+  border: 1px solid var(--sheet-line);
   border-radius: var(--r-sm);
-  background: var(--surface-2);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-snug);
+  padding: var(--sp-2) 10px;
+  font-size: var(--fs-xs);
   color: var(--text-2);
+  line-height: 22px;
+}
+
+.note-display {
   white-space: pre-wrap;
   overflow-wrap: break-word;
-  max-height: 160px;
-  overflow-y: auto;
 }
-.note-display.is-empty { color: var(--muted); font-size: var(--fs-xs); }
 
-/* 子任务进度线：与「已完成 / 总数」读数同一行。细轨道带一道内描边，
-   填充是圆头的一条，换档时慢一点点走完 —— 比原来 3px 方角更看得清刻度。 */
+.note-clip {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 子任务进度线：块头右端一条 2px 细轨，填充走 accent，换档时慢一点点走完。 */
 .subtask-progress {
-  flex: 1;
-  min-width: 0;
-  height: var(--sp-1);
-  border-radius: var(--r-pill);
+  flex: 0 0 auto;
+  width: 72px;
+  height: 2px;
+  border-radius: 2px;
   background: var(--surface-3);
-  box-shadow: inset 0 0 0 1px var(--border);
   overflow: hidden;
 }
 .subtask-progress > span {
   display: block;
   height: 100%;
-  border-radius: var(--r-pill);
   background: var(--accent);
   transition: width var(--dur-3) var(--ease-out);
 }
@@ -3495,168 +3952,153 @@ mark {
 }
 .field select:focus { border-color: var(--accent); box-shadow: var(--ring); }
 
-/* 2026-11-17：编辑浮窗里除标题（14/400）外，所有读数 / 输入 / 标签统一到
-   优先级选项的 13px。只作用在浮窗内，提议弹窗等复用 .field 的地方保持原档。 */
-.edit-window .field { font-size: var(--fs-sm); }
-.edit-window .field input:not([type="checkbox"]),
-.edit-window .field select,
-.edit-window .note-input { font-size: var(--fs-sm); }
-.edit-window .date-field-label,
-.edit-window .date-field-btn { font-size: var(--fs-sm); }
-.edit-window .extra-tags { font-size: var(--fs-sm); }
+/* 登记卡的块（子任务 / 备注）：与刻度行组拉开 16px，块头一行刻度 + 读数 / 动作。 */
+.drawer-block { margin-top: var(--sp-4); }
 
-/* 备注输入框：和单行输入同一套边框 / 焦点环，只是高度随内容、且允许纵向拉伸。 */
-.note-input {
-  width: 100%;
-  min-height: 72px;
-  border: 1px solid var(--control-line);
-  border-radius: var(--r-sm);
-  padding: var(--sp-2);
-  font-size: var(--fs-md);
-  font-family: inherit;
-  line-height: 1.5;
-  color: var(--text);
-  background: var(--surface);
-  outline: none;
-  resize: vertical;
-  transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
-}
-
-.note-input:focus {
-  border-color: var(--accent);
-  box-shadow: var(--ring);
-}
-
-.priority-picker {
+.drawer-bhead {
   display: flex;
-  gap: var(--sp-1);
-  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
 }
 
-.priority-picker button {
-  flex: 1;
+.drawer-bhead-sp { flex: 1; }
+
+/* --- @分类 / +标签：胶囊 + 手输下划线 + 候选清单（2026-11-18 登记卡版式） ---
+   已选的值是一排 22px 胶囊（点 × 移除），「+分类」点开一条下划线输入手打新值，
+   最右一枚小箭头展开已保存的候选。三者写回同一个逗号分隔字符串，只有一份真相。 */
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(var(--sp-1) + 2px);
   min-width: 0;
+  margin-left: calc(var(--sp-1) * -1 - 2px);
+}
+
+/* 胶囊：pill 形、surface-2 底、一道 border；名字 400 字重可省略。
+   选择器带 .tag-chips 前缀，压过全局 .chip 的 mono 16px 行高（那是写入行的笔）。 */
+.tag-chips .chip {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: var(--sp-1);
-  border: 1px solid var(--control-line);
-  background: var(--surface);
-  border-radius: var(--r-sm);
-  height: var(--h-control-lg);
-  padding: 0 var(--sp-1);
-  font-size: var(--fs-sm);
-  color: var(--text-2);
-  transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out),
-    color var(--dur-1) var(--ease-out);
-}
-
-.priority-picker button:hover {
+  gap: 5px;
+  height: 22px;
+  max-width: 100%;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
   background: var(--surface-2);
-  color: var(--text);
-}
-
-.priority-picker button.sel {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: var(--fw-emph);
-}
-
-/* 2026-11-17：选中档位跟列表旗帜同色。高红 / 中橙 / 低蓝各自取实色画边框与字，
-   底用同色相淡档，不再一律走 accent 绿；「无」不画旗，所以保持中性。 */
-.priority-picker button.sel.prio-high {
-  border-color: var(--flag-high);
-  background: var(--flag-high-soft);
-  color: var(--flag-high);
-}
-.priority-picker button.sel.prio-mid {
-  border-color: var(--flag-mid);
-  background: var(--flag-mid-soft);
-  color: var(--flag-mid-ink);
-}
-.priority-picker button.sel.prio-low {
-  border-color: var(--flag-low);
-  background: var(--flag-low-soft);
-  color: var(--flag-low);
-}
-.priority-picker button.sel.prio-none {
-  border-color: var(--border-strong);
-  background: var(--surface-2);
-  color: var(--text);
-}
-.priority-picker button.sel.prio-other {
-  border-color: var(--border-strong);
-  background: var(--surface-2);
+  font-family: var(--font-ui);
+  font-size: var(--fs-xs);
+  line-height: 1;
   color: var(--text-2);
 }
 
-/* --- @分类 / +标签：输入框 + 已保存候选下拉 --- */
-.field-tags {
-  position: relative;
-}
-
-/* 一体化输入框（2026-11-17）：边框 / 圆角 / 底色都归 .tag-input，输入框与
-   右侧候选箭头退成容器内的两段，不再各画一个方框。与日期按钮同一种读法：
-   一个完整控件 + 一枚内置操作图标。 */
-.tag-input {
-  display: flex;
-  align-items: center;
-  height: var(--h-control-lg);
-  border: 1px solid var(--control-line);
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  padding-left: var(--sp-2);
+.tag-chips .chip b {
+  font-weight: var(--fw-body);
   overflow: hidden;
-  transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.tag-input:hover { border-color: var(--accent); }
-.tag-input:focus-within { border-color: var(--accent); box-shadow: var(--ring); }
+/* 标签胶囊前的 6px 色点：与侧栏圆点同源（accent + dot-edge 描边）。 */
+.chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--dot-edge);
+  flex: 0 0 auto;
+}
 
-.edit-window .tag-input input {
-  flex: 1;
-  min-width: 0;
-  width: auto;
-  height: 100%;
-  padding: 0;
+.tag-chips .chip button {
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
   border: 0;
-  border-radius: 0;
-  background: transparent;
-  font-family: inherit;
-  font-size: var(--fs-sm);
-  box-shadow: none;
-}
-
-/* 覆盖 .field input:focus 的内描边：焦点环画在容器上，输入框自己不再画。 */
-.edit-window .tag-input input:focus {
-  border-color: transparent;
-  box-shadow: none;
-}
-
-.tag-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--h-control);
-  min-width: var(--h-control);
-  height: 100%;
-  border: 0;
-  border-radius: 0;
   background: transparent;
   color: var(--muted);
+  cursor: pointer;
   padding: 0;
-  flex-shrink: 0;
-  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+  border-radius: 50%;
+  flex: 0 0 auto;
+  transition: color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out);
 }
 
-.tag-toggle:hover {
-  background: var(--surface-2);
+.tag-chips .chip button:hover { color: var(--danger); background: var(--danger-soft); }
+.tag-chips .chip button:focus-visible { outline: none; box-shadow: var(--ring); }
+
+/* 「+分类 / +标签」与候选箭头：虚线胶囊，hover 转 accent 淡底。 */
+.chip-add {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  height: 22px;
+  padding: 0 7px;
+  border: 1px dashed var(--control-line);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  transition: color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out),
+    background var(--dur-1) var(--ease-out);
+}
+
+.chip-add:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.chip-add:focus-visible { outline: none; box-shadow: var(--ring); }
+.chip-add.is-icon { padding: 0 5px; }
+.chip-add.is-open { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+
+/* 手输新值：一条 accent 下划线，回车提交、可连打；Esc 收起。
+   前缀要压过 .field input:not([type="checkbox"]) 的 32px 方框通用规则。 */
+.edit-window .tag-chips .chip-input {
+  flex: 1;
+  min-width: 60px;
+  width: auto;
+  height: 22px;
+  border: 0;
+  border-bottom: 1px solid var(--accent);
+  border-radius: 0;
+  background: transparent;
   color: var(--text);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  padding: 0 2px;
+  outline: none;
+  box-shadow: none;
 }
 
-.tag-toggle.is-open {
-  color: var(--accent);
+.edit-window .tag-chips .chip-input:focus {
+  border-color: var(--accent);
+  box-shadow: none;
+}
+
+.edit-window .tag-chips .chip-input::placeholder { color: var(--muted); }
+
+/* 备注输入框：透明写在 .note-paper 那张纸上 —— 边框 / 底色都归纸页，
+   textarea 只管字：22px 行距与纸页读数同一档，允许纵向拉伸。 */
+.note-input {
+  width: 100%;
+  min-height: 66px;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  font-size: var(--fs-xs);
+  font-family: inherit;
+  line-height: 22px;
+  color: var(--text);
+  background: transparent;
+  outline: none;
+  box-shadow: none;
+  resize: vertical;
+}
+
+/* --- @分类 / +标签：候选清单挂 body（见 .tag-chips 一节的胶囊版式） --- */
+.field-tags {
+  position: relative;
 }
 
 /* 候选清单挂在 body 上：位置 / 宽度 / 可用高度由 lib/placement.js 实测后写进
@@ -3722,14 +4164,75 @@ mark {
   white-space: nowrap;
 }
 
+/* --- 重复档位：自绘单选下拉（2026-11-17）---
+   原生 <select> 的**弹出层由系统绘制**：macOS 上是一块深灰长菜单 + 系统对勾，既不认本
+   项目的明暗令牌，也和这扇「一页纸」浮窗完全两个语气。触发器因此做成与隔壁输入框一模
+   一样的凹槽控件（同 --h-control-lg / --field-bg / --control-line），展开面复用
+   .tag-menu + .tag-option —— 下拉与候选清单长得一样，用户不必学第二套。 */
+.field-select {
+  min-width: 0;
+}
+
+.select-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  height: var(--h-control-lg);
+  border: 1px solid var(--control-line);
+  border-radius: var(--r-sm);
+  background: var(--field-bg);
+  padding: 0 var(--sp-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  text-align: left;
+  transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out);
+}
+
+/* 基础形态是一枚凹槽控件；在登记卡里由 .drawer-cell .select-trigger 覆盖成
+   透明读数格（hover 才浮 field-bg，accent 只留给焦点 / 展开态）。 */
+.select-trigger:hover { background: var(--surface); }
+.select-trigger:focus-visible { border-color: var(--accent); box-shadow: var(--ring); outline: none; }
+.select-trigger.is-open { border-color: var(--accent); }
+
+.select-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.select-caret {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: color var(--dur-1) var(--ease-out);
+}
+
+.select-trigger.is-open .select-caret { color: var(--accent); }
+
 .extra-tags {
-  margin-top: var(--sp-3);
+  margin-top: 10px;
   font-size: var(--fs-xs);
   color: var(--muted);
   display: flex;
   gap: var(--sp-1);
   flex-wrap: wrap;
   align-items: center;
+}
+
+/* 本工具不认识的键（t: / star: 这类）是「给机器看的原文」，不是用户标签 ——
+   借用 .chip 的胶囊长相会被读成可编辑的标签，所以这里退成 mono 小字 + 浅底 +
+   无描边 + muted。它属于「这一行的原样」，排在备注下方。 */
+.edit-window .extra-tags .chip {
+  background: var(--surface-2);
+  border-color: transparent;
+  color: var(--muted);
+  padding: 1px 5px;
 }
 
 /* 写入行：和引导页同一张纸。行号槽 + 等宽原文，编辑时就能核对将写进文件的那一行。 */
@@ -3751,6 +4254,9 @@ mark {
   overflow: hidden;
 }
 
+/* 底栏：与窗体同底（surface），不再另铺一层 surface-2 —— 登记卡是一整张纸，
+   底栏只是纸的下沿，靠一道 border 分开。左右 14px 比正文 20px 收一档，
+   让删除 / 保存两枚按钮贴近窗角。 */
 .drawer-actions {
   display: flex;
   align-items: center;
@@ -3758,9 +4264,9 @@ mark {
   flex-shrink: 0;
   height: var(--drawer-actions-h);
   margin-top: 0;
-  padding: 0 var(--row-pad);
+  padding: 0 14px;
   border-top: 1px solid var(--border);
-  background: var(--surface-2);
+  background: var(--surface);
 }
 
 /* 按钮高度同步收 20%；min-height 一起写，压住粗指针段的 44px 兜底，
@@ -3768,6 +4274,47 @@ mark {
 .drawer-actions .btn {
   height: var(--drawer-action-h);
   min-height: var(--drawer-action-h);
+}
+
+/* 待确认的删除：按「确认删除」四个字预留宽度，第一下之后底栏不会整体右移一截。
+   76 = 4 × 13px 字 + 两侧 12px 内边距；字号档变了要一起改。 */
+.drawer-delete {
+  min-width: 76px;
+}
+
+/* 「未保存」：底栏左端的一条读数。等宽族 + warn 琥珀 + 前置一枚 5px 圆点 ——
+   它报告「有改动还没落盘」这一状态，颜色与列表的警告语义同源，不解释该怎么做。 */
+.drawer-dirty {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono-cjk);
+  font-size: var(--fs-2xs);
+  color: var(--warn);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.drawer-dirty::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+
+/* 放弃修改的确认：一层薄遮罩压在浮窗上，只问一个问题。
+   它不继承 .edit-window 的 Tab 陷阱 —— 这一层只有两颗按钮，循环在这里没有必要。 */
+.drawer-confirm {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-4);
+  background: var(--overlay);
+  animation: fade-in var(--dur-2) var(--ease-out) backwards;
 }
 
 /* --- 新建提议修改弹窗：居中对话框，表单复用 drawer 的 .field 体系 --- */
@@ -3936,6 +4483,50 @@ mark {
 .btn-soft:active:not(:disabled) {
   background: var(--accent-soft);
   border-color: var(--accent);
+}
+
+/* --- 幽灵按钮（2026-11-17 二改）：无描边无底，只留文字，hover 才浮一档底色。
+       收编「备注 / 添加子任务 / 取消 / 删除」这类不改变数据主体的动作 ——
+       编辑浮窗的底栏于是只剩一枚实心块（保存），一屏里只有一个"该按的"。 --- */
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-2);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.btn-ghost:active:not(:disabled) {
+  background: var(--surface-3);
+}
+
+/* 禁用态不画灰框/灰底，只压不透明度 —— 否则它又变回一颗"按钮"，
+   把刚收掉的边界重新画回来。 */
+.btn-ghost:disabled {
+  background: transparent;
+  border-color: transparent;
+}
+
+/* 红字不红框：删除的常驻形态只用字色表态，免得与逾期那一支红抢注意力。 */
+.btn-ghost.is-danger {
+  color: var(--danger);
+}
+
+.btn-ghost.is-danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* 待确认的删除：第一下只把按钮换成「确认删除」并转实心，第二下才落盘。
+   实心块是底栏里唯一的例外，且只存在到你下一次点击为止。 */
+.btn-ghost.is-danger.is-armed,
+.btn-ghost.is-danger.is-armed:hover:not(:disabled) {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--danger-fg);
 }
 
 /* ============================================================================
@@ -6390,9 +6981,21 @@ mark {
 /* ============================================================================
    9 · 动效
    ----------------------------------------------------------------------------
-   只有两处动效：浮层淡入、完成任务的淡出。
-   "整屏内容逐块升起"这类入场编排是网页的语言 —— 桌面程序打开就是打开。
+   三处动效：浮层淡入、完成任务的淡出、编辑浮窗入场（2026-11-17 二改）。
+   "整屏内容逐块升起"这类入场编排是网页的语言 —— 桌面程序打开就是打开；
+   唯一的例外是编辑浮窗：它是一张被放到桌面上的纸，6px 的落位本身就是那句话。
    ========================================================================== */
+@keyframes window-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @keyframes fade-in {
   from {
     opacity: 0;
@@ -6539,6 +7142,292 @@ mark {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ============================================================================
+   9.5 · 外观主题（2026-11-18 四档皮肤：原版 / 素纸 / 夜航 / 园庭）
+   ----------------------------------------------------------------------------
+   档位由 lib/skin.js 投到 <html data-skin>，与 <html data-theme> 正交：
+   每档皮肤各备明暗两套令牌，「夜航 + 浅色」也是成立的一档。
+   特异性账：基线明 :root (0,1,0) / 基线暗 :root[data-theme] (0,2,0)；
+   皮肤明 :root[data-skin] (0,2,0) 源码序在基线暗之后 → 压过基线暗里同名的令牌；
+   皮肤暗 :root[data-skin][data-theme] (0,3,0) 再压过皮肤明。
+   因此**皮肤暗块必须把皮肤明块改过的令牌逐条重述**，漏一条就会漏浅色值进深色。
+   语义色（danger / warn / 旗标 / chip 四档）不随皮肤换：颜色只编码状态，
+   皮肤换的是纸墨与主色，不是语义。chip-none 的底/字随皮肤中性色走一档。
+   原版 = 不写任何覆盖（data-skin="classic" 没有令牌块），基线即原版。
+   ========================================================================== */
+/* --- 皮肤版式差异（2026-11-18 二改：按五案设计稿逐构件移植） ---
+   侧栏的字样 / 行距 / 宽度一律不随皮肤改（用户明确保留）：夜航不做图标轨，
+   三档侧栏都保留文字与计数，只换纸墨 / 主色 / 选中底 / 圆角。
+   其余构件对齐设计稿：上下文条高度与有无底线、快录盒形态、行分隔与圆角、
+   读数行收放、浮窗宽度 / 圆角 / 读数胶囊、日历格与 chip、设置页卡片化、分段控件形状。 */
+
+/* 上下文条：素纸 40 有底线；夜航 / 园庭去底线、纸面退到 bg、条更高。
+   **高度只在上下文条自成一行时成立**（没有自绘标题栏的平台）：并进 `.titlebar`
+   之后行高由 `--chrome-row-h`（31）定死，再给条设 40 / 46 只会让它从行里往下
+   溢出，条内文字与图标跟着整条下移 —— 2026-11-18 五改前，素纸 / 夜航的内容比
+   行中线低 4.5px、园庭低 7.5px，用户看到的就是「全部和三个按钮没在行里居中」。
+   底色 / 底线同理：在标题行里整条必须是同一张纸，不能出现一条 --bg 的内嵌长条。 */
+[data-skin="paper"] .workspace > .topbar { height: 40px; }
+[data-skin="night"] .workspace > .topbar,
+[data-skin="garden"] .workspace > .topbar {
+  height: 40px;
+  border-bottom: 0;
+  background: var(--bg);
+}
+[data-skin="garden"] .workspace > .topbar { height: 46px; }
+[data-skin="night"] .titlebar,
+[data-skin="garden"] .titlebar { border-bottom: 0; }
+[data-skin="paper"] .quick-add-bar,
+[data-skin="night"] .quick-add-bar,
+[data-skin="garden"] .quick-add-bar { background: var(--bg); }
+
+/* 快录：素纸描边纸盒；夜航无边框凹槽 + 内描边焦点；园庭白卡 + 外焦点环 */
+[data-skin="paper"] .quick-add {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+[data-skin="night"] .quick-add {
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  box-shadow: none;
+}
+[data-skin="night"] .quick-add:focus-within {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+[data-skin="garden"] .quick-add {
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: 0 1px 3px var(--row-line-halo);
+}
+[data-skin="garden"] .quick-add:focus-within {
+  border-color: transparent;
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 3px var(--accent);
+}
+
+/* 列表行：夜航分隔线退场改圆角悬停块；园庭行收进圆卡并带圆角 */
+[data-skin="night"] .task-row {
+  border-bottom-color: transparent;
+  box-shadow: none;
+  border-radius: var(--r-md);
+  margin-bottom: 2px;
+}
+[data-skin="night"] .task-row:hover { background: var(--surface-2); }
+[data-skin="night"] .task-body {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--sp-3);
+}
+[data-skin="night"] .task-head {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+[data-skin="night"] .task-meta {
+  position: static;
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  height: auto;
+  margin-left: auto;
+  flex: 0 0 auto;
+  max-width: 46%;
+}
+[data-skin="night"] .task-row:hover .task-head,
+[data-skin="night"] .task-row:focus-visible .task-head { transform: none; }
+[data-skin="garden"] .task-list {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: 0 1px 3px var(--row-line-halo);
+  padding: 4px 10px;
+}
+[data-skin="garden"] .task-row { border-radius: var(--r-sm); }
+[data-skin="garden"] .task-row:hover { background: var(--surface-2); }
+
+/* 浮窗：夜航 440 / 园庭 420 无边框大圆角；读数与行内控件形状随档 */
+[data-skin="night"] .edit-window {
+  width: 440px;
+  flex: 0 0 440px;
+  border-radius: var(--r-xl);
+}
+[data-skin="garden"] .edit-window {
+  width: 420px;
+  flex: 0 0 420px;
+  border: 0;
+  border-radius: var(--r-xl);
+}
+[data-skin="night"] .drawer-title-input,
+[data-skin="garden"] .drawer-title-input { font-size: var(--fs-lg); }
+[data-skin="paper"] .drawer-read { border-radius: var(--r-sm); }
+[data-skin="night"] .drawer-read { border-radius: var(--r-md); }
+[data-skin="garden"] .drawer-read {
+  border: 0;
+  border-radius: var(--r-pill);
+}
+[data-skin="paper"] .drawer-cell .select-trigger,
+[data-skin="paper"] .drawer-cell .date-field-btn { border-radius: var(--r-sm); }
+[data-skin="night"] .drawer-cell .select-trigger,
+[data-skin="night"] .drawer-cell .date-field-btn { border-radius: var(--r-sm); }
+[data-skin="garden"] .drawer-cell .select-trigger,
+[data-skin="garden"] .drawer-cell .date-field-btn { border-radius: var(--r-sm); }
+[data-skin="garden"] .btn { border-radius: var(--r-pill); }
+
+/* 日历：夜航 chip 小圆角；园庭分离圆角格 + 胶囊 chip（墨条退场） */
+[data-skin="night"] .cal-chip { border-radius: var(--r-xs); }
+[data-skin="garden"] .cal-grid {
+  gap: 4px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+}
+[data-skin="garden"] .cal-cell {
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+[data-skin="garden"] .cal-cell.is-weekend { background: var(--surface); }
+[data-skin="garden"] .cal-cell.out-month { background: transparent; }
+[data-skin="garden"] .cal-chip {
+  border-radius: var(--r-pill);
+  padding-inline: var(--sp-2);
+}
+[data-skin="garden"] .cal-chip::before { display: none; }
+
+/* 分段控件：园庭全药丸（模式 / 密度 / 皮肤样张） */
+[data-skin="garden"] .mode-switch,
+[data-skin="garden"] .mode-btn,
+[data-skin="garden"] .density-seg,
+[data-skin="garden"] .density-opt,
+[data-skin="garden"] .skin-btn { border-radius: var(--r-pill); }
+
+/* 设置页卡片化（三档共用设计稿的「头带 + 行卡」版式）：
+   侧题头收成一条 mono 刻度头带，说明文字退场，行与行之间发丝线。 */
+[data-skin="paper"] .settings-group,
+[data-skin="night"] .settings-group,
+[data-skin="garden"] .settings-group {
+  display: block;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+[data-skin="paper"] .settings-group + .settings-group,
+[data-skin="night"] .settings-group + .settings-group,
+[data-skin="garden"] .settings-group + .settings-group {
+  border-top: 1px solid var(--border);
+  margin-top: var(--sp-4);
+}
+[data-skin="paper"] .settings-group-side,
+[data-skin="night"] .settings-group-side,
+[data-skin="garden"] .settings-group-side {
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+[data-skin="paper"] .settings-group-title,
+[data-skin="night"] .settings-group-title,
+[data-skin="garden"] .settings-group-title {
+  margin: 0;
+  font-family: var(--font-mono-cjk);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-body);
+  color: var(--muted);
+}
+[data-skin="paper"] .settings-group-note,
+[data-skin="night"] .settings-group-note,
+[data-skin="garden"] .settings-group-note { display: none; }
+[data-skin="paper"] .settings-fields,
+[data-skin="night"] .settings-fields,
+[data-skin="garden"] .settings-fields { gap: 0; }
+[data-skin="paper"] .settings-row,
+[data-skin="night"] .settings-row,
+[data-skin="garden"] .settings-row {
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+}
+[data-skin="paper"] .settings-fields > :last-child,
+[data-skin="night"] .settings-fields > :last-child,
+[data-skin="garden"] .settings-fields > :last-child { border-bottom: 0; }
+[data-skin="paper"] .settings-actions,
+[data-skin="night"] .settings-actions,
+[data-skin="garden"] .settings-actions { padding: var(--sp-2) var(--sp-3); }
+[data-skin="paper"] .density-preview,
+[data-skin="night"] .density-preview,
+[data-skin="garden"] .density-preview { margin: var(--sp-2) var(--sp-3); }
+/* 空组（如还没有 +项目 时的列表外观）整卡退场，不留一条空头带 */
+[data-skin="paper"] .settings-group:has(.settings-fields:empty),
+[data-skin="night"] .settings-group:has(.settings-fields:empty),
+[data-skin="garden"] .settings-group:has(.settings-fields:empty) { display: none; }
+/* 非行控件（模式分段 / 皮肤样张 / 密度网格）也要落在卡内留白里 */
+[data-skin="paper"] .settings-fields > :not(.settings-row):not(.density-preview),
+[data-skin="night"] .settings-fields > :not(.settings-row):not(.density-preview),
+[data-skin="garden"] .settings-fields > :not(.settings-row):not(.density-preview) {
+  padding: var(--sp-2) var(--sp-3);
+}
+[data-skin="garden"] .settings-group {
+  border: 0;
+  box-shadow: 0 1px 3px var(--row-line-halo);
+}
+[data-skin="garden"] .settings-group-side { background: transparent; }
+
+/* --- 设置页「外观主题」节：四枚样张按钮 --- */
+.skin-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.skin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: var(--h-control);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--control-line);
+  border-radius: var(--r-sm);
+  background: var(--field-bg);
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
+.skin-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.skin-btn.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+.skin-sw {
+  display: inline-flex;
+  gap: 3px;
+}
+.skin-sw i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px var(--row-line-halo);
+}
+.skin-btn[data-skin="classic"] .sw-bg { background: var(--sw-classic-bg); }
+.skin-btn[data-skin="classic"] .sw-surface { background: var(--sw-classic-surface); }
+.skin-btn[data-skin="classic"] .sw-accent { background: var(--sw-classic-accent); }
+.skin-btn[data-skin="paper"] .sw-bg { background: var(--sw-paper-bg); }
+.skin-btn[data-skin="paper"] .sw-surface { background: var(--sw-paper-surface); }
+.skin-btn[data-skin="paper"] .sw-accent { background: var(--sw-paper-accent); }
+.skin-btn[data-skin="night"] .sw-bg { background: var(--sw-night-bg); }
+.skin-btn[data-skin="night"] .sw-surface { background: var(--sw-night-surface); }
+.skin-btn[data-skin="night"] .sw-accent { background: var(--sw-night-accent); }
+.skin-btn[data-skin="garden"] .sw-bg { background: var(--sw-garden-bg); }
+.skin-btn[data-skin="garden"] .sw-surface { background: var(--sw-garden-surface); }
+.skin-btn[data-skin="garden"] .sw-accent { background: var(--sw-garden-accent); }
 
 /* --- 窄屏 / 手机：活动栏转横向，侧栏转横向过滤条 --- */
 @media (max-width: 768px) {
@@ -6839,8 +7728,8 @@ mark {
     min-width: 420px;
   }
 
-  /* 编辑窗宽度不随主区收窄而缩放：窄边与宽边同为 --edit-window-w（392px），
-     max-width:100% 只在物理放不下的极窄视口兜底；字段行也保持同样的双列。 */
+  /* 编辑窗宽度不随主区收窄而缩放：窄边与宽边同为 --edit-window-w（400px），
+     max-width:100% 只在物理放不下的极窄视口兜底。 */
   .edit-window {
     width: var(--edit-window-w);
   }
@@ -7051,6 +7940,13 @@ mark {
 
   :root {
     --row-pad: 16px;
+    --row-h: 44px;
+  }
+
+  /* 皮肤档的 --row-h 特异性 (0,2,0) 压过上面这条 (0,1,0)：触屏兜底要逐档再压一次，
+     否则夜航 / 园庭在触屏上会缩回 36 / 40，拇指命中区跟着缩。 */
+  :root[data-skin="night"],
+  :root[data-skin="garden"] {
     --row-h: 44px;
   }
 
