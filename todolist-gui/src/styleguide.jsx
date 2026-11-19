@@ -785,8 +785,6 @@ function SettingsStage() {
             onClose={() => {}}
             themeMode={themeStage.themeMode}
             onPickTheme={themeStage.onPickTheme}
-            alwaysOnTop={themeStage.alwaysOnTop}
-            onToggleTop={themeStage.onToggleTop}
           />
         </div>
       </div>

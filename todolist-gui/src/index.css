@@ -4839,74 +4839,7 @@ mark {
   color: var(--muted);
 }
 
-/* 窗口置顶开关：设置页自己的开关控件。轨道用控制线描边（WCAG 1.4.11），
-   开启时轨道转 accent-soft + accent 描边，滑块实心 accent；文字同步报状态。 */
-.settings-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
-  min-height: var(--h-control);
-  padding: 0;
-  border: 0;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--text-2);
-  font: inherit;
-  font-size: var(--fs-xs);
-  cursor: default;
-}
-
-.settings-switch-track {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  width: 32px;
-  height: 18px;
-  flex-shrink: 0;
-  border: 1px solid var(--control-line);
-  border-radius: var(--r-pill);
-  background: var(--surface-2);
-  transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
-}
-
-.settings-switch-thumb {
-  position: absolute;
-  left: 2px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--text-2);
-  transition: transform var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out);
-}
-
-.settings-switch:hover .settings-switch-track {
-  border-color: var(--accent);
-}
-
-.settings-switch:focus-visible {
-  outline: none;
-  box-shadow: var(--ring);
-}
-
-.settings-switch.is-on {
-  color: var(--text);
-}
-
-.settings-switch.is-on .settings-switch-track {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-}
-
-.settings-switch.is-on .settings-switch-thumb {
-  transform: translateX(14px);
-  background: var(--accent);
-}
-
-.settings-switch-text {
-  font-size: var(--fs-xs);
-}
-
-/* 明暗模式与显示模式共用 .mode-switch 的分段外形；这个类只做语义区分。 */
+/* 明暗模式用 .mode-switch 的分段外形；这个类只做语义区分。 */
 .theme-switch {
   align-self: flex-start;
 }
@@ -8057,7 +7990,6 @@ mark {
   .priority-picker button,
   .settings-back,
   .settings-nav-item,
-  .settings-switch,
   .ctx-menu-item,
   .tool-tab,
   .tool-row-del,

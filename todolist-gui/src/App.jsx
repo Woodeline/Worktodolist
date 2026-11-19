@@ -1020,8 +1020,6 @@ export default function App() {
               projects={projects}
               themeMode={themeMode}
               onPickTheme={pickThemeMode}
-              alwaysOnTop={alwaysOnTop}
-              onToggleTop={toggleAlwaysOnTop}
             />
           ) : tab === 'tools' ? (
             <ToolsPage snapshot={snapshot} store={store} />

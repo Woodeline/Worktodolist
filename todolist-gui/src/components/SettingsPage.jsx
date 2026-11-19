@@ -6,15 +6,14 @@
 //  2. 2026-11-19 起入口从应用菜单剥离：活动栏「应用菜单」旁单列一枚设置按钮；
 //     页内用左侧分类导航，一档只展示该大类的设置内容。
 //  3. 快捷键那三组只读：列的是键盘操作，点不了，也不需要"保存"。
-//     外观 / 阅读 / 窗口 / 数据四类会写本机配置 —— 它们是偏好，不是数据，所以不进 todo.txt。
+//     外观 / 数据两类会写本机配置 —— 它们是偏好，不是数据，所以不进 todo.txt。
 //  4. 「数据」分类（2026-11-14 从底栏搬来）是页面里唯一带真动作的地方：
 //     保存状态读数 + 手动重载 / 切换目录。主界面不再常驻这两颗按钮。
-//  5. 分类顺序即应用菜单剥离后的收纳顺序：外观（明暗 + 皮肤）、列表与阅读、
-//     窗口、数据、快捷键。原应用菜单「外观」「窗口与数据」两组不再存在。
+//  5. 分类顺序：外观（明暗 + 皮肤 + 列表外观 + 阅读密度）、数据、快捷键。
+//     显示模式统一走侧栏「日历」入口；窗口置顶统一走活动栏图钉，设置页不再重复。
 import { useEffect, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import { PALETTE, colorHex, resolveColorId, useListStyle } from '../lib/listStyle.js';
-import { useListMode } from '../lib/listMode.js';
 import {
   CHILD_FONT_VARS,
   DENSITY_FIELDS,
@@ -89,8 +88,6 @@ const GROUPS = [
 // 分类只负责收纳，具体字段仍按各节自己的组件渲染；不把设置值写进这里。
 export const SETTINGS_CATEGORIES = [
   { id: 'appearance', label: '外观', icon: 'palette' },
-  { id: 'reading', label: '列表与阅读', icon: 'list-tree' },
-  { id: 'window', label: '窗口', icon: 'pin' },
   { id: 'data', label: '数据', icon: 'database' },
   { id: 'shortcuts', label: '快捷键', icon: 'keyboard' },
 ];
@@ -284,47 +281,6 @@ function DensitySection() {
   );
 }
 
-// 显示模式：与顶栏分段开关、应用菜单读的是同一份 configStore（一个能力一个键）。
-// 这里再放一份，是为了让「从设置页进来的人」也能找到它，并且把红线写清楚：
-// 选的是本机怎么排任务，不是写进 todo.txt 的字段。
-function DisplayModeSection() {
-  const [mode, pickMode] = useListMode();
-  return (
-    <section className="settings-group">
-      <div className="settings-group-side">
-        <h3 className="settings-group-title">显示模式</h3>
-        <p className="settings-group-note">
-          清单可以按行读，也可以按日期摊开。这是本机偏好，不写进 todo.txt —— 换台机器打开同一份文件，各看各的。
-        </p>
-      </div>
-      <div className="settings-fields">
-        <div className="mode-switch" role="group" aria-label="显示模式（本机偏好）">
-          <button
-            type="button"
-            className={'mode-btn' + (mode === 'list' ? ' active' : '')}
-            aria-pressed={mode === 'list'}
-            onClick={() => pickMode('list')}
-            title="按行看清单"
-          >
-            <Icon name="list" size={14} />
-            <span>列表（按行）</span>
-          </button>
-          <button
-            type="button"
-            className={'mode-btn' + (mode === 'calendar' ? ' active' : '')}
-            aria-pressed={mode === 'calendar'}
-            onClick={() => pickMode('calendar')}
-            title="按日期摊开（双击日期新建 · 拖任务改期）"
-          >
-            <Icon name="calendar" size={14} />
-            <span>日历（按日期）</span>
-          </button>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 // 明暗模式：三档直接落档，和活动栏那枚轮换按钮读同一份 configStore。
 // 2026-11-19 从应用菜单「外观」组搬来；按钮图标与活动栏共用 THEME_ICONS。
 function ThemeSection({ themeMode = 'auto', onPickTheme }) {
@@ -438,43 +394,9 @@ function DataSection({ store }) {
   );
 }
 
-// 窗口置顶：2026-11-19 从应用菜单「窗口与数据」组搬来。
-// 状态真相在壳里，设置页只拿 App 投影出来的 onTop 与 toggle；
-// 活动栏图钉、托盘菜单、这里三处读同一份广播。
-function WindowSection({ alwaysOnTop = false, onToggleTop }) {
-  const on = Boolean(alwaysOnTop);
-  return (
-    <section className="settings-group">
-      <div className="settings-group-side">
-        <h3 className="settings-group-title">窗口置顶</h3>
-        <p className="settings-group-note">
-          总在最前。与活动栏图钉、托盘菜单共用同一份状态。
-        </p>
-      </div>
-      <div className="settings-fields">
-        <div className="settings-row">
-          <span className="settings-label">保持最前</span>
-          <div className="settings-control">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={on}
-              className={'settings-switch' + (on ? ' is-on' : '')}
-              onClick={() => onToggleTop && onToggleTop()}
-            >
-              <span className="settings-switch-track" aria-hidden="true">
-                <span className="settings-switch-thumb" />
-              </span>
-              <span className="settings-switch-text">{on ? '已置顶' : '未置顶'}</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-export default function SettingsPage({ onClose, projects, store, themeMode = 'auto', onPickTheme, alwaysOnTop = false, onToggleTop }) {
+// 窗口置顶统一走活动栏图钉与托盘菜单：设置页不再重复一份开关，
+// 避免同一个状态在三个地方各说各话。
+export default function SettingsPage({ onClose, projects, store, themeMode = 'auto', onPickTheme }) {
   const firstCategory = SETTINGS_CATEGORIES[0].id;
   const [active, setActive] = useState(firstCategory);
   const paneRef = useRef(null);
@@ -551,16 +473,8 @@ export default function SettingsPage({ onClose, projects, store, themeMode = 'au
             <section className="settings-cat" data-category="appearance" {...panel('appearance')}>
               <ThemeSection themeMode={themeMode} onPickTheme={onPickTheme} />
               <SkinSection />
-            </section>
-
-            <section className="settings-cat" data-category="reading" {...panel('reading')}>
               <ListStyleSection projects={projects} />
               <DensitySection />
-              <DisplayModeSection />
-            </section>
-
-            <section className="settings-cat" data-category="window" {...panel('window')}>
-              <WindowSection alwaysOnTop={alwaysOnTop} onToggleTop={onToggleTop} />
             </section>
 
             <section className="settings-cat" data-category="data" {...panel('data')}>

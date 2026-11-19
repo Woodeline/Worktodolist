@@ -2,7 +2,8 @@
 //
 // 底栏删掉时最危险的失手不是"样式变了"，而是「手动重载 / 切换目录」随风消失 ——
 // 测试文件盯这一条：两颗按钮真的在设置页里，保存状态也还读得到。
-// 2026-11-19 再把「设置从应用菜单剥离」后的三件事钉住：分类侧栏、明暗模式、窗口置顶。
+// 2026-11-19 第二轮：设置从应用菜单剥离，分类收为外观 / 数据 / 快捷键；
+// 列表与阅读并入外观，显示模式与窗口置顶不再占设置项。
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -30,14 +31,11 @@ const render = (props = {}) => ssr(
     store={store}
     themeMode="auto"
     onPickTheme={noop}
-    alwaysOnTop={false}
-    onToggleTop={noop}
     {...props}
   />
 );
 
 const html = render();
-const onTopHtml = render({ alwaysOnTop: true });
 
 const categoryBlock = (id) => {
   const at = html.indexOf(`data-category="${id}"`);
@@ -47,30 +45,35 @@ const categoryBlock = (id) => {
 };
 
 describe('设置页：分类侧栏', () => {
-  it('五个分类按 外观 / 列表与阅读 / 窗口 / 数据 / 快捷键 排列', () => {
+  it('三个分类按 外观 / 数据 / 快捷键 排列', () => {
     expect(SETTINGS_CATEGORIES.map((c) => c.label)).toEqual([
-      '外观', '列表与阅读', '窗口', '数据', '快捷键',
+      '外观', '数据', '快捷键',
     ]);
     const nav = html.split('class="settings-nav"')[1]?.split('</aside>')[0] || '';
-    expect((nav.match(/role="tab"/g) || []).length).toBe(5);
-    for (const label of ['外观', '列表与阅读', '窗口', '数据', '快捷键']) {
+    expect((nav.match(/role="tab"/g) || []).length).toBe(3);
+    for (const label of ['外观', '数据', '快捷键']) {
       expect(nav).toContain(`>${label}</span>`);
     }
   });
 
   it('默认只展示「外观」，其余分类整块 hidden', () => {
-    expect((html.match(/role="tabpanel"/g) || []).length).toBe(5);
+    expect((html.match(/role="tabpanel"/g) || []).length).toBe(3);
     expect((html.match(/aria-selected="true"/g) || []).length).toBe(1);
     expect(categoryBlock('appearance')).not.toContain('hidden=""');
-    for (const id of ['reading', 'window', 'data', 'shortcuts']) {
+    for (const id of ['data', 'shortcuts']) {
       expect(categoryBlock(id)).toContain('hidden=""');
     }
   });
 
-  it('把原应用菜单里的明暗模式与窗口置顶收进对应分类', () => {
+  it('把原「列表与阅读」并进外观，并清掉显示模式与窗口置顶两节', () => {
     expect(categoryBlock('appearance')).toContain('明暗模式');
     expect(categoryBlock('appearance')).toContain('外观主题');
-    expect(categoryBlock('window')).toContain('窗口置顶');
+    expect(categoryBlock('appearance')).toContain('列表外观');
+    expect(categoryBlock('appearance')).toContain('阅读密度');
+    expect(html).not.toContain('显示模式');
+    expect(html).not.toContain('窗口置顶');
+    expect(html).not.toContain('data-category="reading"');
+    expect(html).not.toContain('data-category="window"');
     expect(categoryBlock('data')).toContain('手动重载');
     expect(categoryBlock('shortcuts')).toContain('全局');
   });
@@ -96,12 +99,11 @@ describe('设置页：数据节', () => {
     expect(html).toContain('2 条任务'); // 只数任务，raw 行不算
   });
 
-  it('十个设置节按分类顺序排列', () => {
+  it('八个设置节按分类顺序排列', () => {
     const titles = [...html.matchAll(/class="settings-group-title">([^<]+)</g)].map((m) => m[1]);
     expect(titles).toEqual([
       '明暗模式', '外观主题',
-      '列表外观', '阅读密度', '显示模式',
-      '窗口置顶',
+      '列表外观', '阅读密度',
       '数据',
       '全局', '列表页', '日历',
     ]);
@@ -134,21 +136,6 @@ describe('设置页：明暗模式（从应用菜单迁入）', () => {
     expect(theme).toContain('data-theme-mode="auto"');
     expect(theme).toContain('data-theme-mode="light"');
     expect(theme).toContain('data-theme-mode="dark"');
-  });
-});
-
-describe('设置页：窗口置顶（从应用菜单迁入）', () => {
-  it('是一枚 role=switch 的开关，关闭时报「未置顶」', () => {
-    const block = html.split('class="settings-group-title">窗口置顶<')[1]?.split('class="settings-group"')[0] || '';
-    expect(block).toContain('role="switch"');
-    expect(block).toContain('aria-checked="false"');
-    expect(block).toContain('未置顶');
-  });
-
-  it('置顶时 aria-checked 与文案同步', () => {
-    const block = onTopHtml.split('class="settings-group-title">窗口置顶<')[1]?.split('class="settings-group"')[0] || '';
-    expect(block).toContain('aria-checked="true"');
-    expect(block).toContain('已置顶');
   });
 });
 
@@ -196,7 +183,7 @@ describe('设置页：底栏真的搬走了', () => {
 
 describe('设置页：外观主题节（2026-11-18 四档皮肤）', () => {
   it('四枚样张按钮按 原版/素纸/夜航/园庭 排，默认恰好原版按下', () => {
-    const seg = categoryBlock('appearance').split('class="skin-switch"')[1] || '';
+    const seg = categoryBlock('appearance').split('class="skin-switch"')[1]?.split('class="settings-group"')[0] || '';
     const btns = seg.split('class="skin-btn').slice(1);
     expect(btns).toHaveLength(4);
     expect(seg).toContain('data-skin="classic"');
@@ -210,7 +197,7 @@ describe('设置页：外观主题节（2026-11-18 四档皮肤）', () => {
   });
 
   it('每枚按钮带三枚小样（底 / 面 / 主色），共十二枚', () => {
-    const seg = categoryBlock('appearance').split('class="skin-switch"')[1] || '';
+    const seg = categoryBlock('appearance').split('class="skin-switch"')[1]?.split('class="settings-group"')[0] || '';
     expect((seg.match(/class="sw-bg"/g) || []).length).toBe(4);
     expect((seg.match(/class="sw-surface"/g) || []).length).toBe(4);
     expect((seg.match(/class="sw-accent"/g) || []).length).toBe(4);
