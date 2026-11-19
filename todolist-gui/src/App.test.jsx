@@ -1,6 +1,6 @@
 // 活动栏 Tabs 的渲染冒烟。
 //
-// 纯函数单测盯不到「设置按钮有没有真的删掉」「主题是不是只剩一枚轮换按钮」
+// 纯函数单测盯不到「设置按钮有没有真的摆到应用菜单旁边」「主题是不是只剩一枚轮换按钮」
 // 「置顶态是不是实心图标」—— 这些写错界面不报错，只会悄悄退回旧样子。
 // 项目无 jsdom，用 SSR 静态标记补最后一公里，不为此装 DOM 依赖。
 import { describe, expect, it } from 'vitest';
@@ -24,7 +24,6 @@ function rail(props = {}) {
         alwaysOnTop={false}
         onToggleTop={noop}
         themeMode="auto"
-        onPickTheme={noop}
         onCycleTheme={noop}
         {...props}
       />
@@ -46,12 +45,15 @@ describe('活动栏：页签与设置入口', () => {
     TABS.forEach(([, label]) => expect(html).toContain(`>${label}</span>`));
   });
 
-  it('不再有设置按钮，应用菜单按钮仍在', () => {
+  it('设置按钮紧邻应用菜单按钮，应用菜单仍在', () => {
     const html = rail();
-    expect(html).not.toContain('title="设置（Ctrl+,）"');
-    expect(html).not.toContain('设置 · Ctrl+,');
-    expect(html).toContain('aria-haspopup="menu"');
-    expect(html).toContain('>应用菜单</span>');
+    const menu = buttonChunk(html, 'aria-haspopup="menu"');
+    const settings = buttonChunk(html, 'title="设置（Ctrl+,）"');
+    expect(menu).toContain('>应用菜单</span>');
+    expect(settings).toContain('aria-label="设置"');
+    expect(settings).toContain('>设置</span>');
+    expect(html.indexOf(settings)).toBeGreaterThan(html.indexOf(menu));
+    expect(html.split('<button').filter((s) => s.includes('title="设置（Ctrl+,）"')).length).toBe(1);
   });
 });
 

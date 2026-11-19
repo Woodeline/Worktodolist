@@ -1,12 +1,17 @@
-// 独立设置页：四项本机偏好（列表外观 / 阅读密度 / 显示模式 / 数据）+ 三节快捷键速查。
+// 独立设置页：本机偏好 + 数据动作 + 只读快捷键速查。
 //
 // 设计约定：
 //  1. 设置不是"工作流的一部分"，所以它不是一个页签，而是一张独立页面
-//     （从应用菜单 / Ctrl+, 进入，Esc 或「返回」退出）。
-//  2. 快捷键那三节只读：列的是键盘操作，点不了，也不需要"保存"。
-//     列表外观 / 阅读密度 / 显示模式三节会写本机配置 —— 它们是偏好，不是数据，所以不进 todo.txt。
-//  3. 「数据」节（2026-11-14 从底栏搬来）是页面里唯一带真动作的地方：
+//     （从活动栏「设置」/ Ctrl+, 进入，Esc 或「返回」退出）。
+//  2. 2026-11-19 起入口从应用菜单剥离：活动栏「应用菜单」旁单列一枚设置按钮；
+//     页内用左侧分类导航，一档只展示该大类的设置内容。
+//  3. 快捷键那三组只读：列的是键盘操作，点不了，也不需要"保存"。
+//     外观 / 阅读 / 窗口 / 数据四类会写本机配置 —— 它们是偏好，不是数据，所以不进 todo.txt。
+//  4. 「数据」分类（2026-11-14 从底栏搬来）是页面里唯一带真动作的地方：
 //     保存状态读数 + 手动重载 / 切换目录。主界面不再常驻这两颗按钮。
+//  5. 分类顺序即应用菜单剥离后的收纳顺序：外观（明暗 + 皮肤）、列表与阅读、
+//     窗口、数据、快捷键。原应用菜单「外观」「窗口与数据」两组不再存在。
+import { useEffect, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import { PALETTE, colorHex, resolveColorId, useListStyle } from '../lib/listStyle.js';
 import { useListMode } from '../lib/listMode.js';
@@ -23,6 +28,7 @@ import {
 } from '../lib/readingDensity.js';
 import Icon from './Icon.jsx';
 import { SKINS, SKIN_LABELS, useSkin } from '../lib/skin.js';
+import { THEME_ICONS, THEME_LABELS, THEME_MODES } from '../lib/theme.js';
 
 // 键帽：把 "Ctrl + 1 / 2 / 3" 拆成一枚枚可扫的键，分隔符留在中间。
 // 纯函数，便于单测与复用；不改变原有字符串内容（速查表的断言仍成立）。
@@ -77,6 +83,16 @@ const GROUPS = [
       ['空格', '选中当前日期'],
     ],
   },
+];
+
+// 设置分类：左侧导航与右侧面板共用的唯一顺序来源。
+// 分类只负责收纳，具体字段仍按各节自己的组件渲染；不把设置值写进这里。
+export const SETTINGS_CATEGORIES = [
+  { id: 'appearance', label: '外观', icon: 'palette' },
+  { id: 'reading', label: '列表与阅读', icon: 'list-tree' },
+  { id: 'window', label: '窗口', icon: 'pin' },
+  { id: 'data', label: '数据', icon: 'database' },
+  { id: 'shortcuts', label: '快捷键', icon: 'keyboard' },
 ];
 
 // 列表外观：给每个 +项目 挑一个颜色。
@@ -309,6 +325,39 @@ function DisplayModeSection() {
   );
 }
 
+// 明暗模式：三档直接落档，和活动栏那枚轮换按钮读同一份 configStore。
+// 2026-11-19 从应用菜单「外观」组搬来；按钮图标与活动栏共用 THEME_ICONS。
+function ThemeSection({ themeMode = 'auto', onPickTheme }) {
+  const current = THEME_MODES.includes(themeMode) ? themeMode : 'auto';
+  return (
+    <section className="settings-group">
+      <div className="settings-group-side">
+        <h3 className="settings-group-title">明暗模式</h3>
+        <p className="settings-group-note">
+          跟随系统，或固定浅色 / 深色。与活动栏主题按钮写同一份本机偏好。
+        </p>
+      </div>
+      <div className="settings-fields">
+        <div className="mode-switch theme-switch" role="group" aria-label="明暗模式（本机偏好）">
+          {THEME_MODES.map((m) => (
+            <button
+              key={m}
+              type="button"
+              data-theme-mode={m}
+              className={'mode-btn' + (current === m ? ' active' : '')}
+              aria-pressed={current === m}
+              onClick={() => onPickTheme && onPickTheme(m)}
+            >
+              <Icon name={THEME_ICONS[m]} size={14} />
+              <span>{THEME_LABELS[m]}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // 外观主题：四档皮肤（原版 / 素纸 / 夜航 / 园庭），与明暗档位正交。
 // 按钮上那三枚小样读 §1 的 --sw-* 样张令牌：画的是「目标档长什么样」，
 // 不是当前生效色 —— 否则在夜航里看夜航的样张就只剩一片黑。
@@ -389,7 +438,78 @@ function DataSection({ store }) {
   );
 }
 
-export default function SettingsPage({ onClose, projects, store }) {
+// 窗口置顶：2026-11-19 从应用菜单「窗口与数据」组搬来。
+// 状态真相在壳里，设置页只拿 App 投影出来的 onTop 与 toggle；
+// 活动栏图钉、托盘菜单、这里三处读同一份广播。
+function WindowSection({ alwaysOnTop = false, onToggleTop }) {
+  const on = Boolean(alwaysOnTop);
+  return (
+    <section className="settings-group">
+      <div className="settings-group-side">
+        <h3 className="settings-group-title">窗口置顶</h3>
+        <p className="settings-group-note">
+          总在最前。与活动栏图钉、托盘菜单共用同一份状态。
+        </p>
+      </div>
+      <div className="settings-fields">
+        <div className="settings-row">
+          <span className="settings-label">保持最前</span>
+          <div className="settings-control">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={on}
+              className={'settings-switch' + (on ? ' is-on' : '')}
+              onClick={() => onToggleTop && onToggleTop()}
+            >
+              <span className="settings-switch-track" aria-hidden="true">
+                <span className="settings-switch-thumb" />
+              </span>
+              <span className="settings-switch-text">{on ? '已置顶' : '未置顶'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export default function SettingsPage({ onClose, projects, store, themeMode = 'auto', onPickTheme, alwaysOnTop = false, onToggleTop }) {
+  const firstCategory = SETTINGS_CATEGORIES[0].id;
+  const [active, setActive] = useState(firstCategory);
+  const paneRef = useRef(null);
+  const tabRefs = useRef([]);
+
+  // 分类切换后回到该分类顶部；否则从长分类切到短分类会停在旧滚动位置，像页面空了。
+  useEffect(() => {
+    if (paneRef.current) paneRef.current.scrollTop = 0;
+  }, [active]);
+
+  // 左侧分类是 tablist：↑↓ / ←→ / Home / End 在分类间移动，focus 跟着按下项走。
+  const onNavKeyDown = (e, index) => {
+    let next = null;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') next = (index + 1) % SETTINGS_CATEGORIES.length;
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+      next = (index - 1 + SETTINGS_CATEGORIES.length) % SETTINGS_CATEGORIES.length;
+    } else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = SETTINGS_CATEGORIES.length - 1;
+    if (next == null) return;
+    e.preventDefault();
+    const category = SETTINGS_CATEGORIES[next];
+    setActive(category.id);
+    requestAnimationFrame(() => {
+      if (tabRefs.current[next]) tabRefs.current[next].focus();
+    });
+  };
+
+  const is = (id) => active === id;
+  const panel = (id) => ({
+    id: `settings-panel-${id}`,
+    role: 'tabpanel',
+    'aria-labelledby': `settings-tab-${id}`,
+    hidden: !is(id),
+  });
+
   return (
     <div className="settings">
       <div className="settings-head">
@@ -399,39 +519,82 @@ export default function SettingsPage({ onClose, projects, store }) {
         </button>
         <h2 className="settings-title">设置</h2>
         <span className="spacer" />
-        <span className="settings-head-note">快捷键速查只读 · 外观与数据操作在这里</span>
+        <span className="settings-head-note">本机偏好 · 快捷键速查只读</span>
       </div>
 
-      <div className="settings-body">
-        <ListStyleSection projects={projects} />
-        <DensitySection />
-        <DisplayModeSection />
-        <SkinSection />
-        <DataSection store={store} />
-        {GROUPS.map((g) => (
-          <section className="settings-group" key={g.title}>
-            <div className="settings-group-side">
-              <h3 className="settings-group-title">{g.title}</h3>
-              {g.note && <p className="settings-group-note">{g.note}</p>}
-            </div>
+      <div className="settings-main">
+        <aside className="settings-nav" aria-label="设置分类">
+          <div className="settings-nav-list" role="tablist" aria-orientation="vertical">
+            {SETTINGS_CATEGORIES.map((category, index) => (
+              <button
+                key={category.id}
+                type="button"
+                id={`settings-tab-${category.id}`}
+                role="tab"
+                aria-selected={is(category.id)}
+                aria-controls={`settings-panel-${category.id}`}
+                tabIndex={is(category.id) ? 0 : -1}
+                className={'settings-nav-item' + (is(category.id) ? ' is-active' : '')}
+                onClick={() => setActive(category.id)}
+                onKeyDown={(e) => onNavKeyDown(e, index)}
+                ref={(el) => { tabRefs.current[index] = el; }}
+              >
+                <Icon name={category.icon} size={16} className="settings-nav-icon" />
+                <span className="settings-nav-label">{category.label}</span>
+              </button>
+            ))}
+          </div>
+        </aside>
 
-            <div className="settings-fields">
-              {g.rows.map(([keys, desc]) => (
-                <div className="settings-row settings-row-keys" key={keys}>
-                  <span className="settings-label"><Keycaps text={keys} /></span>
-                  <div className="settings-control">
-                    <span className="settings-range">{desc}</span>
+        <div className="settings-pane" ref={paneRef}>
+          <div className="settings-inner">
+            <section className="settings-cat" data-category="appearance" {...panel('appearance')}>
+              <ThemeSection themeMode={themeMode} onPickTheme={onPickTheme} />
+              <SkinSection />
+            </section>
+
+            <section className="settings-cat" data-category="reading" {...panel('reading')}>
+              <ListStyleSection projects={projects} />
+              <DensitySection />
+              <DisplayModeSection />
+            </section>
+
+            <section className="settings-cat" data-category="window" {...panel('window')}>
+              <WindowSection alwaysOnTop={alwaysOnTop} onToggleTop={onToggleTop} />
+            </section>
+
+            <section className="settings-cat" data-category="data" {...panel('data')}>
+              <DataSection store={store} />
+            </section>
+
+            <section className="settings-cat" data-category="shortcuts" {...panel('shortcuts')}>
+              {GROUPS.map((g) => (
+                <section className="settings-group" key={g.title}>
+                  <div className="settings-group-side">
+                    <h3 className="settings-group-title">{g.title}</h3>
+                    {g.note && <p className="settings-group-note">{g.note}</p>}
                   </div>
-                </div>
+
+                  <div className="settings-fields">
+                    {g.rows.map(([keys, desc]) => (
+                      <div className="settings-row settings-row-keys" key={keys}>
+                        <span className="settings-label"><Keycaps text={keys} /></span>
+                        <div className="settings-control">
+                          <span className="settings-range">{desc}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
               ))}
-            </div>
-          </section>
-        ))}
+            </section>
+          </div>
+        </div>
       </div>
 
       <div className="settings-foot">
         <span className="spacer" />
-        <span className="settings-where">随时可查：应用菜单「设置…」/ Ctrl + ,</span>
+        <span className="settings-where">随时可查：活动栏「设置」/ Ctrl + ,</span>
       </div>
     </div>
   );

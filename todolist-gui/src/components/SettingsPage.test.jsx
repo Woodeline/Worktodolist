@@ -1,7 +1,8 @@
-// 设置页的渲染契约（2026-11-14 数据节加入后）。
+// 设置页的渲染契约（2026-11-14 数据节加入后，2026-11-19 分类侧栏改版）。
 //
 // 底栏删掉时最危险的失手不是"样式变了"，而是「手动重载 / 切换目录」随风消失 ——
 // 测试文件盯这一条：两颗按钮真的在设置页里，保存状态也还读得到。
+// 2026-11-19 再把「设置从应用菜单剥离」后的三件事钉住：分类侧栏、明暗模式、窗口置顶。
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -9,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 // 无 jsdom：用 react-dom/server 的静态标记（与 App.test.jsx 同一套路）。
 import { renderToStaticMarkup as ssr } from 'react-dom/server';
-import SettingsPage from './SettingsPage.jsx';
+import SettingsPage, { SETTINGS_CATEGORIES } from './SettingsPage.jsx';
 
 const noop = () => {};
 
@@ -22,7 +23,64 @@ const store = {
   pickDirectory: noop,
 };
 
-const html = ssr(<SettingsPage onClose={noop} projects={[]} store={store} />);
+const render = (props = {}) => ssr(
+  <SettingsPage
+    onClose={noop}
+    projects={[]}
+    store={store}
+    themeMode="auto"
+    onPickTheme={noop}
+    alwaysOnTop={false}
+    onToggleTop={noop}
+    {...props}
+  />
+);
+
+const html = render();
+const onTopHtml = render({ alwaysOnTop: true });
+
+const categoryBlock = (id) => {
+  const at = html.indexOf(`data-category="${id}"`);
+  if (at === -1) return '';
+  const next = html.indexOf('class="settings-cat"', at + 1);
+  return html.slice(at, next === -1 ? undefined : next);
+};
+
+describe('设置页：分类侧栏', () => {
+  it('五个分类按 外观 / 列表与阅读 / 窗口 / 数据 / 快捷键 排列', () => {
+    expect(SETTINGS_CATEGORIES.map((c) => c.label)).toEqual([
+      '外观', '列表与阅读', '窗口', '数据', '快捷键',
+    ]);
+    const nav = html.split('class="settings-nav"')[1]?.split('</aside>')[0] || '';
+    expect((nav.match(/role="tab"/g) || []).length).toBe(5);
+    for (const label of ['外观', '列表与阅读', '窗口', '数据', '快捷键']) {
+      expect(nav).toContain(`>${label}</span>`);
+    }
+  });
+
+  it('默认只展示「外观」，其余分类整块 hidden', () => {
+    expect((html.match(/role="tabpanel"/g) || []).length).toBe(5);
+    expect((html.match(/aria-selected="true"/g) || []).length).toBe(1);
+    expect(categoryBlock('appearance')).not.toContain('hidden=""');
+    for (const id of ['reading', 'window', 'data', 'shortcuts']) {
+      expect(categoryBlock(id)).toContain('hidden=""');
+    }
+  });
+
+  it('把原应用菜单里的明暗模式与窗口置顶收进对应分类', () => {
+    expect(categoryBlock('appearance')).toContain('明暗模式');
+    expect(categoryBlock('appearance')).toContain('外观主题');
+    expect(categoryBlock('window')).toContain('窗口置顶');
+    expect(categoryBlock('data')).toContain('手动重载');
+    expect(categoryBlock('shortcuts')).toContain('全局');
+  });
+
+  it('分类切换后页面从顶部读起（滚动重置副作用存在）', () => {
+    const src = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), './SettingsPage.jsx'), 'utf8');
+    expect(src).toContain('paneRef.current.scrollTop = 0');
+    expect(src).toContain("useEffect(() => {");
+  });
+});
 
 describe('设置页：数据节', () => {
   it('「手动重载 / 切换目录」在设置页里，且是一颗动作行', () => {
@@ -38,9 +96,15 @@ describe('设置页：数据节', () => {
     expect(html).toContain('2 条任务'); // 只数任务，raw 行不算
   });
 
-  it('分组顺序固定：外观 → 阅读密度 → 显示模式 → 外观主题 → 数据 → 三节快捷键', () => {
+  it('十个设置节按分类顺序排列', () => {
     const titles = [...html.matchAll(/class="settings-group-title">([^<]+)</g)].map((m) => m[1]);
-    expect(titles).toEqual(['列表外观', '阅读密度', '显示模式', '外观主题', '数据', '全局', '列表页', '日历']);
+    expect(titles).toEqual([
+      '明暗模式', '外观主题',
+      '列表外观', '阅读密度', '显示模式',
+      '窗口置顶',
+      '数据',
+      '全局', '列表页', '日历',
+    ]);
   });
 
   it('列表页速查不再把空格列为完成快捷键', () => {
@@ -51,6 +115,40 @@ describe('设置页：数据节', () => {
 
   it('页头说明仍写明快捷键只读（这一节确实点不了）', () => {
     expect(html).toContain('只读');
+    expect(html).toContain('活动栏「设置」');
+  });
+});
+
+describe('设置页：明暗模式（从应用菜单迁入）', () => {
+  const theme = html.split('class="settings-group-title">明暗模式<')[1]?.split('class="settings-group"')[0] || '';
+
+  it('三档按钮按 跟随系统 / 浅色 / 深色 排，默认恰好一档按下', () => {
+    expect((theme.match(/data-theme-mode=/g) || []).length).toBe(3);
+    expect((theme.match(/aria-pressed="true"/g) || []).length).toBe(1);
+    expect(theme).toContain('跟随系统');
+    expect(theme).toContain('浅色');
+    expect(theme).toContain('深色');
+  });
+
+  it('与活动栏主题共用同一份档位来源，没有第二套选项', () => {
+    expect(theme).toContain('data-theme-mode="auto"');
+    expect(theme).toContain('data-theme-mode="light"');
+    expect(theme).toContain('data-theme-mode="dark"');
+  });
+});
+
+describe('设置页：窗口置顶（从应用菜单迁入）', () => {
+  it('是一枚 role=switch 的开关，关闭时报「未置顶」', () => {
+    const block = html.split('class="settings-group-title">窗口置顶<')[1]?.split('class="settings-group"')[0] || '';
+    expect(block).toContain('role="switch"');
+    expect(block).toContain('aria-checked="false"');
+    expect(block).toContain('未置顶');
+  });
+
+  it('置顶时 aria-checked 与文案同步', () => {
+    const block = onTopHtml.split('class="settings-group-title">窗口置顶<')[1]?.split('class="settings-group"')[0] || '';
+    expect(block).toContain('aria-checked="true"');
+    expect(block).toContain('已置顶');
   });
 });
 
@@ -98,7 +196,7 @@ describe('设置页：底栏真的搬走了', () => {
 
 describe('设置页：外观主题节（2026-11-18 四档皮肤）', () => {
   it('四枚样张按钮按 原版/素纸/夜航/园庭 排，默认恰好原版按下', () => {
-    const seg = html.split('class="skin-switch"')[1] || '';
+    const seg = categoryBlock('appearance').split('class="skin-switch"')[1] || '';
     const btns = seg.split('class="skin-btn').slice(1);
     expect(btns).toHaveLength(4);
     expect(seg).toContain('data-skin="classic"');
@@ -112,19 +210,17 @@ describe('设置页：外观主题节（2026-11-18 四档皮肤）', () => {
   });
 
   it('每枚按钮带三枚小样（底 / 面 / 主色），共十二枚', () => {
-    const seg = html.split('class="skin-switch"')[1] || '';
+    const seg = categoryBlock('appearance').split('class="skin-switch"')[1] || '';
     expect((seg.match(/class="sw-bg"/g) || []).length).toBe(4);
     expect((seg.match(/class="sw-surface"/g) || []).length).toBe(4);
     expect((seg.match(/class="sw-accent"/g) || []).length).toBe(4);
   });
 
-  it('节序：外观主题插在显示模式之后、数据之前', () => {
-    const a = html.indexOf('>显示模式<');
+  it('节序：明暗模式在前、外观主题在后', () => {
+    const a = html.indexOf('>明暗模式<');
     const b = html.indexOf('>外观主题<');
-    const c = html.indexOf('>数据<');
     expect(a).toBeGreaterThan(-1);
     expect(b).toBeGreaterThan(a);
-    expect(c).toBeGreaterThan(b);
   });
 
   it('样张色走 §1 的 --sw-* 令牌，CSS 里四档 × 三枚都有落点', () => {

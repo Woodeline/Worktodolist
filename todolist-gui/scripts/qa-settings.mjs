@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-// 设置页（快捷键速查）UI 级回归（独立浏览器 profile）。
+// 设置页 UI 级回归（独立浏览器 profile）。
 //
 // 为什么单测不够：单测能证明组件函数返回了 JSX，但证明不了「在真实浏览器里渲染出来
 // 的页面结构正确、旧功能入口一个都不剩」这条链路 —— 类名写错、入口漏删，在逻辑层
 // 全绿的情况下照样能坏。这里用真实浏览器读页面上真实结构。
 //
-// 顺带核对「不再有任何配置类入口」：设置页只读、无输入控件。
+// 2026-11-19 起设置页是分类侧栏：外观 / 列表与阅读 / 窗口 / 数据 / 快捷键；
+// 顺带核对「没有文本输入控件」与「设置按钮紧邻应用菜单」。
 //
 // 用法：npm run test:settings   （需要先起 dev：npm run dev -- --port 15181 --strictPort）
 //      SG_BASE=http://localhost:15181 npm run test:settings
@@ -208,7 +209,7 @@ async function main() {
   await goto('settings', 1280, 820);
   const shape = await evalJs(`(() => {
     const q = (s) => document.querySelector(s);
-    const rows = Array.from(document.querySelectorAll('.settings-row'));
+    const rows = Array.from(document.querySelectorAll('.settings-cat[data-category="shortcuts"] .settings-row'));
     return {
       head: !!q('.settings-head'),
       back: !!q('.settings-back'),
@@ -225,16 +226,36 @@ async function main() {
       }),
       hasInput: !!q('.settings input, .settings textarea, .settings input[type=checkbox]'),
       footButtons: document.querySelectorAll('.settings-foot button').length,
+      // 设置页 2026-11-19 改版：左侧分类导航 + 右侧当前分类；默认只展示「外观」。
+      settingsNav: document.querySelectorAll('.settings-nav').length,
+      navItems: document.querySelectorAll('.settings-nav-item').length,
+      navLabels: Array.from(document.querySelectorAll('.settings-nav-label')).map((e) => e.textContent.trim()),
+      navActive: (q('.settings-nav-item.is-active .settings-nav-label') || {}).textContent || '',
+      cats: document.querySelectorAll('.settings-cat').length,
+      visibleCats: document.querySelectorAll('.settings-cat:not([hidden])').length,
+      hiddenCats: document.querySelectorAll('.settings-cat[hidden]').length,
+      visibleCat: (q('.settings-cat:not([hidden])') || {}).dataset?.category || '',
       // 显示模式是本机偏好，设置页也要有入口；日历键必须进速查表。
-      modeBtns: document.querySelectorAll('.settings-group .mode-switch .mode-btn').length,
-      modePressed: Array.from(document.querySelectorAll('.settings-group .mode-switch .mode-btn')).map((b) => b.getAttribute('aria-pressed')),
-      keyText: Array.from(document.querySelectorAll('.settings-row')).map((r) => r.textContent).join(' '),
+      // 外观分类里另有三枚明暗模式按钮，所以这里限定 :not(.theme-switch)。
+      modeBtns: document.querySelectorAll('.settings-group .mode-switch:not(.theme-switch) .mode-btn').length,
+      modePressed: Array.from(document.querySelectorAll('.settings-group .mode-switch:not(.theme-switch) .mode-btn')).map((b) => b.getAttribute('aria-pressed')),
+      settingsThemeBtns: document.querySelectorAll('.theme-switch .mode-btn').length,
+      settingsThemePressed: Array.from(document.querySelectorAll('.theme-switch .mode-btn')).map((b) => b.getAttribute('aria-pressed')),
+      settingsThemeMode: (q('.theme-switch .mode-btn[aria-pressed="true"]') || {}).dataset?.themeMode || '',
+      windowSwitch: document.querySelectorAll('.settings-switch[role="switch"]').length,
+      windowChecked: q('.settings-switch[role="switch"]') ? q('.settings-switch[role="switch"]').getAttribute('aria-checked') : '',
+      keyText: Array.from(document.querySelectorAll('.settings-cat[data-category="shortcuts"] .settings-row')).map((r) => r.textContent).join(' '),
       oldNet: !!q('#set-net-hosts') || !!q('#set-net-timeout') || !!q('#set-net-maxbytes'),
-      // 设置入口已收进应用菜单：活动栏不再单列齿轮，但菜单按钮必须在，
-      // 否则这个动作是真的丢了（单测只证明 appMenu.js 里有这一项）。
+      // 设置入口在活动栏「应用菜单」旁单列，应用菜单仍在；两项必须紧邻。
       settingsBtn: Array.from(document.querySelectorAll('.tabs .tab'))
         .filter((b) => (b.getAttribute('title') || '').startsWith('设置')).length,
       appMenuBtn: !!q('.tabs .tab[aria-haspopup="menu"]'),
+      settingsAdjacent: (() => {
+        const menu = q('.tabs .tab[aria-haspopup="menu"]');
+        const set = Array.from(document.querySelectorAll('.tabs .tab'))
+          .find((b) => (b.getAttribute('title') || '').startsWith('设置'));
+        return !!(menu && set && menu.nextElementSibling === set);
+      })(),
       // 数据节：两颗以前挂在底栏上的按钮，必须真的在设置页里（不是被顺手删掉）
       dataActions: document.querySelectorAll('.settings-actions').length,
       dataBtns: Array.from(document.querySelectorAll('.settings-actions button')).map((b) => b.textContent.trim()),
@@ -259,19 +280,44 @@ async function main() {
   })()`);
   check('设置页结构完整（页头 / 返回 / 分组 / 底栏）', shape.head && shape.back && shape.foot, JSON.stringify(shape));
   check('标题为「设置」', shape.title === '设置', `title=${shape.title}`);
-  // 2026-11-14 对话功能剥离后设置页共五节：两项本机偏好 + 三组快捷键速查。
-  // 仍然是严格顺序比较：少一节、多一节、换顺序都会红。
-  // 2026-11-14 数据节加入（底栏删除后，「手动重载 / 切换目录」搬到这里）：
-  // 仍是严格顺序比较，少一节、多一节、换顺序都会红。
-  // 2026-11-14 阅读密度节加入（侧栏 / 列表的字号与行距，插在列表外观之后）：七节。
-  // 2026-11-18 外观主题节加入（四档皮肤，插在显示模式之后）：八节。
-  const WANT_GROUPS = ['列表外观', '阅读密度', '显示模式', '外观主题', '数据', '全局', '列表页', '日历'];
+  // 2026-11-19 设置页改为分类侧栏：十个设置节按分类顺序排列；
+  // 分类本身另有严格顺序与默认可见性检查（见下一条）。
+  const WANT_GROUPS = [
+    '明暗模式', '外观主题',
+    '列表外观', '阅读密度', '显示模式',
+    '窗口置顶',
+    '数据',
+    '全局', '列表页', '日历',
+  ];
   check(
-    '分组为「列表外观 / 阅读密度 / 显示模式 / 外观主题 / 数据 / 全局 / 列表页 / 日历」',
+    '设置节为「明暗模式 / 外观主题 / 列表外观 / 阅读密度 / 显示模式 / 窗口置顶 / 数据 / 全局 / 列表页 / 日历」',
     JSON.stringify(shape.groupTitles) === JSON.stringify(WANT_GROUPS),
     JSON.stringify(shape.groupTitles)
   );
+  check(
+    '分类侧栏有五个分类：外观 / 列表与阅读 / 窗口 / 数据 / 快捷键',
+    shape.settingsNav === 1 && shape.navItems === 5
+      && JSON.stringify(shape.navLabels) === JSON.stringify(['外观', '列表与阅读', '窗口', '数据', '快捷键'])
+      && shape.cats === 5,
+    JSON.stringify({ nav: shape.settingsNav, items: shape.navItems, labels: shape.navLabels, cats: shape.cats })
+  );
+  check(
+    '默认只展示「外观」分类，其余四块 hidden',
+    shape.navActive === '外观' && shape.visibleCats === 1 && shape.visibleCat === 'appearance' && shape.hiddenCats === 4,
+    JSON.stringify({ active: shape.navActive, visible: shape.visibleCat, hidden: shape.hiddenCats })
+  );
   check('设置页有两个显示模式按钮，且恰好一个处于按下态', shape.modeBtns === 2 && shape.modePressed.filter((v) => v === 'true').length === 1, JSON.stringify(shape.modePressed));
+  check(
+    '明暗模式有三档按钮（跟随系统 / 浅色 / 深色），恰好一档按下',
+    shape.settingsThemeBtns === 3 && shape.settingsThemePressed.filter((v) => v === 'true').length === 1
+      && ['auto', 'light', 'dark'].includes(shape.settingsThemeMode),
+    JSON.stringify({ btns: shape.settingsThemeBtns, pressed: shape.settingsThemePressed, mode: shape.settingsThemeMode })
+  );
+  check(
+    '窗口置顶是一枚 role=switch 的开关，默认未置顶',
+    shape.windowSwitch === 1 && shape.windowChecked === 'false',
+    JSON.stringify({ switch: shape.windowSwitch, checked: shape.windowChecked })
+  );
   check('速查表列出日历键（翻月 / 回今天 / 在这天新建）', ['PageUp', 'PageDown', 'Home', '在选中那天新建'].every((k) => shape.keyText.includes(k)), shape.keyText.slice(0, 160));
   check('每组至少一条、且每条快捷键都有键名与说明', shape.rows >= 12 && shape.rowsComplete, `rows=${shape.rows} complete=${shape.rowsComplete}`);
   check('列表页速查不再列空格完成', !shape.keyText.includes('完成 / 取消完成当前选中任务'), shape.keyText.slice(0, 160));
@@ -285,9 +331,9 @@ async function main() {
       JSON.stringify(shape.dataBtns) === JSON.stringify(['手动重载', '切换目录']),
     JSON.stringify(shape.dataBtns)
   );
-  check('设置入口只在应用菜单（活动栏无齿轮、菜单按钮仍在）',
-    shape.settingsBtn === 0 && shape.appMenuBtn === true,
-    `settingsBtn=${shape.settingsBtn} appMenuBtn=${shape.appMenuBtn}`);
+  check('设置按钮紧邻应用菜单（活动栏一枚设置入口 + 菜单按钮仍在）',
+    shape.settingsBtn === 1 && shape.appMenuBtn === true && shape.settingsAdjacent === true,
+    `settingsBtn=${shape.settingsBtn} appMenuBtn=${shape.appMenuBtn} adjacent=${shape.settingsAdjacent}`);
   check('主题只有一枚轮换按钮，且不套实心底',
     shape.themeBtns === 1 && shape.themeSolid === 0 && ['auto', 'light', 'dark'].includes(shape.themeMode),
     `themeBtns=${shape.themeBtns} themeSolid=${shape.themeSolid} mode=${shape.themeMode}`);
@@ -299,6 +345,21 @@ async function main() {
     shape.densityPreviewNav === 3 && shape.densityPreviewRows === 3,
     JSON.stringify({ nav: shape.densityPreviewNav, rows: shape.densityPreviewRows }));
   check('阅读密度：默认档不出现「恢复默认」出口', shape.densityReset === 0, `reset=${shape.densityReset}`);
+
+  // 阅读密度在「列表与阅读」分类里，先切过去再点；不切的话按钮在 hidden 面板里，
+  // 几何量全是 0，测试会误判成「点了没反应」。
+  const switchCategory = async (label) => {
+    const ok = await evalJs(`(() => {
+      const btn = Array.from(document.querySelectorAll('.settings-nav-item'))
+        .find((b) => (b.textContent || '').includes(${JSON.stringify(label)}));
+      if (!btn) return false;
+      btn.click();
+      return true;
+    })()`);
+    await sleep(220);
+    return ok;
+  };
+  check('分类导航可切到「列表与阅读」', await switchCategory('列表与阅读'));
 
   // 阅读密度交互链路：点「宽松」→ 按下档移动、预览行高真的变大、--pref-nav-h 落到 <html>；
   // 点「恢复默认」→ 落盘清除（变量移除）、按下档回标准。只证明按钮画出来不够，
@@ -352,6 +413,9 @@ async function main() {
     && shape.skinSwatches === 12,
     JSON.stringify({ btns: shape.skinBtns, pressed: shape.skinPressed, labels: shape.skinLabels, sw: shape.skinSwatches }));
 
+  // 外观主题在「外观」分类里；从密度分类切回来再点。
+  check('分类导航可切回「外观」', await switchCategory('外观'));
+
   // 外观主题交互链路：点「夜航」→ data-skin 投影 + 落盘 + 令牌真的换；
   // 点回「原版」→ 基线宽度恢复。只证明按钮画出来不够，要证明偏好 → 投影 → 令牌这条链是通的。
   // 2026-11-18 二改：侧栏四档同形 —— 换档不许动侧栏宽度与行高（夜航早期收到 56px
@@ -389,6 +453,22 @@ async function main() {
   check('外观主题：点回原版 → 侧栏仍 176（换档不改骨架）',
     skinBack && skinBack.attr === 'classic' && skinBack.sideW === '176px',
     JSON.stringify(skinBack));
+
+  // 数据分类要能真的切出来：按钮在 hidden 面板里数得到不算数，得看得见。
+  check('分类导航可切到「数据」', await switchCategory('数据'));
+  const dataVisible = await evalJs(`(() => {
+    const cat = document.querySelector('.settings-cat[data-category="data"]');
+    const actions = document.querySelector('.settings-actions');
+    return {
+      cat: !!cat && !cat.hasAttribute('hidden'),
+      actions: !!actions && getComputedStyle(actions).display !== 'none',
+      active: (document.querySelector('.settings-nav-item.is-active .settings-nav-label') || {}).textContent || '',
+    };
+  })()`);
+  check('切到「数据」后动作区可见（不是被分类藏住）',
+    dataVisible.cat && dataVisible.actions && dataVisible.active === '数据',
+    JSON.stringify(dataVisible));
+  check('分类导航可切回「外观」（截图与后续检查的默认面）', await switchCategory('外观'));
 
   if (WANT_SHOTS) await shot('settings-1280.png');
 
@@ -659,18 +739,25 @@ async function main() {
 
   // ── 4. 窄屏几何：设置页在 390 宽下不横向溢出 ────────────────────────────
   await goto('settings', 390, 844);
+  await switchCategory('快捷键');
   const narrow = await evalJs(`(() => {
     const q = (s) => document.querySelector(s);
-    const row = q('.settings-row');
+    const row = q('.settings-cat[data-category="shortcuts"] .settings-row');
+    const nav = q('.settings-nav');
     return {
       overflow: document.documentElement.scrollWidth - window.innerWidth,
       singleColumn: row ? getComputedStyle(row).gridTemplateColumns.split(' ').length === 1 : false,
       footVisible: !!q('.settings-foot'),
+      navHorizontal: nav ? getComputedStyle(nav).flexDirection !== 'column' : false,
+      navOverflow: nav ? nav.scrollWidth - nav.clientWidth : 0,
     };
   })()`);
   check('390 宽下无横向溢出', narrow.overflow <= 0, `overflow=${narrow.overflow}`);
   check('390 宽下快捷键改为上下堆叠（单列）', narrow.singleColumn === true);
   check('390 宽下底栏仍在（布局不塌）', narrow.footVisible === true);
+  check('390 宽下分类导航转横向并可横滚（不撑破页面）',
+    narrow.navHorizontal === true && narrow.navOverflow >= 0,
+    JSON.stringify({ horizontal: narrow.navHorizontal, navOverflow: narrow.navOverflow }));
   if (WANT_SHOTS) await shot('settings-390.png');
 
   // ── 5. 暗色 ────────────────────────────────────────────────────────────

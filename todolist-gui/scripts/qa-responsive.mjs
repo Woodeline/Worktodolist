@@ -29,6 +29,7 @@ const EDGE_CANDIDATES = [
   '/usr/bin/microsoft-edge',
   '/usr/bin/google-chrome',
 ];
+const EDGE_ENV = process.env.EDGE;
 
 // 目标地址：SG_BASE 环境变量优先；否则读项目根 .todolist-server.port（这是早期 Python
 // 启动器留下的端口文件，现在已没有东西写它，读到就用作兼容）；再读不到回落到 15180。
@@ -150,6 +151,7 @@ const CASES = [
 
 // ------------------------------------------------------------------ CDP 客户端
 function findEdge() {
+  if (EDGE_ENV && existsSync(EDGE_ENV)) return EDGE_ENV;
   for (const p of EDGE_CANDIDATES) if (existsSync(p)) return p;
   throw new Error('找不到 Edge/Chrome 可执行文件，请设置 EDGE 环境变量或在脚本里加路径');
 }

@@ -1,13 +1,13 @@
 // 应用菜单的两级结构：一级只列分组，具体动作全部收进二级。
 //
-// 旧菜单一次摊开 27 项（动作 + 6 个分组标题 + 分隔线），窄窗口要滚动才能找。
-// 现在一级固定 7 个分组 + 一个「设置…」直入口；二级沿用 ContextMenu 已有的
-// sub 机制渲染（悬停 / 点击 / → 展开，← 回上层，Esc 关闭），不另造一套菜单。
+// 2026-11-19：设置入口从菜单里剥离，活动栏「应用菜单」旁单列一枚设置按钮；
+// 原菜单里的「外观」与「窗口与数据」两组也搬进设置页分类侧栏。
+// 这里只剩列表工作流本身的动作：任务 / 页面 / 列表视图 / 显示模式 / 排序。
 //
 // 纯函数：不碰 React / DOM，只把外壳状态与回调摊成菜单数据，方便单测
 // 「每个原有动作都还逐级可达」。
 export const APP_MENU_GROUP_LABELS = [
-  '任务', '页面', '列表视图', '显示模式', '排序', '外观', '窗口与数据',
+  '任务', '页面', '列表视图', '显示模式', '排序',
 ];
 
 // 与侧栏五个入口同口径（2026-11-15）：收集箱条目已取消，「已完成」更名「日志」。
@@ -22,9 +22,7 @@ export const LIST_VIEW_ITEMS = [
  * @param {object} p
  * @param {string} p.tab                 当前页签 'list' | 'tools'
  * @param {string} p.listMode            当前显示模式 'list' | 'calendar'
- * @param {boolean} p.alwaysOnTop       窗口置顶态
  * @param {Array<[string,string]>} p.tabs 页签 [id, label]，顺序即 Ctrl+1/2
- * @param {Array} p.themeItems          主题三档（与主题按钮右键共用）
  * @param {object} p.store              useTodoStore 的只读子集 + 动作
  * @param {object} p.on                 外壳回调
  * @param {boolean} p.showListMode      是否接了显示模式切换（静态舞台没有）
@@ -32,9 +30,7 @@ export const LIST_VIEW_ITEMS = [
 export function buildAppMenuItems({
   tab,
   listMode,
-  alwaysOnTop,
   tabs,
-  themeItems,
   store,
   on,
   showListMode = true,
@@ -88,19 +84,7 @@ export function buildAppMenuItems({
         store.setSortMode('auto');
       }, { checked: tab === 'list' && store.sortMode === 'auto' }),
     ]),
-    sub('外观', themeItems),
-    sub('窗口与数据', [
-      item(alwaysOnTop ? '取消窗口置顶' : '窗口置顶', safe(on.toggleTop), {
-        checked: Boolean(alwaysOnTop),
-      }),
-      item('重新载入文件', safe(store.manualReload)),
-      item('切换数据目录…', safe(store.pickDirectory)),
-    ]),
   ];
 
-  return [
-    ...groups,
-    { type: 'sep' },
-    item('设置…', safe(on.openSettings), { accel: 'Ctrl+,' }),
-  ];
+  return groups;
 }

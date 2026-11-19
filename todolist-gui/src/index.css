@@ -1282,6 +1282,7 @@ code {
   height: var(--ctx-btn-h);
   padding: 1px;
   flex-shrink: 0;
+  align-self: flex-start;
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--r-sm);
@@ -4530,8 +4531,9 @@ mark {
 }
 
 /* ============================================================================
-   设置页 —— 独立页面（不是页签）：左边说明、右边字段，底部一条动作栏。
-   参照物是"工具软件的偏好设置面板"，所以分组之间只用发丝线，不做卡片套卡片。
+   设置页 —— 独立页面（不是页签）：左侧分类导航，右侧当前分类的设置字段。
+   2026-11-19：入口从应用菜单剥离到活动栏「设置」；页内改成分类侧栏，
+   原应用菜单的「外观」「窗口与数据」在这里各归其位。
    ============================================================================ */
 .settings {
   flex: 1;
@@ -4591,12 +4593,98 @@ mark {
   color: var(--muted);
 }
 
-.settings-body {
+/* 设置主体：左侧目录与右侧面板同一高度，各自滚动；面板不把页头顶走。 */
+.settings-main {
   flex: 1;
   min-height: 0;
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+}
+
+/* 设置分类侧栏：与任务侧栏同宽、同底色、同行圆角，但它是设置页自己的目录，
+   不参与窄屏的 `.sidebar { display:none }` 退场。 */
+.settings-nav {
+  min-width: 0;
+  min-height: 0;
   overflow-y: auto;
-  padding: var(--sp-5) 0;
-  padding-inline: max(var(--sp-5), calc((100% - var(--rail-max)) / 2));
+  padding: var(--sp-2);
+  background: var(--surface-2);
+  border-right: 1px solid var(--border);
+}
+
+.settings-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  min-height: calc(var(--nav-h) + var(--sp-1));
+  padding: 0 var(--sp-2);
+  border: 1px solid transparent;
+  border-radius: var(--r-nav);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: var(--fs-sm);
+  text-align: left;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+
+.settings-nav-item:hover {
+  background: var(--sel);
+  color: var(--text);
+}
+
+.settings-nav-item.is-active {
+  background: var(--sel-strong);
+  color: var(--text);
+}
+
+.settings-nav-item:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+
+.settings-nav-icon {
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: color var(--dur-1) var(--ease-out);
+}
+
+.settings-nav-item:hover .settings-nav-icon,
+.settings-nav-item.is-active .settings-nav-icon {
+  color: var(--text-2);
+}
+
+.settings-nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-pane {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--sp-5);
+}
+
+.settings-inner {
+  width: 100%;
+  max-width: var(--rail-max);
+  margin: 0 auto;
+}
+
+/* 只展示当前分类；其余分类留在 DOM 里以保留各节内部状态，hidden 从可访问树里退出。 */
+.settings-cat[hidden] {
+  display: none;
 }
 
 .settings-group {
@@ -4749,6 +4837,78 @@ mark {
 .settings-range {
   font-size: var(--fs-2xs);
   color: var(--muted);
+}
+
+/* 窗口置顶开关：设置页自己的开关控件。轨道用控制线描边（WCAG 1.4.11），
+   开启时轨道转 accent-soft + accent 描边，滑块实心 accent；文字同步报状态。 */
+.settings-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--h-control);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: var(--fs-xs);
+  cursor: default;
+}
+
+.settings-switch-track {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 32px;
+  height: 18px;
+  flex-shrink: 0;
+  border: 1px solid var(--control-line);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
+}
+
+.settings-switch-thumb {
+  position: absolute;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-2);
+  transition: transform var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out);
+}
+
+.settings-switch:hover .settings-switch-track {
+  border-color: var(--accent);
+}
+
+.settings-switch:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+.settings-switch.is-on {
+  color: var(--text);
+}
+
+.settings-switch.is-on .settings-switch-track {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.settings-switch.is-on .settings-switch-thumb {
+  transform: translateX(14px);
+  background: var(--accent);
+}
+
+.settings-switch-text {
+  font-size: var(--fs-xs);
+}
+
+/* 明暗模式与显示模式共用 .mode-switch 的分段外形；这个类只做语义区分。 */
+.theme-switch {
+  align-self: flex-start;
 }
 
 /* 数据节的动作行：两颗桌面按钮左对齐，与上面的读数行同一列起点 */
@@ -7744,9 +7904,35 @@ mark {
     max-width: none;
   }
 
-  /* 设置页：说明与字段改为上下堆叠；页头那句解释让位给标题与返回 */
-  .settings-body {
-    padding-inline: var(--sp-4);
+  /* 设置页：分类侧栏在窄屏转成顶部横向目录；说明与字段改为上下堆叠 */
+  .settings-main {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .settings-nav {
+    padding: var(--sp-1) var(--sp-2);
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .settings-nav-list {
+    flex-direction: row;
+    gap: 2px;
+    min-width: max-content;
+  }
+
+  .settings-nav-item {
+    width: auto;
+    flex: 0 0 auto;
+    min-height: var(--rail-tab-size);
+    padding: 0 var(--sp-2);
+  }
+
+  .settings-pane {
+    padding: var(--sp-4);
   }
 
   .settings-group {
@@ -7838,6 +8024,12 @@ mark {
     font-size: var(--fs-md);
   }
 
+  /* 五类目录在 390 宽要能一眼排完：收紧图标与文字的间隙和左右内边距。 */
+  .settings-nav-item {
+    gap: var(--sp-1);
+    padding: 0 var(--sp-1);
+  }
+
   /* 工具区在手机宽度上：结果大数字降一档，指标卡摞成单列 */
   .tool-metrics {
     grid-template-columns: minmax(0, 1fr);
@@ -7864,6 +8056,8 @@ mark {
   .nav-item,
   .priority-picker button,
   .settings-back,
+  .settings-nav-item,
+  .settings-switch,
   .ctx-menu-item,
   .tool-tab,
   .tool-row-del,

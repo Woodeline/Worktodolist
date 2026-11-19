@@ -4,7 +4,7 @@ import { useTodoStore } from './hooks/useTodoStore';
 import { useNativeShell } from './hooks/useNativeShell';
 import { useAlwaysOnTop } from './hooks/useAlwaysOnTop';
 import { useTheme } from './hooks/useTheme';
-import { THEME_ICONS, THEME_LABELS, THEME_MODES } from './lib/theme.js';
+import { THEME_ICONS, THEME_LABELS } from './lib/theme.js';
 import { hostPlatform, isTauri, hideToTray, usesCustomTitlebar } from './lib/runtime.js';
 import { resolveEscape } from './lib/escape.js';
 import { useTodoSnapshot } from './hooks/useTodoSnapshot';
@@ -472,8 +472,8 @@ export function MainList({
 //
 // 保留的契约：
 //   · 两个页签仍在 .tabs-group .tab 里，且文字内容就是页签名（QA 依赖这一条）；
-//   · 轨道底部：应用菜单 / 置顶 / 主题，主题只有**一枚**按钮，点一次轮换一档。
-//     「设置」不再单列按钮，入口收进应用菜单，避免同一个动作摆两处。
+//   · 轨道底部：应用菜单 / 设置 / 置顶 / 主题，设置按钮紧邻应用菜单。
+//     2026-11-19：设置从应用菜单剥离，改成活动栏单列入口；菜单只保留列表工作流动作。
 // ---------------------------------------------------------------------------
 export function Tabs({
   tab,
@@ -483,7 +483,6 @@ export function Tabs({
   alwaysOnTop,
   onToggleTop,
   themeMode,
-  onPickTheme,
   onCycleTheme,
   onOpenSearch,
   listMode = 'list',
@@ -506,16 +505,9 @@ export function Tabs({
     requestAnimationFrame(() => tryFocus(4));
   };
 
-  // 应用菜单「外观」分组的三档条目，与轨道上三枚主题按钮读同一份档位表。
-  const themeItems = THEME_MODES.map((m) => ({
-    type: 'item',
-    label: THEME_LABELS[m],
-    checked: (themeMode || 'auto') === m,
-    onClick: () => onPickTheme && onPickTheme(m),
-  }));
-
   // 两级菜单：一级只列分组，具体动作全在二级里逐级展开。
   // 结构与动作清单在 lib/appMenu.js（纯函数、已单测），这里只把外壳状态接进去。
+  // 设置、外观、窗口与数据已搬进设置页，不再由这枚菜单承担。
   const openAppMenu = () => {
     const btn = menuBtnRef.current;
     if (!btn || !store) return;
@@ -523,17 +515,13 @@ export function Tabs({
     openAt(r.right + 3, r.top, buildAppMenuItems({
       tab,
       listMode,
-      alwaysOnTop,
       tabs: TABS,
-      themeItems,
       store,
       showListMode: Boolean(onPickListMode),
       on: {
         focusAfterSwitch,
         changeTab: onChange,
         pickListMode: onPickListMode,
-        toggleTop: onToggleTop,
-        openSettings: onOpenSettings,
         openSearch: onOpenSearch,
       },
     }));
@@ -560,16 +548,28 @@ export function Tabs({
       <span className="rail-sep" />
 
       {store && (
-        <button
-          type="button"
-          className="tab"
-          ref={menuBtnRef}
-          onClick={openAppMenu}
-          aria-haspopup="menu"
-        >
-          <Icon name="menu" size={16} />
-          <span className="tip">应用菜单</span>
-        </button>
+        <>
+          <button
+            type="button"
+            className="tab"
+            ref={menuBtnRef}
+            onClick={openAppMenu}
+            aria-haspopup="menu"
+          >
+            <Icon name="menu" size={16} />
+            <span className="tip">应用菜单</span>
+          </button>
+          <button
+            type="button"
+            className="tab"
+            onClick={onOpenSettings}
+            title="设置（Ctrl+,）"
+            aria-label="设置"
+          >
+            <Icon name="settings" size={16} />
+            <span className="tip">设置</span>
+          </button>
+        </>
       )}
 
       <span className="spacer" />
@@ -997,7 +997,6 @@ export default function App() {
         alwaysOnTop={alwaysOnTop}
         onToggleTop={toggleAlwaysOnTop}
         themeMode={themeMode}
-        onPickTheme={pickThemeMode}
         onCycleTheme={cycleThemeMode}
         listMode={preferredMode}
         onPickListMode={pickMode}
@@ -1015,7 +1014,15 @@ export default function App() {
           }
         >
           {settingsOpen ? (
-            <SettingsPage store={store} onClose={() => setSettingsOpen(false)} projects={projects} />
+            <SettingsPage
+              store={store}
+              onClose={() => setSettingsOpen(false)}
+              projects={projects}
+              themeMode={themeMode}
+              onPickTheme={pickThemeMode}
+              alwaysOnTop={alwaysOnTop}
+              onToggleTop={toggleAlwaysOnTop}
+            />
           ) : tab === 'tools' ? (
             <ToolsPage snapshot={snapshot} store={store} />
           ) : (

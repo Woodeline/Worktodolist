@@ -763,8 +763,8 @@ function IconsDoc() {
   );
 }
 
-// 设置页：与产品同构（独立页面，无底栏）。入口只在应用菜单里，活动栏不再单列按钮。
-// 渲染的是真实组件（偏好 + 数据动作 + 只读的快捷键速查）。
+// 设置页：与产品同构（独立页面，无底栏）。入口是活动栏「应用菜单」旁的设置按钮；
+// 页内左侧分类导航，右侧展示当前分类。渲染的是真实组件（偏好 + 数据动作 + 只读的快捷键速查）。
 function SettingsStage() {
   const themeStage = useRailStage();
   const store = makeStore({ dirReady: false });
@@ -780,7 +780,14 @@ function SettingsStage() {
       <div className="workspace">
         <TopBar store={store} tab="list" settingsOpen />
         <div className="content">
-          <SettingsPage store={store} onClose={() => {}} />
+          <SettingsPage
+            store={store}
+            onClose={() => {}}
+            themeMode={themeStage.themeMode}
+            onPickTheme={themeStage.onPickTheme}
+            alwaysOnTop={themeStage.alwaysOnTop}
+            onToggleTop={themeStage.onToggleTop}
+          />
         </div>
       </div>
     </div>
