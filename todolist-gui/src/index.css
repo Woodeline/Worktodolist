@@ -23,7 +23,7 @@
        日历 / 菜单里的紧凑记号仍是 .prio-mark 的小方块。
 
    2026-10-17 外壳改版（按原型 Worktodolist-UI-原型-v2.html）：
-     页签从「顶部横向条」移到「左侧 46px 活动栏」，顶部让给 36px 上下文条
+     页签从「顶部横向条」移到「左侧 40px 活动栏」，顶部让给 36px 上下文条
      （面包屑 + 本层动作）；列表行改为 38px、无行分隔线、圆形复选框、
      等宽药丸优先级。令牌值一个没动 —— 这轮改的是骨架与节奏，不是调性。
      一处刻意不跟原型：原型把高优先级涂成红色，本实现仍走「同一色相的
@@ -58,6 +58,9 @@
   --row-line: #e4e2db;
   --row-line-child: #f0efea;
   --row-line-halo: rgba(30, 28, 22, 0.05);
+  /* 原版行悬停的浮起阴影（2026-11-23）：只给 classic 的父任务行，
+     其它皮肤不浮起。 */
+  --row-float-sh: 0 4px 12px rgba(30, 28, 22, 0.10), 0 1px 3px rgba(30, 28, 22, 0.06);
   --control-line: #837f75; /* 对 surface / bg ≥3:1，WCAG 1.4.11 */
 
   /* 输入控件的「凹槽底」（2026-11-17 二改）：编辑浮窗里的输入框 / 下拉 / 日期按钮 /
@@ -199,12 +202,12 @@
   --r-lg: 12px;
   --r-xl: 16px;
   --r-pill: 999px;
-  /* 侧栏行的圆角单独提一枚令牌（2026-11-18 二改）：四档外观主题共用同一套侧栏骨架，
+  /* 侧栏行的圆角单独提一枚令牌（2026-11-18 二改）：三档外观主题共用同一套侧栏骨架，
      皮肤改 --r-sm 时不许把这行也跟着改圆 —— 否则「同一份目录」在不同档下形状不同。
      数值即基线 --r-sm，皮肤块不得覆盖本令牌。 */
   --r-nav: 6px;
 
-  /* --- 外观主题样张色（2026-11-18 四档皮肤）：设置页「外观主题」那排按钮上的
+  /* --- 外观主题样张色（2026-11-18 三档皮肤）：设置页「外观主题」那排按钮上的
          三枚小样（底 / 面 / 主色）读这里，而不是读当前生效令牌 —— 样张要画
          「目标档长什么样」，不是「我现在长什么样」。夜航样张取其签名深色。
          只供样张消费，产品任何表面都不许引用这组令牌。 --- */
@@ -217,9 +220,6 @@
   --sw-night-bg: #141311;
   --sw-night-surface: #1c1a17;
   --sw-night-accent: #d9a441;
-  --sw-garden-bg: #f3f1ec;
-  --sw-garden-surface: #ffffff;
-  --sw-garden-accent: #2f7e68;
 
   /* --- 动效：仪表响应「立刻」—— dur-2 100ms（原 140）、dur-3 140ms（原 180），
          抽屉/模态保留过程感 --- */
@@ -264,9 +264,9 @@
      480 是评审定稿值 —— 再高会把「一页纸」读成一张长表单。 */
   --drawer-body-max-h: 480px;
 
-  /* --- 外壳骨架（原型 v2）：46px 活动栏 + 36px 上下文条。
+  /* --- 外壳骨架（原型 v2）：40px 活动栏 + 36px 上下文条。
          这几个数字是外壳的唯一口径 —— 组件里不要再手写轨道宽度或条高。 --- */
-  --rail-w: 46px;
+  --rail-w: 40px;
   /* 窄窗里三条横向外壳行（2026-11-16 十七改）：自绘标题行 / 横向页签条 /
      底部导航条共用一档 --chrome-row-h，35 · 31 · 48 取齐到 31。
      这三条在窄窗里上下相对 —— 标题 31 与页签 31 叠在顶上，导航 31 压在底边；
@@ -409,6 +409,7 @@
   --row-line: #2b2a25;
   --row-line-child: #23221d;
   --row-line-halo: rgba(236, 234, 227, 0.035);
+  --row-float-sh: 0 4px 12px rgba(0, 0, 0, 0.52), 0 1px 3px rgba(0, 0, 0, 0.4);
   /* 深色描边（2026-11-17 二改）：#8f8c81 对纸面是 5.01:1，几乎两倍于 3:1 阈值，
      一屏八个控件就是八圈发光的线。#77736a 对 surface 3.57、surface-2 3.25、
      field-bg 3.76，三处都过线且留余量。这是全局令牌，深色下所有边界一起变安静。 */
@@ -515,7 +516,7 @@
   --ramp-5: #86cda8;
 }
 
-/* --- 外观主题令牌（2026-11-18 四档皮肤）：皮肤也是令牌层的一部分 ——
+/* --- 外观主题令牌（2026-11-18 三档皮肤）：皮肤也是令牌层的一部分 ——
    明暗各一套、逐档重述，放在基线暗块之后保证特异性账成立（见 §9.5 头注）。
    裸色值只允许出现在这里与基线令牌里，门禁按节标题定位令牌层。 --- */
 :root[data-skin="paper"] {
@@ -625,64 +626,6 @@
   --r-md: 10px;
   --r-lg: 12px;
   --r-xl: 14px;
-}
-:root[data-skin="garden"] {
-  --bg: #f3f1ec;
-  --surface: #ffffff;
-  --surface-2: #f0ede6;
-  --surface-3: #e6e2d8;
-  --border: #e8e4db;
-  --border-strong: #d3cec2;
-  --row-line: #edeae2;
-  --row-line-child: #f4f1ea;
-  --row-line-halo: rgba(38, 36, 31, 0.06);
-  --control-line: #6b675f;
-  --field-bg: #f4f1ea;
-  --text: #26241f;
-  --text-2: #55524a;
-  --muted: #6f6b62;
-  --accent: #2f7e68;
-  --accent-hover: #256b58;
-  --accent-fg: #ffffff;
-  --accent-soft: #e2efea;
-  --accent-line: #b6d4c9;
-  --chip-none-bg: #dcd8ce;
-  --chip-none-fg: #3d3b35;
-  --row-h: var(--pref-row-h, 40px);
-  --r-xs: 6px;
-  --r-sm: 10px;
-  --r-md: 12px;
-  --r-lg: 16px;
-  --r-xl: 18px;
-}
-:root[data-skin="garden"][data-theme="dark"] {
-  --bg: #191813;
-  --surface: #211f1a;
-  --surface-2: #2a2822;
-  --surface-3: #35322a;
-  --border: #2e2c26;
-  --border-strong: #434036;
-  --row-line: #2a2822;
-  --row-line-child: #26241e;
-  --row-line-halo: rgba(0, 0, 0, 0.4);
-  --control-line: #77736a;
-  --field-bg: #26241e;
-  --text: #ece7db;
-  --text-2: #c6c1b4;
-  --muted: #979284;
-  --accent: #6fbf9f;
-  --accent-hover: #82cbab;
-  --accent-fg: #191813;
-  --accent-soft: #21302a;
-  --accent-line: #33493d;
-  --chip-none-bg: #35322a;
-  --chip-none-fg: #c6c1b4;
-  --row-h: var(--pref-row-h, 40px);
-  --r-xs: 6px;
-  --r-sm: 10px;
-  --r-md: 12px;
-  --r-lg: 16px;
-  --r-xl: 18px;
 }
 
 /* ============================================================================
@@ -1081,7 +1024,7 @@ code {
   cursor: nwse-resize;
 }
 
-/* --- 活动栏：46px 纵向轨道，图标即页签 --- */
+/* --- 活动栏：40px 纵向轨道，图标即页签 --- */
 .tabs {
   display: flex;
   flex-direction: column;
@@ -1129,7 +1072,7 @@ code {
 .tab.active::after {
   content: "";
   position: absolute;
-  left: -6px;
+  left: calc((var(--ctl-h) - var(--rail-w)) / 2);
   top: 8px;
   bottom: 8px;
   width: 2px;
@@ -1586,6 +1529,7 @@ code {
    （原型明确不要"每行一张带阴影的卡片"—— 那是移动端与网页的语言。）
    ========================================================================== */
 .layout {
+  position: relative;
   display: flex;
   flex: 1;
   min-width: 0;
@@ -1617,6 +1561,42 @@ code {
   opacity: 0;
   border-right-color: transparent;
   overflow: hidden;
+}
+
+/* 任务侧栏宽度拖拽边界：5px 命中区压在侧栏右缘。
+   平时透明；悬停 / 键盘聚焦 / 拖动时才浮出一条 accent 线。
+   只挂在 `.layout` 里（设置页自己的分类侧栏不参与）。 */
+.sidebar-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--sidebar-w) - 2px);
+  z-index: 6;
+  width: 5px;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+}
+.sidebar-resize::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: transparent;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.sidebar-resize:hover::after,
+.sidebar-resize:focus-visible::after,
+.is-resizing-sidebar .sidebar-resize::after {
+  background: var(--accent);
+}
+.sidebar-resize:focus-visible { outline: none; }
+.is-resizing-sidebar {
+  cursor: col-resize;
+  user-select: none;
 }
 
 /* 组间距（--sp-2）比组内行距（--sp-1）松一档：先把条目归拢成组，再让组与组分开。 */
@@ -2066,6 +2046,7 @@ code {
    2026-11-15 起不再跟着焦点显示（:focus-within 那条已删）—— 键盘上下扫列表时
    右侧一团按钮跟着闪，比没有更难用；键盘用户走快捷键 + 右键菜单，
    所以按钮仍不进 Tab 序列（隐藏时可聚焦的按钮是键盘用户的陷阱）。
+   2026-11-23：去掉小浮窗的边框 / 底色 / 圆角 / 阴影，只留四枚图标嵌在行里。
 
    右侧留白 = 行内边距 + 箭头槽宽 + 4：箭头独占第三列，按钮永远退到它左边，
    两者不可能叠在一起（用户明确要求「不要与小悬浮图标重叠」）。 */
@@ -2077,11 +2058,11 @@ code {
   display: flex;
   align-items: center;
   gap: 1px;
-  padding: 2px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  box-shadow: var(--sh-1);
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--dur-1) var(--ease-out);
@@ -2116,8 +2097,8 @@ code {
 }
 
 .row-quick-btn:hover {
-  background: var(--surface-3);
-  color: var(--text-2);
+  background: transparent;
+  color: var(--text);
 }
 
 .row-quick-del:hover {
@@ -4588,11 +4569,6 @@ mark {
   color: var(--text);
 }
 
-.settings-head-note {
-  font-size: var(--fs-2xs);
-  color: var(--muted);
-}
-
 /* 设置主体：左侧目录与右侧面板同一高度，各自滚动；面板不把页头顶走。 */
 .settings-main {
   flex: 1;
@@ -5162,22 +5138,6 @@ mark {
   color: var(--muted);
 }
 
-.settings-foot {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-3);
-  flex-shrink: 0;
-  background: var(--surface);
-  border-top: 1px solid var(--border);
-}
-
-.settings-where {
-  font-family: var(--font-mono);
-  font-size: var(--fs-2xs);
-  color: var(--muted);
-}
-
 /* ============================================================================
    7 · 工具集
    ----------------------------------------------------------------------------
@@ -5314,15 +5274,6 @@ mark {
   font-family: var(--font-mono);
   font-size: var(--fs-2xs);
   color: var(--muted);
-}
-
-.tools-sec-note {
-  margin-left: auto;
-  font-size: var(--fs-2xs);
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .tools-cards {
@@ -7237,7 +7188,7 @@ mark {
 }
 
 /* ============================================================================
-   9.5 · 外观主题（2026-11-18 四档皮肤：原版 / 素纸 / 夜航 / 园庭）
+   9.5 · 外观主题（2026-11-18 三档皮肤：原版 / 素纸 / 夜航）
    ----------------------------------------------------------------------------
    档位由 lib/skin.js 投到 <html data-skin>，与 <html data-theme> 正交：
    每档皮肤各备明暗两套令牌，「夜航 + 浅色」也是成立的一档。
@@ -7253,29 +7204,25 @@ mark {
    侧栏的字样 / 行距 / 宽度一律不随皮肤改（用户明确保留）：夜航不做图标轨，
    三档侧栏都保留文字与计数，只换纸墨 / 主色 / 选中底 / 圆角。
    其余构件对齐设计稿：上下文条高度与有无底线、快录盒形态、行分隔与圆角、
-   读数行收放、浮窗宽度 / 圆角 / 读数胶囊、日历格与 chip、设置页卡片化、分段控件形状。 */
+   读数行收放、浮窗宽度 / 圆角、设置页卡片化；原版另加行悬停浮起。 */
 
-/* 上下文条：素纸 40 有底线；夜航 / 园庭去底线、纸面退到 bg、条更高。
+/* 上下文条：素纸 40 有底线；夜航去底线、纸面退到 bg、条更高。
    **高度只在上下文条自成一行时成立**（没有自绘标题栏的平台）：并进 `.titlebar`
-   之后行高由 `--chrome-row-h`（31）定死，再给条设 40 / 46 只会让它从行里往下
+   之后行高由 `--chrome-row-h`（31）定死，再给条设 40 只会让它从行里往下
    溢出，条内文字与图标跟着整条下移 —— 2026-11-18 五改前，素纸 / 夜航的内容比
-   行中线低 4.5px、园庭低 7.5px，用户看到的就是「全部和三个按钮没在行里居中」。
+   行中线低 4.5px，用户看到的就是「全部和三个按钮没在行里居中」。
    底色 / 底线同理：在标题行里整条必须是同一张纸，不能出现一条 --bg 的内嵌长条。 */
 [data-skin="paper"] .workspace > .topbar { height: 40px; }
-[data-skin="night"] .workspace > .topbar,
-[data-skin="garden"] .workspace > .topbar {
+[data-skin="night"] .workspace > .topbar {
   height: 40px;
   border-bottom: 0;
   background: var(--bg);
 }
-[data-skin="garden"] .workspace > .topbar { height: 46px; }
-[data-skin="night"] .titlebar,
-[data-skin="garden"] .titlebar { border-bottom: 0; }
+[data-skin="night"] .titlebar { border-bottom: 0; }
 [data-skin="paper"] .quick-add-bar,
-[data-skin="night"] .quick-add-bar,
-[data-skin="garden"] .quick-add-bar { background: var(--bg); }
+[data-skin="night"] .quick-add-bar { background: var(--bg); }
 
-/* 快录：素纸描边纸盒；夜航无边框凹槽 + 内描边焦点；园庭白卡 + 外焦点环 */
+/* 快录：素纸描边纸盒；夜航无边框凹槽 + 内描边焦点 */
 [data-skin="paper"] .quick-add {
   border: 1px solid var(--border-strong);
   border-radius: var(--r-sm);
@@ -7291,18 +7238,8 @@ mark {
   border-color: transparent;
   box-shadow: inset 0 0 0 1px var(--accent);
 }
-[data-skin="garden"] .quick-add {
-  border: 0;
-  border-radius: var(--r-md);
-  background: var(--surface);
-  box-shadow: 0 1px 3px var(--row-line-halo);
-}
-[data-skin="garden"] .quick-add:focus-within {
-  border-color: transparent;
-  box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 3px var(--accent);
-}
 
-/* 列表行：夜航分隔线退场改圆角悬停块；园庭行收进圆卡并带圆角 */
+/* 列表行：夜航分隔线退场改圆角悬停块 */
 [data-skin="night"] .task-row {
   border-bottom-color: transparent;
   box-shadow: none;
@@ -7334,76 +7271,51 @@ mark {
 }
 [data-skin="night"] .task-row:hover .task-head,
 [data-skin="night"] .task-row:focus-visible .task-head { transform: none; }
-[data-skin="garden"] .task-list {
-  background: var(--surface);
-  border-radius: var(--r-lg);
-  box-shadow: 0 1px 3px var(--row-line-halo);
-  padding: 4px 10px;
-}
-[data-skin="garden"] .task-row { border-radius: var(--r-sm); }
-[data-skin="garden"] .task-row:hover { background: var(--surface-2); }
 
-/* 浮窗：夜航 440 / 园庭 420 无边框大圆角；读数与行内控件形状随档 */
+/* --- 原版行悬停：轻微浮起 + 下缘映影（2026-11-23） ---
+   只挂原版；素纸 / 夜航保持原有的悬停底色，不跟浮起。
+   只动 transform / 阴影 / 背景 / 边框色，行高与相邻行位置零变化；
+   `z-index` 让影子压过下一行，`.main` 把日历当天浮层里的 minimal 行挡在外面。 */
+:root[data-skin="classic"] .main .task-row:not(.is-child) {
+  transition: transform var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out),
+    background var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out);
+}
+@media (hover: hover) {
+  :root[data-skin="classic"] .main .task-row:not(.is-child):hover {
+    z-index: 2;
+    transform: translateY(-2px);
+    border-radius: var(--r-xs);
+    border-bottom-color: transparent;
+    box-shadow: var(--row-float-sh);
+  }
+  :root[data-skin="classic"] .main .task-row:not(.is-child):not(.selected):hover {
+    background: var(--surface);
+  }
+}
+
+/* 浮窗：夜航 440 无边框大圆角；读数与行内控件形状随档 */
 [data-skin="night"] .edit-window {
   width: 440px;
   flex: 0 0 440px;
   border-radius: var(--r-xl);
 }
-[data-skin="garden"] .edit-window {
-  width: 420px;
-  flex: 0 0 420px;
-  border: 0;
-  border-radius: var(--r-xl);
-}
-[data-skin="night"] .drawer-title-input,
-[data-skin="garden"] .drawer-title-input { font-size: var(--fs-lg); }
+[data-skin="night"] .drawer-title-input { font-size: var(--fs-lg); }
 [data-skin="paper"] .drawer-read { border-radius: var(--r-sm); }
 [data-skin="night"] .drawer-read { border-radius: var(--r-md); }
-[data-skin="garden"] .drawer-read {
-  border: 0;
-  border-radius: var(--r-pill);
-}
 [data-skin="paper"] .drawer-cell .select-trigger,
 [data-skin="paper"] .drawer-cell .date-field-btn { border-radius: var(--r-sm); }
 [data-skin="night"] .drawer-cell .select-trigger,
 [data-skin="night"] .drawer-cell .date-field-btn { border-radius: var(--r-sm); }
-[data-skin="garden"] .drawer-cell .select-trigger,
-[data-skin="garden"] .drawer-cell .date-field-btn { border-radius: var(--r-sm); }
-[data-skin="garden"] .btn { border-radius: var(--r-pill); }
 
-/* 日历：夜航 chip 小圆角；园庭分离圆角格 + 胶囊 chip（墨条退场） */
+/* 日历：夜航 chip 小圆角 */
 [data-skin="night"] .cal-chip { border-radius: var(--r-xs); }
-[data-skin="garden"] .cal-grid {
-  gap: 4px;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  overflow: visible;
-}
-[data-skin="garden"] .cal-cell {
-  border-radius: var(--r-md);
-  background: var(--surface);
-}
-[data-skin="garden"] .cal-cell.is-weekend { background: var(--surface); }
-[data-skin="garden"] .cal-cell.out-month { background: transparent; }
-[data-skin="garden"] .cal-chip {
-  border-radius: var(--r-pill);
-  padding-inline: var(--sp-2);
-}
-[data-skin="garden"] .cal-chip::before { display: none; }
 
-/* 分段控件：园庭全药丸（模式 / 密度 / 皮肤样张） */
-[data-skin="garden"] .mode-switch,
-[data-skin="garden"] .mode-btn,
-[data-skin="garden"] .density-seg,
-[data-skin="garden"] .density-opt,
-[data-skin="garden"] .skin-btn { border-radius: var(--r-pill); }
-
-/* 设置页卡片化（三档共用设计稿的「头带 + 行卡」版式）：
+/* 设置页卡片化（两档共用设计稿的「头带 + 行卡」版式）：
    侧题头收成一条 mono 刻度头带，说明文字退场，行与行之间发丝线。 */
 [data-skin="paper"] .settings-group,
-[data-skin="night"] .settings-group,
-[data-skin="garden"] .settings-group {
+[data-skin="night"] .settings-group {
   display: block;
   padding: 0;
   border: 1px solid var(--border);
@@ -7412,21 +7324,18 @@ mark {
   overflow: hidden;
 }
 [data-skin="paper"] .settings-group + .settings-group,
-[data-skin="night"] .settings-group + .settings-group,
-[data-skin="garden"] .settings-group + .settings-group {
+[data-skin="night"] .settings-group + .settings-group {
   border-top: 1px solid var(--border);
   margin-top: var(--sp-4);
 }
 [data-skin="paper"] .settings-group-side,
-[data-skin="night"] .settings-group-side,
-[data-skin="garden"] .settings-group-side {
+[data-skin="night"] .settings-group-side {
   padding: var(--sp-2) var(--sp-3);
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
 }
 [data-skin="paper"] .settings-group-title,
-[data-skin="night"] .settings-group-title,
-[data-skin="garden"] .settings-group-title {
+[data-skin="night"] .settings-group-title {
   margin: 0;
   font-family: var(--font-mono-cjk);
   font-size: var(--fs-2xs);
@@ -7434,44 +7343,31 @@ mark {
   color: var(--muted);
 }
 [data-skin="paper"] .settings-group-note,
-[data-skin="night"] .settings-group-note,
-[data-skin="garden"] .settings-group-note { display: none; }
+[data-skin="night"] .settings-group-note { display: none; }
 [data-skin="paper"] .settings-fields,
-[data-skin="night"] .settings-fields,
-[data-skin="garden"] .settings-fields { gap: 0; }
+[data-skin="night"] .settings-fields { gap: 0; }
 [data-skin="paper"] .settings-row,
-[data-skin="night"] .settings-row,
-[data-skin="garden"] .settings-row {
+[data-skin="night"] .settings-row {
   padding: var(--sp-2) var(--sp-3);
   border-bottom: 1px solid var(--border);
   align-items: center;
 }
 [data-skin="paper"] .settings-fields > :last-child,
-[data-skin="night"] .settings-fields > :last-child,
-[data-skin="garden"] .settings-fields > :last-child { border-bottom: 0; }
+[data-skin="night"] .settings-fields > :last-child { border-bottom: 0; }
 [data-skin="paper"] .settings-actions,
-[data-skin="night"] .settings-actions,
-[data-skin="garden"] .settings-actions { padding: var(--sp-2) var(--sp-3); }
+[data-skin="night"] .settings-actions { padding: var(--sp-2) var(--sp-3); }
 [data-skin="paper"] .density-preview,
-[data-skin="night"] .density-preview,
-[data-skin="garden"] .density-preview { margin: var(--sp-2) var(--sp-3); }
+[data-skin="night"] .density-preview { margin: var(--sp-2) var(--sp-3); }
 /* 空组（如还没有 +项目 时的列表外观）整卡退场，不留一条空头带 */
 [data-skin="paper"] .settings-group:has(.settings-fields:empty),
-[data-skin="night"] .settings-group:has(.settings-fields:empty),
-[data-skin="garden"] .settings-group:has(.settings-fields:empty) { display: none; }
+[data-skin="night"] .settings-group:has(.settings-fields:empty) { display: none; }
 /* 非行控件（模式分段 / 皮肤样张 / 密度网格）也要落在卡内留白里 */
 [data-skin="paper"] .settings-fields > :not(.settings-row):not(.density-preview),
-[data-skin="night"] .settings-fields > :not(.settings-row):not(.density-preview),
-[data-skin="garden"] .settings-fields > :not(.settings-row):not(.density-preview) {
+[data-skin="night"] .settings-fields > :not(.settings-row):not(.density-preview) {
   padding: var(--sp-2) var(--sp-3);
 }
-[data-skin="garden"] .settings-group {
-  border: 0;
-  box-shadow: 0 1px 3px var(--row-line-halo);
-}
-[data-skin="garden"] .settings-group-side { background: transparent; }
 
-/* --- 设置页「外观主题」节：四枚样张按钮 --- */
+/* --- 设置页「外观主题」节：三枚样张按钮 --- */
 .skin-switch {
   display: flex;
   flex-wrap: wrap;
@@ -7518,9 +7414,6 @@ mark {
 .skin-btn[data-skin="night"] .sw-bg { background: var(--sw-night-bg); }
 .skin-btn[data-skin="night"] .sw-surface { background: var(--sw-night-surface); }
 .skin-btn[data-skin="night"] .sw-accent { background: var(--sw-night-accent); }
-.skin-btn[data-skin="garden"] .sw-bg { background: var(--sw-garden-bg); }
-.skin-btn[data-skin="garden"] .sw-surface { background: var(--sw-garden-surface); }
-.skin-btn[data-skin="garden"] .sw-accent { background: var(--sw-garden-accent); }
 
 /* --- 窄屏 / 手机：活动栏转横向，侧栏转横向过滤条 --- */
 @media (max-width: 768px) {
@@ -7555,7 +7448,7 @@ mark {
     flex-basis: 100%;
   }
 
-  /* 46px 的竖轨在窄屏上会把内容挤到不能读，所以整条转到顶部变成横向页签。
+  /* 40px 的竖轨在窄屏上会把内容挤到不能读，所以整条转到顶部变成横向页签。
      2026-11-15 十一改：页签条行高 44 → 31（-30%），窗口底边让出一条底部导航；
      网格最后一行 auto —— 底部导航不在（工具页 / 设置页）时自动塌成 0。
      2026-11-16 十七改：页签条 / 标题行统一取 --chrome-row-h(31)；
@@ -7695,6 +7588,10 @@ mark {
     display: none;
   }
 
+  .sidebar-resize {
+    display: none;
+  }
+
   .main {
     padding: var(--sp-2) var(--sp-3) var(--sp-6);
   }
@@ -7785,10 +7682,6 @@ mark {
 
   .tools-card-desc {
     -webkit-line-clamp: 1;
-  }
-
-  .tools-sec-note {
-    display: none;
   }
 
   .tool-head {
@@ -7903,13 +7796,6 @@ mark {
     flex: 0 0 auto;
   }
 
-  .settings-head-note {
-    display: none;
-  }
-
-  .settings-foot {
-    flex-wrap: wrap;
-  }
 }
 
 /* --- 小屏：进一步压缩留白 --- */
@@ -7941,16 +7827,6 @@ mark {
 
   .task-row {
     gap: var(--sp-2);
-  }
-
-  .settings-foot {
-    padding: var(--sp-2);
-    gap: var(--sp-2);
-  }
-
-  /* 窄屏上"当前会发往哪里"独占一行：它是安全信息，不能被挤掉 */
-  .settings-where {
-    width: 100%;
   }
 
   .settings-title {
@@ -8069,10 +7945,9 @@ mark {
     --row-h: 44px;
   }
 
-  /* 皮肤档的 --row-h 特异性 (0,2,0) 压过上面这条 (0,1,0)：触屏兜底要逐档再压一次，
-     否则夜航 / 园庭在触屏上会缩回 36 / 40，拇指命中区跟着缩。 */
-  :root[data-skin="night"],
-  :root[data-skin="garden"] {
+  /* 皮肤档的 --row-h 特异性 (0,2,0) 压过上面这条 (0,1,0)：触屏兜底要再压一次，
+     否则夜航在触屏上会缩回 36，拇指命中区跟着缩。 */
+  :root[data-skin="night"] {
     --row-h: 44px;
   }
 

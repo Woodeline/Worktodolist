@@ -1,9 +1,11 @@
 # 在 GitHub 的 Windows 云主机上编译 Worktodolist 的 exe（NSIS 安装包）
 #
-# 触发方式二选一：
+# 触发方式三选一：
 #   1. 推送标签  git push origin v1.1.0   → 自动构建，并把 exe 挂到该版本的 Release 上
 #   2. 手动      仓库页面 → Actions → "Build Windows EXE" → Run workflow
 #                在这种方式下只上传 Artifacts，不建 Release（没有标签可挂）
+#   3. Pull Request（R-12）：**只跑测试语义**（单测 / 静态门禁 / 前端构建），
+#                不编译 Rust、不产出安装包、绝不碰 Release。
 #
 # 产物：
 #   todolist-gui/src-tauri/target/release/bundle/nsis/Worktodolist_<版本>_x64-setup.exe
@@ -15,12 +17,62 @@ on:
   push:
     tags:
       - 'v*'
+  # PR 门禁走独立的 test-windows job：出包要烧掉几分钟的 Windows runner + Rust 编译，
+  # 而 PR 只需要知道「这套改动过不过门禁」。所以这里不挂 push.branches —— 全分支的
+  # 单测门禁由 ci.yml（ubuntu）负责，Windows 侧只补「平台相关差异」这一层。
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'todolist-gui/src/**'
+      - 'todolist-gui/src-tauri/**'
+      - 'todolist-gui/package.json'
+      - 'todolist-gui/package-lock.json'
+      - 'todolist-gui/vite.config.js'
+      - 'todolist-gui/index.html'
+      - 'todolist-gui/scripts/**'
+      - '.gitattributes'
+      - 'AGENTS.md'
 
 permissions:
   contents: write
 
 jobs:
+  # ——— PR：只验证，不产出 ———
+  test-windows:
+    if: github.event_name == 'pull_request'
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: todolist-gui/package-lock.json
+
+      - name: 安装前端依赖
+        working-directory: todolist-gui
+        run: npm ci
+
+      # 与 ci.yml 同一口径：test:guard 内部已重跑全量 vitest，不再叠裸的测试命令。
+      - name: 测试门禁（单测 / 完整性 / CSS·对比度·Hooks）
+        working-directory: todolist-gui
+        run: npm run test:guard && npm run test:ui
+
+      - name: 构建（vite build → dist/）
+        working-directory: todolist-gui
+        run: npm run build
+
+  # ——— 出包：只在 tag / 手动触发时跑 ———
   build-windows:
+    # 双保险：PR 根本不进这个 job；即使将来 on 里加了别的触发器，
+    # 下面 Release 步骤还有 startsWith(github.ref, 'refs/tags/') 这道锁。
+    if: github.event_name != 'pull_request'
     runs-on: windows-latest
     steps:
       - name: 拉取代码

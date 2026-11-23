@@ -11,7 +11,7 @@
 //      达到 RESERVED_SLOT_LIMIT 后自动隐藏——扩展位不变成噪音。
 import { useMemo, useState } from 'react';
 import { GROUPS, riskBadges } from './registry.js';
-import { GROUP_NOTES, RESERVED_SLOT_LIMIT } from './wallConfig.js';
+import { RESERVED_SLOT_LIMIT } from './wallConfig.js';
 import Icon from '../Icon.jsx';
 import { useContextMenu } from '../../hooks/useContextMenu.jsx';
 
@@ -130,20 +130,20 @@ export default function ToolsWall({ tools, meta, onOpen, onToggleFav }) {
   // 有查询词时整体平铺：分组头在过滤态只会挡住结果。
   const sections = useMemo(() => {
     if (q) {
-      return [{ id: '__flat', label: null, note: null, tools: matched.slice().sort(byMru) }];
+      return [{ id: '__flat', label: null, tools: matched.slice().sort(byMru) }];
     }
     const out = [];
     const favorites = meta.favorites.map((id) => tools.find((t) => t.id === id)).filter(Boolean);
     if (favorites.length) {
-      out.push({ id: '__fav', label: '收藏', note: '置顶常用工具', tools: favorites });
+      out.push({ id: '__fav', label: '收藏', tools: favorites });
     }
     for (const g of GROUPS) {
       const list = matched.filter((t) => t.group === g.id && !favoriteSet.has(t.id)).sort(byMru);
-      if (list.length) out.push({ id: g.id, label: g.label, note: GROUP_NOTES[g.id] || null, tools: list });
+      if (list.length) out.push({ id: g.id, label: g.label, tools: list });
     }
     const known = new Set(GROUPS.map((g) => g.id));
     const orphan = matched.filter((t) => !known.has(t.group) && !favoriteSet.has(t.id)).sort(byMru);
-    if (orphan.length) out.push({ id: '__other', label: '其它', note: '未登记分组', tools: orphan });
+    if (orphan.length) out.push({ id: '__other', label: '其它', tools: orphan });
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, matched, meta.favorites, meta.mru]);
@@ -213,7 +213,6 @@ export default function ToolsWall({ tools, meta, onOpen, onToggleFav }) {
                 )}
                 <h3 className="tools-sec-name">{sec.label}</h3>
                 <span className="tools-sec-count">{sec.tools.length}</span>
-                {sec.note && <span className="tools-sec-note">{sec.note}</span>}
               </div>
             )}
             {/* 预留卡只给注册表分组：收藏区是用户自选的子集，"这里会长出新工具"

@@ -35,28 +35,63 @@ export function useNativeShell(store) {
   useEffect(() => {
     if (!isTauri()) return undefined;
     let unlisten = null;
+    let detachFallback = null;
     let disposed = false;
 
+    // 降级路径只做一件事：刷盘。
+    // **绝不调 app_confirm_close** —— 关窗确认权在 Rust（lib.rs 的 3 秒超时），
+    // 前端在页面离开事件里替它放行会让那层超时保护失效。
+    const flushOnly = () => {
+      try {
+        const save = saveNowRef.current;
+        if (save) save();
+      } catch {
+        // 尽力而为：刷盘失败也必须让页面继续离开
+      }
+    };
+    const onVisibility = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') flushOnly();
+    };
+
     (async () => {
-      const off = await listen('shell://before-close', async () => {
-        try {
-          if (saveNowRef.current) await saveNowRef.current();
-        } catch {
-          // 尽力而为：刷盘失败也必须放行，否则应用永远关不掉
-        }
-        try {
-          await invoke('app_confirm_close');
-        } catch {
-          // 忽略
-        }
-      });
-      if (disposed) off();
-      else unlisten = off;
+      try {
+        const off = await listen('shell://before-close', async () => {
+          // 已知限制（2026-11-21 A 语义）：saveNow 失败也照样 app_confirm_close ——
+          // 内存里未落盘的改动会随窗口消失而丢失。堵此洞需 Rust 侧「关闭前二次确认」
+          // 新能力，未在 B1 范围；记录于补丁方案 §14.4。
+          try {
+            if (saveNowRef.current) await saveNowRef.current();
+          } catch {
+            // 尽力而为：刷盘失败也必须放行，否则应用永远关不掉
+          }
+          try {
+            await invoke('app_confirm_close');
+          } catch {
+            // 忽略
+          }
+        });
+        // listen 是异步的：resolve 之后要再判一次 disposed，否则会把取消函数丢掉。
+        if (disposed) off();
+        else unlisten = off;
+      } catch {
+        // R-10 降级：拿不到事件通道（runtime.listen 抛错）时，靠页面离开事件兜底刷盘。
+        // 不做模块级去重 flag —— 重复刷盘由 useTodoStore 的「内容比对短路 + 串行闸门」
+        // 吸收成 no-op，加个 flag 反而会在「先降级、后来又拿到能力」时把后者挡住。
+        if (disposed) return;
+        if (typeof document === 'undefined' || typeof window === 'undefined') return;
+        document.addEventListener('visibilitychange', onVisibility);
+        window.addEventListener('pagehide', flushOnly);
+        detachFallback = () => {
+          document.removeEventListener('visibilitychange', onVisibility);
+          window.removeEventListener('pagehide', flushOnly);
+        };
+      }
     })();
 
     return () => {
       disposed = true;
       if (unlisten) unlisten();
+      if (detachFallback) detachFallback();
     };
   }, []);
 

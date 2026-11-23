@@ -27,14 +27,25 @@
 //   · 卡片名改集合比较 —— 收藏置顶与 MRU 会重排，不能再逐序断言；
 //   · 墙态默认视图（?view=tools）不再直接打开第一个工具，要点卡才进工作态。
 //
-// 用法：npm run test:tools   （需要先起 dev：npm run dev -- --port 15181 --strictPort）
+// 用法：npm run test:tools   （需要先起 dev：npm run dev）
 //      SG_BASE=http://localhost:15181 npm run test:tools
 //      --shots  额外输出 qa-artifacts/tools-*.png
+//
+// 退出码（R-42）：0 全绿 / 1 断言失败 / 2 环境未就绪（dev server 没起、找不到浏览器）
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import {
+  EXIT_ENV,
+  EXIT_FAIL,
+  EXIT_OK,
+  ensureServer,
+  exitWithError,
+  findBrowser,
+  resolveBase,
+} from './qa-preflight.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 
@@ -55,11 +66,18 @@ const RESERVED_SLOTS = GROUPS.reduce((n, g) => {
 }, 0);
 const EXPECT_GROUP_LABELS = GROUPS.map((g) => g.label);
 
-const EDGE = process.env.EDGE || [
-  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
-  'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
-].find((p) => existsSync(p));
-const BASE = process.env.SG_BASE || 'http://localhost:15181';
+// 浏览器探测与端口都收敛到 preflight（R-11）：候选项不再只有 Windows 路径。
+const EDGE = findBrowser();
+// 端口取自 vite.config.js 的 DEV_PORT；SG_BASE 仍可覆盖。
+// 解析失败时 fail-loud 退 2（环境未就绪），不回落任何默认端口。
+function mustResolveBase() {
+  try {
+    return resolveBase();
+  } catch (err) {
+    exitWithError(err);
+  }
+}
+const BASE = mustResolveBase();
 const PORT = 9561;
 const PROFILE = path.join(tmpdir(), 'todolist-qa-tools-profile');
 const OUT = path.join(ROOT, 'qa-artifacts');
@@ -176,8 +194,14 @@ const HELPERS = `
 `;
 
 async function main() {
-  if (!EDGE) throw new Error('找不到 Edge/Chrome，可设置 EDGE 环境变量');
+  if (!EDGE) {
+    const err = new Error('找不到 Edge/Chrome，可设置 EDGE 环境变量');
+    err.exitCode = EXIT_ENV;
+    throw err;
+  }
   if (!TOOL_LIST.length) throw new Error('registry 里没有可见工具，门禁无从校验');
+  // 环境未就绪 → 退出码 2（与断言失败区分，R-42）。
+  await ensureServer(BASE);
   rmSync(PROFILE, { recursive: true, force: true });
 
   const proc = spawn(
@@ -905,9 +929,11 @@ main()
   .then(() => {
     const failed = results.filter((r) => !r.ok);
     console.log(`\n结果：${results.length - failed.length}/${results.length} 通过${failed.length ? '  ✗ 存在失败项' : '  全部通过'}`);
-    process.exit(failed.length ? 1 : 0);
+    process.exit(failed.length ? EXIT_FAIL : EXIT_OK);
   })
   .catch((err) => {
+    // 环境未就绪（dev server 没起 / 找不到浏览器）带 exitCode=2，断言失败退 1。
+    const code = err && Number.isInteger(err.exitCode) ? err.exitCode : EXIT_FAIL;
     console.error('✗ ' + (err && err.message ? err.message : err));
-    process.exit(1);
+    process.exit(code);
   });

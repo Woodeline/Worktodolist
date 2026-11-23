@@ -10,40 +10,44 @@
 //
 // 用法：
 //   npm run dev                       # 另开一个终端，先把 dev server 起起来
-//                                     # （vite 默认 5173；指定别的地址用 SG_BASE 环境变量）
+//                                     # （端口取自 vite.config.js 的 DEV_PORT；
+//                                     #   要把门禁指到别的实例上用 SG_BASE 环境变量）
 //   node scripts/qa-responsive.mjs            # 只出表格
 //   node scripts/qa-responsive.mjs --shots    # 顺便存图到 .tmp-shot/
 //   node scripts/qa-responsive.mjs --json     # 额外吐一份原始 JSON
 //
-// 退出码：有断言失败 → 1
+// 退出码（R-42）：0 全绿 / 1 断言失败 / 2 环境未就绪（dev server 没起、找不到浏览器）
 
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import {
+  exitWithError,
+  ensureServer,
+  requireBrowser,
+  resolveBase,
+  resolveDevPort,
+} from './qa-preflight.mjs';
 
-const EDGE_CANDIDATES = [
-  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
-  'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
-  '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
-  '/usr/bin/microsoft-edge',
-  '/usr/bin/google-chrome',
-];
-const EDGE_ENV = process.env.EDGE;
-
-// 目标地址：SG_BASE 环境变量优先；否则读项目根 .todolist-server.port（这是早期 Python
-// 启动器留下的端口文件，现在已没有东西写它，读到就用作兼容）；再读不到回落到 15180。
-function readServerPort() {
+// 端口只有一条真相源：vite.config.js 的 DEV_PORT（R-11）。
+// 这里刻意删掉了两条旧逻辑：
+//   · `readServerPort()` 读仓库根的 `.todolist-server.port` —— 那是早期 Python 启动器
+//     留下的文件，早就没有东西在写它，读到的是历史残值；
+//   · `?? 15180` 回落 —— 回落会让门禁连到一个不存在的端口，然后所有档都报「连不上」，
+//     看起来像环境问题，实际是端口错了。
+// 解析失败时 fail-loud 退 2（环境未就绪），不猜。
+function mustResolvePort() {
   try {
-    const raw = readFileSync(path.resolve(import.meta.dirname, '..', '..', '.todolist-server.port'), 'utf8').trim();
-    const n = Number(raw);
-    return Number.isFinite(n) && n > 0 ? n : null;
-  } catch {
-    return null;
+    return resolveDevPort();
+  } catch (err) {
+    exitWithError(err);
   }
 }
-const SERVER_PORT = readServerPort() ?? 15180;
-const BASE = process.env.SG_BASE || `http://localhost:${SERVER_PORT}`;
+const SERVER_PORT = mustResolvePort();
+// BASE 仍允许 SG_BASE 覆盖（手工把门禁指到别的实例上调试）。
+const BASE = resolveBase(SERVER_PORT);
+// CDP 调试端口与 dev server 端口是两件事，别混（旧注释里两者都叫 PORT 容易看串）。
 const PORT = Number(process.env.CDP_PORT || 9333);
 const WANT_SHOTS = process.argv.includes('--shots');
 const WANT_JSON = process.argv.includes('--json');
@@ -150,11 +154,8 @@ const CASES = [
 ];
 
 // ------------------------------------------------------------------ CDP 客户端
-function findEdge() {
-  if (EDGE_ENV && existsSync(EDGE_ENV)) return EDGE_ENV;
-  for (const p of EDGE_CANDIDATES) if (existsSync(p)) return p;
-  throw new Error('找不到 Edge/Chrome 可执行文件，请设置 EDGE 环境变量或在脚本里加路径');
-}
+// 浏览器探测收敛到 preflight（R-11）：原来这份候选表只有 Windows 路径，
+// macOS 上三个门禁全都死在「找不到 Edge」。找不到时抛错带 exitCode=EXIT_ENV。
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -512,7 +513,7 @@ function assertions(c, m) {
     ok('--rail-max = 900px', m.railMax === '900px', m.railMax);
     ok('主区占满剩余宽度（≥ 560）', (g('rail')?.w ?? 0) >= 560, `w=${g('rail')?.w}`);
     ok('上下文条为单行 36px', (g('topbar')?.h ?? 0) >= 30 && (g('topbar')?.h ?? 0) <= 44, `h=${g('topbar')?.h}`);
-    ok('活动栏为 46px 竖轨', g('tabs')?.w === 46 && (g('tabs')?.h ?? 0) > 300, JSON.stringify(g('tabs')));
+    ok('活动栏为 40px 竖轨', g('tabs')?.w === 40 && (g('tabs')?.h ?? 0) > 300, JSON.stringify(g('tabs')));
     // 页眉左侧化（2026-10-18）：侧栏开关必须在页眉最左，紧贴左内边距
     ok('侧栏开关在页眉最左', (g('panelToggle')?.x ?? 1e9) - (g('topbar')?.x ?? 0) <= 24, `toggle.x=${g('panelToggle')?.x} topbar.x=${g('topbar')?.x}`);
     // 外壳行高（2026-11-16 十七改）：标题行 / 页签条 / 底栏共用 --chrome-row-h(31)
@@ -715,16 +716,10 @@ async function main() {
     process.exit(nf === 0 && missingCases.length === 0 ? 0 : 1);
   }
 
-  // 1) 确认 dev server 在跑
-  try {
-    const r = await fetch(`${BASE}/styleguide.html`, { method: 'GET' });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-  } catch (e) {
-    console.error(`\n✗ 连不上 ${BASE} —— 请先另开终端跑 npm run dev\n  (${e.message})\n`);
-    process.exit(2);
-  }
+  // 1) 确认 dev server 在跑（环境未就绪 → 退出码 2，与断言失败区分开）
+  await ensureServer(BASE);
 
-  const edge = process.env.EDGE || findEdge();
+  const edge = requireBrowser();
   console.log(`\nEdge: ${edge}`);
   console.log(`目标: ${BASE}/styleguide.html\n`);
 
@@ -865,7 +860,8 @@ function report(results, failed, fromFile = false) {
   console.log('');
 }
 
+// 退出码语义（R-42）：环境未就绪带 exitCode=2（由 preflight 标），
+// 其余未预期的崩溃按「门禁不通过」退 1 —— 宁可报红，也不能把崩溃读成通过。
 main().catch((e) => {
-  console.error('\n✗ ' + e.message + '\n');
-  process.exit(2);
+  exitWithError(e);
 });

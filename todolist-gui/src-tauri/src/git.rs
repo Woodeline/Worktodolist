@@ -4,19 +4,17 @@
 //! 绝不碰代码；没有 git、不是仓库、没有变更、提交失败——一律**静默降级**，
 //! 因为 git 化是增强而不是依赖。
 //!
-//! 刻意**不含 `backup/`**：备份文件就是 todo.txt 每日的整份副本，而 todo.txt
+//! 刻意**不含 `.worktodolist/backup/`**：备份文件就是 todo.txt 每日的整份副本，而 todo.txt
 //! 本身已在版本控制里——跟踪它等于把同一份历史存两遍，且每天新增一份、历史
 //! 永不回收，仓库会无上限膨胀。要回溯历史看 todo.txt 的提交记录即可。
 
-use std::fs;
-use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Output};
 
 use serde::Serialize;
 use tauri::State;
 
-use crate::workspace::Workspace;
+use crate::workspace::{append_capped_log, Workspace};
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -58,13 +56,10 @@ fn report(status: &str, detail: impl Into<String>) -> CommitReport {
 /// 提交失败时留痕。与旧 `scripts/git_autocommit.py` 写 `.todolist-launch.log` 的行为对齐 ——
 /// 迁移前"git 身份没配置"这件事是有痕迹的，不能因为换了实现就悄悄丢掉。
 fn log_failure(root: &Path, detail: &str) {
-    if let Ok(mut fh) = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(root.join(".todolist-launch.log"))
-    {
-        let _ = writeln!(fh, "[autocommit] {}", detail.trim());
-    }
+    append_capped_log(
+        &root.join(".worktodolist").join("logs").join("launch.log"),
+        &format!("[autocommit] {}", detail.trim()),
+    );
 }
 
 /// 在 `root` 里跑一次数据提交。`stamp` 由前端传入本地时间（形如 "2026-10-10 22:40"），

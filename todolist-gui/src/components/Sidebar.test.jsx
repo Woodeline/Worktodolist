@@ -56,6 +56,25 @@ describe('Sidebar 列表圆点', () => {
     expect(markup).not.toContain('>列表<');
   });
 
+  it('组名读本机配置：标签可改成「团队」，分类仍是默认', () => {
+    const mem = new Map([
+      ['worktodolist.sidebar-groups', JSON.stringify({ contexts: '分类', projects: '团队' })],
+    ]);
+    globalThis.localStorage = {
+      getItem: (k) => (mem.has(k) ? mem.get(k) : null),
+      setItem: (k, v) => mem.set(k, v),
+      removeItem: (k) => mem.delete(k),
+    };
+    try {
+      const store = makeStore('写周报 +投资\n买网线 @家');
+      const markup = renderToStaticMarkup(<Sidebar store={store} />);
+      expect(markup).toContain('>团队<');
+      expect(markup).toContain('>分类<');
+    } finally {
+      delete globalThis.localStorage;
+    }
+  });
+
   it('圆点颜色与 defaultColorId 一致（没配过色时走名字散列）', () => {
     const store = makeStore('写周报 +投资');
     const markup = renderToStaticMarkup(<Sidebar store={store} />);

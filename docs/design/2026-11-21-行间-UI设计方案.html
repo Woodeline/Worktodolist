@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>行间 · Interline 设计方案</title>
+<style>
+:root{
+  --f-ui:"PingFang SC","Hiragino Sans GB","Microsoft YaHei UI","Microsoft YaHei","Segoe UI",sans-serif;
+  --f-mono:"SF Mono","SFMono-Regular","JetBrains Mono","Cascadia Mono","Consolas",ui-monospace,monospace;
+  --paper:#fbfaf6; --paper-2:#f1efe7; --paper-3:#e7e4d9;
+  --ink:#1b1a15; --ink-2:#45433a; --ink-3:#716d62;
+  --line:#e6e2d8; --line-2:#cec8b9; --ctl:#89847a;
+  --accent:#1d6b4e; --accent-ink:#175641; --accent-soft:#e4efe8;
+  --danger:#ab2a1e; --flag-a:#b3261e; --flag-b:#a35f06; --flag-c:#1b4f96;
+  --shadow-1:0 1px 0 rgba(255,255,255,.82) inset,0 1px 2px rgba(32,28,18,.06);
+  --shadow-2:0 1px 0 rgba(255,255,255,.9) inset,0 14px 32px -14px rgba(32,28,18,.28),0 2px 6px rgba(32,28,18,.05);
+  --shadow-3:0 40px 100px -36px rgba(28,24,16,.5),0 2px 14px rgba(28,24,16,.12);
+}
+*{box-sizing:border-box}
+body{
+  margin:0; padding:0 24px 72px;
+  background:radial-gradient(1200px 600px at 50% -8%,#e7e4dc,transparent 70%),#dcd8ce;
+  color:var(--ink); font-family:var(--f-ui); font-size:14px; line-height:1.75;
+  -webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:""; position:fixed; inset:0; pointer-events:none; opacity:.5; z-index:0;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='140' height='140' filter='n' opacity='.25'/></svg>");
+  mix-blend-mode:multiply;
+}
+.page{
+  position:relative; z-index:1;
+  width:min(1120px,100%); margin:0 auto; background:var(--paper);
+  border-radius:16px; box-shadow:var(--shadow-3),0 0 0 1px rgba(0,0,0,.1);
+  padding:64px 76px 56px;
+}
+.eyebrow{font:10px/1 var(--f-mono); letter-spacing:.18em; color:var(--ink-3); display:flex; gap:12px; flex-wrap:wrap}
+.eyebrow b{color:var(--accent-ink); font-weight:400}
+h1{font-size:52px; line-height:1.05; letter-spacing:-.025em; margin:22px 0 6px; font-weight:600}
+h1 span{font:400 13px/1 var(--f-mono); letter-spacing:.16em; color:var(--ink-3); vertical-align:middle; margin-left:14px}
+.lede{font-size:16px; line-height:1.9; color:var(--ink-2); max-width:58em; margin:18px 0 0}
+.lede strong{font-weight:600; color:var(--ink)}
+.head-link{display:inline-flex; align-items:center; gap:8px; margin-top:22px; height:30px; padding:0 14px; border-radius:999px; border:1px solid var(--line-2); color:var(--accent-ink); text-decoration:none; font-size:12px; background:var(--paper-2)}
+.head-link:hover{border-color:var(--accent); background:var(--accent-soft)}
+.head-link svg{width:13px;height:13px}
+
+h2{font-size:22px; line-height:1.3; margin:0 0 8px; letter-spacing:-.01em; font-weight:600; display:flex; gap:14px; align-items:baseline}
+h2 i{font:400 10px/1 var(--f-mono); letter-spacing:.14em; color:var(--ink-3); font-style:normal}
+section{margin-top:62px; padding-top:34px; border-top:1px solid var(--line)}
+section:first-of-type{margin-top:52px}
+.sub{color:var(--ink-3); font-size:12.5px; margin:0 0 24px; max-width:52em}
+h3{font-size:15px; margin:26px 0 8px; font-weight:600}
+p{margin:0 0 14px; max-width:52em}
+.muted{color:var(--ink-3)}
+.small{font-size:12px; color:var(--ink-3)}
+.mono{font-family:var(--f-mono); font-variant-numeric:tabular-nums}
+
+.grid3{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin:18px 0 6px}
+.card{background:var(--paper-2); border-radius:10px; padding:18px 18px 16px; border:1px solid var(--line)}
+.card .n{font:400 10px/1 var(--f-mono); color:var(--ink-3); letter-spacing:.14em}
+.card h4{margin:10px 0 8px; font-size:14px; font-weight:600}
+.card p{margin:0; font-size:12px; line-height:1.7; color:var(--ink-2)}
+.card .cost{margin-top:10px; padding-top:9px; border-top:1px solid var(--line); font-size:11px; color:var(--ink-3)}
+.card .cost b{color:var(--flag-b); font-weight:500}
+
+.quote{
+  border-left:2px solid var(--accent); padding:2px 0 2px 18px; margin:24px 0;
+  font-size:15px; line-height:1.9; color:var(--ink-2); max-width:50em;
+}
+.quote b{color:var(--ink); font-weight:600}
+
+.trend{display:grid; grid-template-columns:1fr 1fr; gap:0; margin:22px 0 8px; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+.trend > div{padding:18px 20px}
+.trend .take{background:var(--accent-soft)}
+.trend .leave{background:var(--paper-2); border-left:1px solid var(--line)}
+.trend h4{margin:0 0 10px; font-size:12px; letter-spacing:.08em; font-weight:600}
+.trend .take h4{color:var(--accent-ink)}
+.trend .leave h4{color:var(--ink-3)}
+.trend ul{margin:0; padding-left:16px; font-size:12.5px; line-height:1.85; color:var(--ink-2)}
+.trend li{margin:2px 0}
+
+table{width:100%; border-collapse:collapse; margin:16px 0 6px; font-size:12.5px}
+th{text-align:left; font-weight:500; color:var(--ink-3); font-size:10.5px; letter-spacing:.1em; padding:8px 10px; border-bottom:1px solid var(--line-2); background:var(--paper-2)}
+td{padding:10px; border-bottom:1px solid var(--line); vertical-align:top; color:var(--ink-2); line-height:1.65}
+td b{color:var(--ink); font-weight:500}
+td code{font:11px/1.4 var(--f-mono); background:var(--paper-2); padding:2px 5px; border-radius:4px; color:var(--ink-2)}
+
+.shot{margin:20px 0 8px}
+.shot img{width:100%; display:block; border-radius:12px; box-shadow:0 24px 60px -28px rgba(30,26,18,.45),0 0 0 1px rgba(0,0,0,.1)}
+.shot figcaption{font:10.5px/1.6 var(--f-mono); color:var(--ink-3); margin-top:10px; letter-spacing:.04em; display:flex; gap:10px}
+.shot figcaption b{color:var(--ink-2); font-weight:400}
+
+.two{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+.two .shot{margin-top:16px}
+
+.anatomy{
+  border:1px solid var(--line); border-radius:10px; padding:18px 20px 14px; margin:18px 0 6px; background:var(--paper-2);
+}
+.an-row{display:grid; grid-template-columns:18px 18px minmax(0,1fr) 56px 88px 16px; gap:10px; align-items:center; padding:12px 10px; background:var(--paper); border-radius:8px; box-shadow:var(--shadow-1); font-size:13px}
+.an-row .box{width:15px;height:15px;border-radius:5px;box-shadow:inset 0 0 0 1px var(--ctl)}
+.an-row .t{font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.an-row .d{font:11.5px/1 var(--f-mono); color:var(--accent-ink); text-align:right}
+.an-row .q{display:flex; justify-content:flex-end; gap:2px; opacity:.55}
+.an-row .q span{width:20px;height:20px;border-radius:4px;background:var(--paper-2)}
+.an-row .c{width:12px;height:12px;border-right:1.5px solid var(--ink-3);border-bottom:1.5px solid var(--ink-3); transform:rotate(-45deg) scale(.6)}
+.an-legend{display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px; margin-top:12px; font:9.5px/1.5 var(--f-mono); color:var(--ink-3)}
+.an-legend b{display:block; color:var(--ink-2); font-weight:400}
+
+.swatches{display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; margin:14px 0 4px}
+.sw{border-radius:8px; overflow:hidden; border:1px solid var(--line); background:var(--paper)}
+.sw i{display:block; height:54px}
+.sw span{display:block; padding:7px 9px; font:9.5px/1.4 var(--f-mono); color:var(--ink-2)}
+.sw em{display:block; font-style:normal; color:var(--ink-3); font-size:9px}
+
+.typerow{display:grid; grid-template-columns:150px 1fr; gap:14px; align-items:baseline; padding:12px 0; border-bottom:1px solid var(--line)}
+.typerow .k{font:9.5px/1.4 var(--f-mono); color:var(--ink-3); letter-spacing:.06em}
+.typerow .v{font-size:13px}
+.t-display{font-size:27px;font-weight:600;letter-spacing:-.02em;line-height:1.1}
+.t-title{font-size:14px}
+.t-meta{font-size:10.5px;color:var(--ink-3)}
+.t-mono{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-2)}
+
+.elev{display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin:16px 0 6px}
+.elev div{height:86px; border-radius:10px; background:var(--paper); display:flex; align-items:flex-end; padding:10px; font:9.5px/1.4 var(--f-mono); color:var(--ink-3)}
+.elev .e1{box-shadow:var(--shadow-1)}
+.elev .e2{box-shadow:var(--shadow-2)}
+.elev .e3{box-shadow:var(--shadow-3); background:var(--paper); border:1px solid var(--line)}
+
+.motion{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:16px 0 6px}
+.mox b{display:block; font:9.5px/1 var(--f-mono); color:var(--ink-3); letter-spacing:.12em}
+.mox span{display:block; margin-top:7px; font-size:12px; color:var(--ink-2)}
+.mox i{display:block; margin-top:9px; height:3px; background:var(--line); border-radius:2px; position:relative}
+.mox i u{position:absolute;left:0;top:0;bottom:0;background:var(--accent);border-radius:2px}
+
+.list-check{margin:10px 0 0; padding:0; list-style:none}
+.list-check li{display:flex; gap:10px; padding:7px 0; font-size:12.5px; color:var(--ink-2); border-bottom:1px solid var(--line)}
+.list-check li b{font-weight:500; color:var(--ink)}
+.list-check li .tick{width:14px;height:14px;flex:0 0 14px;margin-top:3px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);font:10px/14px var(--f-mono);text-align:center}
+
+.note-box{border:1px dashed var(--line-2); border-radius:10px; padding:16px 18px; margin:18px 0; font-size:12.5px; color:var(--ink-2); background:repeating-linear-gradient(180deg,transparent 0 27px,var(--line) 27px 28px)}
+.note-box b{color:var(--ink)}
+
+.foot{margin-top:56px; padding-top:26px; border-top:1px solid var(--line); font-size:11.5px; color:var(--ink-3)}
+.foot ol{margin:10px 0 0; padding-left:20px; line-height:2}
+.foot a{color:var(--ink-2)}
+
+@media (max-width:900px){
+  .page{padding:36px 24px}
+  h1{font-size:36px}
+  .grid3,.two,.elev,.swatches{grid-template-columns:1fr 1fr}
+  .trend{grid-template-columns:1fr}
+  .trend .leave{border-left:0;border-top:1px solid var(--line)}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <div class="eyebrow"><span>设计提案</span><span>2026-11-21</span><span>worktodolist</span><b>可交互样张已附</b></div>
+  <h1>行间<span>INTERLINE</span></h1>
+  <p class="lede">这份提案只回答一个问题。一个把 <strong>todo.txt</strong> 当作唯一真相的本地待办工具，在 2026 年的主流设计语言里应该长什么样。我的结论先说：<strong>留住账簿的诚实，拆掉它的栅栏。</strong></p>
+  <p class="lede" style="margin-top:10px">留住的是三件事：可核对、安静、一行一条。拆掉的也是三件事：用 1px 线承包层级、把期限折进 hover、让纯文本在界面上没有证据。</p>
+  <a class="head-link" href="2026-11-21-行间-交互样张.html" target="_blank">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 10-10-3-3-10 10-1 4zM14 6l3 3"/></svg>
+    打开交互样张
+    <span style="font:9px/1 var(--f-mono);color:var(--ink-3)">⌘K 可写一行</span>
+  </a>
+</header>
+
+<section>
+  <h2><i>01</i>先把问题说清</h2>
+  <p class="sub">现行的「工作登记簿 / 墨绿账簿」是一套有自己语法的界面。它的完成度没有问题。真正的问题在于，这套语法只对做界面的人可见。</p>
+
+  <div class="grid3">
+    <div class="card">
+      <div class="n">FINDING 01</div>
+      <h4>线在替布局说话</h4>
+      <p>界面里有六种线与描边令牌：<span class="mono">border / border-strong / row-line / row-line-child / row-line-halo / control-line</span>。每一层关系都靠 1px 画出来，层级是靠围栏成立的。</p>
+      <div class="cost"><b>代价</b>　任务一多，列表先被读成表格。眼睛在数格子，事情退到第二位。</div>
+    </div>
+    <div class="card">
+      <div class="n">FINDING 02</div>
+      <h4>期限被折了起来</h4>
+      <p>截止日、子任务进度、分类与标签默认 <span class="mono">opacity: 0</span>，鼠标悬停才浮出。浏览时干净，日用时费劲。</p>
+      <div class="cost"><b>代价</b>　账本从不把金额栏折起来，而日期就是这张表的金额栏。</div>
+    </div>
+    <div class="card">
+      <div class="n">FINDING 03</div>
+      <h4>纯文本没有证据</h4>
+      <p>产品真正的护城河是 <span class="mono">grep</span>、<span class="mono">git</span>、topydo、脚本批处理。界面里却看不到一行原文，用户感受不到数据是可读、可 diff 的。</p>
+      <div class="cost"><b>代价</b>　用起来像普通待办，讲起来才像纯文本工具。</div>
+    </div>
+  </div>
+
+  <div class="quote">
+    <b>公平地说，现有界面已经守住了两件难事。</b> 颜色只编码状态，优先级是用户自己打的记号；键盘与 Esc 逐层退出也做到了肌肉记忆。这些是资产。下面所有改动都不动这两条，只换承载它们的方式。
+  </div>
+</section>
+
+<section>
+  <h2><i>02</i>趋势里拿什么，丢什么</h2>
+  <p class="sub">2026 年的主流设计语言有三个可辨认的动作。问题在于，它们各自都在服务「第一次看见」，而这个工具要服务「每天看五十次」。</p>
+
+  <p><b>第一是深度分层。</b> Apple 的 Liquid Glass 把层级从尺寸与颜色移到了深度、模糊与透光，按钮与面板浮在内容之上，靠材质说明前后关系。<sup><a href="https://www.wavespace.agency/blog/ui-design-trends">1</a></sup> <b>第二是目的性动效。</b> 动效开始承担状态、层级与反馈，而不再只是过渡。<sup><a href="https://mockflow.com/blog/ui-design-trends">2</a></sup> <b>第三是意图驱动入口。</b> 用户表达目标，界面负责组装步骤，命令面板与自然语言输入变成主入口。<sup><a href="https://mockflow.com/blog/ui-design-trends">2</a></sup></p>
+
+  <p>但趋势自己先纠了偏。WWDC 2026 上 Apple 下调了 Liquid Glass 的默认透明度，在系统设置里加了从 clear 到 frosted 的滑杆，也重画了侧栏圆角与图标，理由是可读性。<sup><a href="https://www.beryldesign.fr/en/post/liquid-glass-vs-material-3-expressive">3</a></sup> <sup><a href="https://en.wikipedia.org/wiki/Liquid_Glass">4</a></sup> 一条被大规模抱怨过的语言，最后的修正方向是「退回去一点」。</p>
+
+  <div class="quote">
+    流行语言只提供语法。内容要自己长出来。<b>结构可以搬。装饰搬不得。</b> 这条判断决定了下面的取舍。
+  </div>
+
+  <div class="trend">
+    <div class="take">
+      <h4>拿走</h4>
+      <ul>
+        <li>深度分层，用纸层与投影说明前后，替代满屏 1px</li>
+        <li>目的性动效，只用来说明状态变化</li>
+        <li>一条能写自然语言的命令入口</li>
+        <li>更大的标题与留白，让一天有一页的感觉</li>
+        <li>连续圆角与顶部微光，给纸面一点物理感</li>
+      </ul>
+    </div>
+    <div class="leave">
+      <h4>丢掉</h4>
+      <ul>
+        <li>全屏玻璃与背景折射，读长清单会累</li>
+        <li>彩色渐变、光晕、发光描边</li>
+        <li>每次 hover 都弹一下的过冲弹簧</li>
+        <li>把每个区块都装进卡片的卡片墙</li>
+        <li>为了「有质感」而加的装饰性分割线</li>
+      </ul>
+    </div>
+  </div>
+
+  <p><b>一条硬规则。</b> 玻璃只出现在临时层，包括命令面板、编辑浮窗、当天浮纸与 toast。书写面永远是不透明纸。理由有两条，一条是可读性，一条是长时间注视的疲劳。这条规则让方案站在「被修正后的 Liquid Glass」这一边，也保住了这个产品最像纸的那部分。</p>
+</section>
+
+<section>
+  <h2><i>03</i>五个动作</h2>
+  <p class="sub">每个动作都配一条可执行的规则和一个诚实的代价。没有代价的设计方案只是效果图。</p>
+
+  <h3>动作一 · 纸三叠</h3>
+  <p>把界面收成三层材质。<b>桌面</b>是最外层的灰纸，只在窗口之外出现；<b>纸面</b>是内容所在的暖白；<b>浮纸</b>是编辑浮窗与当天浮纸，靠投影与顶部微光浮起来。层级由亮度与阴影承担，1px 只留给真正需要边界的地方，也就是交互控件的 <span class="mono">--control-line</span>，它必须过 WCAG 1.4.11 的 3:1。</p>
+  <ul class="list-check">
+    <li><span class="tick">1</span><span><b>行不再画分隔线。</b> 悬停给一块圆角浅底，行与行靠 8px 节奏分开。</span></li>
+    <li><span class="tick">2</span><span><b>三层封顶。</b> 再多一层阴影就会开始像卡片墙，也会在 WebView2 上掉帧。</span></li>
+    <li><span class="tick">3</span><span><b>阴影统一从上方来。</b> 顶部 1px 白色内高光，底部一层短投影，方向一致才有物理感。</span></li>
+  </ul>
+  <p class="small">代价　阴影比 1px 更难调。层数必须克制，滚动区域里不能挂大模糊。</p>
+
+  <h3>动作二 · 一格</h3>
+  <p>把日期做成一根常驻的右列，像账本的金额栏。它一直可见，等宽数字，右对齐；今天用强调绿，逾期用红，其余用次级墨色。分类、标签、重复、备注仍然折在标题下方，只在悬停或选中时出现。列表的阅读顺序因此变成一次水平扫视，事情在左，期限在右。</p>
+  <ul class="list-check">
+    <li><span class="tick">1</span><span><b>列宽 56px，恒右对齐。</b> 无日期写「—」，不留空也不猜。</span></li>
+    <li><span class="tick">2</span><span><b>悬停零重排。</b> 只碰 opacity 与 transform，标题上移 6px 给读数行让位，行的 top/height 一格不动。</span></li>
+    <li><span class="tick">3</span><span><b>颜色不兼任第二语义。</b> 日期列只用 accent 与 danger，优先级仍由左侧那枚旗承担。</span></li>
+  </ul>
+  <p class="small">代价　常驻列吃掉 56px。窄窗口里长标题会少几个字，换来的是「一眼知道今天还剩什么」。</p>
+
+  <h3>动作三 · 一行</h3>
+  <p>把命令面板做成这个产品的主入口，名字就叫「写一行」。输入一句自然语言，下面实时回显它写进 <span class="mono">todo.txt</span> 的规范化结果，包含优先级、<span class="mono">due:</span>、<span class="mono">@分类</span>、<span class="mono">+列表</span> 与 <span class="mono">rec:</span>。编辑浮窗底部也常驻一条「原文」，随手改标题时同步更新。</p>
+  <ul class="list-check">
+    <li><span class="tick">1</span><span><b>回显的内容来自落盘结果。</b> 输入框只是草稿。 这是「纯文本是唯一真相」最直接的证据。</span></li>
+    <li><span class="tick">2</span><span><b>写入不劫持视线。</b> 加一条未来的任务，当前视图不动，toast 给一个「去看」。</span></li>
+    <li><span class="tick">3</span><span><b>解析器与 QuickAdd 共用一份。</b> 不在命令面板里另造一套日期语法。</span></li>
+  </ul>
+  <p class="small">代价　相对日期（明天、后天、下周一、+3）需要维护一张词表，中文歧义要写测试兜住。</p>
+
+  <h3>动作四 · 一线</h3>
+  <p>完成一条任务时，一条 1px 的墨线从左往右划掉标题，240ms 后整行收拢消失。重复任务在同一位置长出新的一行，底色先亮一下再退去，toast 报「已为你排到 12月1日」。颜色在这个产品里只编码状态，动效是唯一还能讲「刚刚发生了什么」的通道，所以它必须准确，不能装饰。</p>
+  <ul class="list-check">
+    <li><span class="tick">1</span><span><b>悬停不做动效。</b> 只有状态变化才动，扫列表时界面是静的。</span></li>
+    <li><span class="tick">2</span><span><b>尊重 reduced-motion。</b> 关掉动效后，完成仍然有划线，只是不位移。</span></li>
+    <li><span class="tick">3</span><span><b>连点要锁。</b> 收拢的 200ms 内不接受第二次完成，避免重复写 done.txt。</span></li>
+  </ul>
+  <p class="small">代价　完成多等 200ms 才消失。对一天几十次的动作，这 200ms 必须换来「确实做完了」的确认感，否则就是负担。</p>
+
+  <h3>动作五 · 一个焦点</h3>
+  <p>专注模式把侧栏、页头与其余行压到 14% 透明度，只留一条任务，页顶给一个「专注中」的小条，Esc 退出。它不新增数据，也不新增页面，只改一次透明度。</p>
+  <p class="small">代价　上下文被藏起来，可能让人忘了别的任务。入口必须显眼，退出必须一键。</p>
+</section>
+
+<section>
+  <h2><i>04</i>纸三叠与刻度</h2>
+  <p class="sub">令牌是这套语言的词典。下面的数值都可以直接落进 <span class="mono">index.css</span> 的 §1，明暗各一套。</p>
+
+  <div class="swatches">
+    <div class="sw"><i style="background:#dcd8ce"></i><span>desk<em>#dcd8ce 舞台</em></span></div>
+    <div class="sw"><i style="background:#fbfaf6"></i><span>paper<em>#fbfaf6 纸面</em></span></div>
+    <div class="sw"><i style="background:#f1efe7"></i><span>paper-2<em>#f1efe7 浅一档</em></span></div>
+    <div class="sw"><i style="background:#e7e4d9"></i><span>paper-3<em>#e7e4d9 凹槽</em></span></div>
+    <div class="sw"><i style="background:#1b1a15"></i><span>ink<em>#1b1a15 正文</em></span></div>
+    <div class="sw"><i style="background:#716d62"></i><span>ink-3<em>#716d62 读数</em></span></div>
+    <div class="sw"><i style="background:#1d6b4e"></i><span>accent<em>#1d6b4e 今天/选中</em></span></div>
+    <div class="sw"><i style="background:#ab2a1e"></i><span>danger<em>#ab2a1e 逾期</em></span></div>
+    <div class="sw"><i style="background:#b3261e"></i><span>flag-a<em>#b3261e 高</em></span></div>
+    <div class="sw"><i style="background:#a35f06"></i><span>flag-b<em>#a35f06 中</em></span></div>
+    <div class="sw"><i style="background:#1b4f96"></i><span>flag-c<em>#1b4f96 低</em></span></div>
+    <div class="sw"><i style="background:#1a1915"></i><span>暗纸<em>#1a1915 暖黑</em></span></div>
+  </div>
+  <p class="small">暗色不用蓝黑，用带纸感的暖黑 <span class="mono">#1a1915</span>，强调色提到 <span class="mono">#7ec9a2</span>。这样它仍然像同一本书的夜读版，不像另一个产品。</p>
+
+  <h3>字阶</h3>
+  <div class="typerow"><div class="k">display / 27 / 600</div><div class="t-display">11月21日</div></div>
+  <div class="typerow"><div class="k">title / 14 / 400</div><div class="t-title">回复东丽关于 PA6 切片交期的邮件</div></div>
+  <div class="typerow"><div class="k">meta / 10.5 / 400</div><div class="t-meta">（A）　逾期 2 天　@采购　+国产替代　备注</div></div>
+  <div class="typerow"><div class="k">data / 11.5 mono</div><div class="t-mono">due:2026-11-22　2/3　L42</div></div>
+  <p class="small">两族分工不变。界面字承担全部文字，等宽字只归读数、键位、行号与日期列。层级靠字号与颜色，不靠字重堆。</p>
+
+  <h3>圆角与投影</h3>
+  <div class="elev">
+    <div class="e1">e1 · 行与控件</div>
+    <div class="e2">e2 · 页头、条子</div>
+    <div class="e3">e3 · 浮纸与命令面板</div>
+  </div>
+  <p class="small">圆角 4 / 6 / 10 / 16，按钮与胶囊走 999。投影永远带一条顶部白色内高光，让光从上方来。</p>
+
+  <h3>动效</h3>
+  <div class="motion">
+    <div class="mox"><b>FAST 120ms</b><span>悬停、按下</span><i><u style="width:32%"></u></i></div>
+    <div class="mox"><b>BASE 200ms</b><span>行收拢、面板淡入</span><i><u style="width:52%"></u></i></div>
+    <div class="mox"><b>SLOW 320ms</b><span>浮窗滑入</span><i><u style="width:78%"></u></i></div>
+    <div class="mox"><b>SPRING 220ms</b><span>命令面板落位</span><i><u style="width:60%"></u></i></div>
+  </div>
+  <p class="small">曲线只有两条：<span class="mono">cubic-bezier(.2,.7,.25,1)</span> 与一个 220ms 的轻微弹簧。没有回弹过冲，没有逐帧位移。</p>
+</section>
+
+<section>
+  <h2><i>05</i>骨架与页面</h2>
+  <p class="sub">外壳只做减法。活动栏并进侧栏，内容收在 980px 的阅读宽度里，窗口再宽也不把日期列推到屏幕边缘。</p>
+
+  <div class="anatomy">
+    <div class="an-row">
+      <span style="color:var(--flag-a);text-align:center">⚑</span>
+      <span class="box"></span>
+      <span class="t">把三家供应商的 UL 黄卡归档</span>
+      <span class="d">今天</span>
+      <span class="q"><span></span><span></span><span></span><span></span></span>
+      <span class="c"></span>
+    </div>
+    <div class="an-legend">
+      <div><b>18px 旗标</b>高红 / 中橙 / 低蓝</div>
+      <div><b>18px 勾选</b>点击即完成</div>
+      <div><b>1fr 标题</b>读数折在下方</div>
+      <div><b>56px 日期</b>等宽右对齐</div>
+      <div><b>88px 动作</b>悬停才出现</div>
+      <div><b>16px 箭头</b>展开子任务</div>
+    </div>
+  </div>
+
+  <figure class="shot">
+    <img src="assets/2026-11-21-行间/列表-明.png" alt="列表 · 明">
+    <figcaption><b>列表 · 明</b> 40px 行高，980px 阅读宽度，日期成列。悬停才出现读数与四枚快捷动作。</figcaption>
+  </figure>
+
+  <div class="two">
+    <figure class="shot">
+      <img src="assets/2026-11-21-行间/列表-暗.png" alt="列表 · 暗">
+      <figcaption><b>列表 · 暗</b> 暖黑纸面，强调色提亮，优先级仍是用户记号。</figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="assets/2026-11-21-行间/悬停-快捷动作.png" alt="悬停">
+      <figcaption><b>悬停态</b> 标题上移，读数与快捷动作各就各位，行高不变。</figcaption>
+    </figure>
+  </div>
+
+  <figure class="shot">
+    <img src="assets/2026-11-21-行间/命令行.png" alt="写一行">
+    <figcaption><b>写一行</b> 输入「写周报 due:明天 @研发 +阻燃项目」，下方回显规范化后的 todo.txt 行，第 15 行。Enter 落盘。</figcaption>
+  </figure>
+
+  <figure class="shot">
+    <img src="assets/2026-11-21-行间/编辑浮窗.png" alt="编辑浮窗">
+    <figcaption><b>编辑浮窗</b> 一页浮纸，400px。优先级是四档刻度尺，底部常驻「原文」，改标题时同步更新。</figcaption>
+  </figure>
+
+  <figure class="shot">
+    <img src="assets/2026-11-21-行间/日历-当天浮纸.png" alt="日历">
+    <figcaption><b>日历与当天浮纸</b> 日期格只放 chip，最多三条加 +N。点格子弹出当天浮纸，勾选即完成，也可以原地加一条。</figcaption>
+  </figure>
+
+  <figure class="shot">
+    <img src="assets/2026-11-21-行间/专注.png" alt="专注">
+    <figcaption><b>专注</b> 只留一条任务，其余压到 14%。顶部一枚「专注中」，Esc 退出。</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2><i>06</i>交互的纪律</h2>
+  <p class="sub">这套界面靠三条纪律成立。任何一条破了，整套语言就退回普通待办。</p>
+
+  <table>
+    <tr><th style="width:130px">键</th><th>动作</th><th>说明</th></tr>
+    <tr><td><code>⌘K</code></td><td><b>写一行</b></td><td>任何页面可用，输入即规范化回显</td></tr>
+    <tr><td><code>/</code></td><td><b>搜索</b></td><td>搜索框非常驻，关闭时一并清空关键词</td></tr>
+    <tr><td><code>↑ ↓</code></td><td><b>移动焦点</b></td><td>行是唯一焦点单位，箭头键改展开</td></tr>
+    <tr><td><code>Enter</code></td><td><b>打开浮窗</b></td><td>与双击标题等价</td></tr>
+    <tr><td><code>X</code></td><td><b>完成</b></td><td>空格不完成，避免误触</td></tr>
+    <tr><td><code>F</code></td><td><b>专注</b></td><td>进入只留当前行，Esc 退出</td></tr>
+    <tr><td><code>Esc</code></td><td><b>逐层退出</b></td><td>弹层 → 搜索 → 专注 → 窗口</td></tr>
+  </table>
+
+  <table>
+    <tr><th style="width:120px">纪律</th><th>规则</th><th>取证</th></tr>
+    <tr><td><b>悬停不重排</b></td><td>只改 opacity 与 transform，不碰 max-height 与盒尺寸</td><td>静止与悬停时每行 top/height 全等，layout-shift 为 0</td></tr>
+    <tr><td><b>颜色只表状态</b></td><td>accent 只给今天、选中、焦点；danger 只给逾期</td><td>优先级用红橙蓝，是用户记号，不算状态</td></tr>
+    <tr><td><b>动效只表变化</b></td><td>完成、生成、落位才动，悬停不动</td><td>关掉动效后功能仍然完整</td></tr>
+  </table>
+
+  <div class="note-box">
+    <b>样张的边界。</b> 它不读写真实文件，分类与列表点击只做提示，日期选择器与设置页留白。可用的部分包括写一行、完成与重复生成、编辑浮窗、命令面板、日历改期拖拽、当天浮纸与专注模式。
+  </div>
+</section>
+
+<section>
+  <h2><i>07</i>怎么落进这个仓库</h2>
+  <p class="sub">这套方案不改数据模型，不碰 todo.txt 的形状。改动集中在 CSS 令牌层与三个组件。</p>
+
+  <table>
+    <tr><th style="width:120px">批次</th><th>改动</th><th>涉及文件</th><th>门禁</th></tr>
+    <tr><td><b>P0</b></td><td>令牌层、行版式、日期列、内容 980 收口</td><td><code>index.css</code> §1、<code>TaskRow.jsx</code>、<code>MainList.jsx</code></td><td><code>qa-css-check</code> <code>qa-contrast</code> <code>TaskRow.test</code></td></tr>
+    <tr><td><b>P0</b></td><td>命令面板与规范化回显</td><td>新增 <code>CommandPalette.jsx</code>，共用 <code>todoParser</code></td><td><code>test:tools</code> 导航与快捷键回归</td></tr>
+    <tr><td><b>P1</b></td><td>浮窗「原文」条、完成墨线与重复生成</td><td><code>EditDrawer.jsx</code>、<code>TaskRow.jsx</code></td><td><code>EditDrawer.test</code> <code>test:guard</code></td></tr>
+    <tr><td><b>P1</b></td><td>专注模式</td><td><code>App.jsx</code>、<code>useHotkeys.js</code></td><td>Esc 逐层与热键回归</td></tr>
+    <tr><td><b>P2</b></td><td>日历 chip 印章、当天浮纸、暗色校准</td><td><code>CalendarView.jsx</code></td><td><code>CalendarView.test</code> <code>qa-contrast</code></td></tr>
+  </table>
+
+  <h3>风险</h3>
+  <table>
+    <tr><th style="width:150px">风险</th><th>判断</th><th>应对</th></tr>
+    <tr><td><b>玻璃的性能</b></td><td>Windows WebView2 上 <code>backdrop-filter</code> 会掉帧，尤其叠在长列表上</td><td>只用于临时层，层数 ≤2；关闭时退化为不透明纸</td></tr>
+    <tr><td><b>980 阅读宽度</b></td><td>超宽屏上右侧会留白，有人会读成「没铺满」</td><td>外壳仍满宽，只有内容收口；这与编辑型产品的阅读宽度一致</td></tr>
+    <tr><td><b>日期列吃宽度</b></td><td>56px 会让长标题更早省略</td><td>标题悬停给 title 提示；浮窗里可读全文</td></tr>
+    <tr><td><b>解析器分叉</b></td><td>命令面板与 QuickAdd 各写一套日期语法会长歪</td><td>抽成 <code>lib/parseInput.js</code>，两侧共用，中文词表进单测</td></tr>
+    <tr><td><b>动效拖慢连点</b></td><td>完成到消失有 200ms 空窗</td><td>状态锁 + 立即落盘，界面只是延迟收拢</td></tr>
+  </table>
+
+  <p><b>顺序建议。</b> 先做 P0 的令牌与日期列，因为它不改任何交互，风险最低，收益最直接。命令面板放第二批，它需要解析器和测试先行。动效最后做，它最容易在上线后调。</p>
+</section>
+
+<section>
+  <h2><i>08</i>不做什么</h2>
+  <p class="sub">一份方案的说服力，一半来自它明确拒绝了什么。</p>
+  <ul class="list-check">
+    <li><span class="tick">×</span><span><b>不做全屏玻璃。</b> 长清单需要稳定的纸面，透光会把文字一起拉走。</span></li>
+    <li><span class="tick">×</span><span><b>不做彩色渐变与光晕。</b> 颜色在这个产品里是稀缺资源，只编码状态。</span></li>
+    <li><span class="tick">×</span><span><b>不把优先级做成红色语义。</b> 红旗是用户自己打的记号，和逾期不是一回事。</span></li>
+    <li><span class="tick">×</span><span><b>不引入 webfont。</b> 系统字栈能保证离线与跨平台一致，花体字只会让读数漂移。</span></li>
+    <li><span class="tick">×</span><span><b>不做 AI 自动生成任务。</b> 这个工具的力量来自可核对。它不为用户猜。</span></li>
+    <li><span class="tick">×</span><span><b>不为窄屏另造一套布局。</b> 只做降级，窄边隐藏侧栏，底部导航保留。</span></li>
+  </ul>
+
+  <div class="quote" style="margin-top:30px">
+    如果只拿走一件事，先拿<b>日期列</b>。它不改变任何数据、任何交互、任何测试，却把「今天还剩什么」从一次 hover 变成一次扫视。
+  </div>
+</section>
+
+<div class="foot">
+  <b>样张</b>　<a href="2026-11-21-行间-交互样张.html">2026-11-21-行间-交互样张.html</a>　单文件，无依赖，⌘K 可写一行。
+  <ol>
+    <li><a href="https://www.wavespace.agency/blog/ui-design-trends">8 UI Design Trends in 2026, Wavespace</a>　Liquid Glass 与深度分层的行业解读，2026-09。</li>
+    <li><a href="https://mockflow.com/blog/ui-design-trends">UI Design Trends 2026, MockFlow</a>　目的性动效与意图驱动入口，2026-07。</li>
+    <li><a href="https://www.beryldesign.fr/en/post/liquid-glass-vs-material-3-expressive">Liquid Glass vs Material 3 Expressive, Beryl Design</a>　WWDC 2026 下调透明度与增加滑杆，2026-07。</li>
+    <li><a href="https://en.wikipedia.org/wiki/Liquid_Glass">Liquid Glass, Wikipedia</a>　语言定义与 2026 年的修正记录。</li>
+  </ol>
+</div>
+
+</div>
+</body>
+</html>

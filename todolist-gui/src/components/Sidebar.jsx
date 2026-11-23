@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { sidebarStats, tasksForView } from '../lib/sortFilter';
 import { colorHex, resolveColorId, useListStyle } from '../lib/listStyle.js';
+import { useGroupLabels } from '../lib/sidebarGroups.js';
 import Icon from './Icon.jsx';
 
 // 可展开的分组（分类 / 标签）。
@@ -14,6 +15,8 @@ import Icon from './Icon.jsx';
 // 分类（@）没有对应物，保持纯文字才不会让人以为它是另一种标签。
 // 2026-11-16：组的标题由「列表」改为「标签」—— 与编辑浮窗的「+标签」字段、
 // 底部导航的「标签」菜单同一口径（"列表"在本应用里专指主区的任务清单）。
+// 2026-11-23：两枚组名可在设置页「侧栏分组」里改（默认 分类 / 标签）；
+// 只是显示名，@ / + 的写法与数据都不动。
 function SidebarGroup({ prefix, label, items, view, onSelect, dotFor }) {
   // 默认展开：首屏直接看到具体分类 / 项目，不必先点一下。
   const [open, setOpen] = useState(true);
@@ -84,6 +87,8 @@ export default function Sidebar({ store, collapsed = false, listMode = 'list', o
 
   // 项目色：配过的用配置，没配过的按名字稳定取一个（见 listStyle.js 的说明）。
   const { colors } = useListStyle();
+  // 组名是显示偏好：设置页改完，侧栏订阅到变化后立刻换字。
+  const { labels } = useGroupLabels();
   const dotFor = useMemo(
     () => (name) => colorHex(resolveColorId(name, colors)),
     [colors]
@@ -143,7 +148,7 @@ export default function Sidebar({ store, collapsed = false, listMode = 'list', o
         <div className="sidebar-group">
           <SidebarGroup
             prefix="@"
-            label="分类"
+            label={labels.contexts}
             items={stats.contexts}
             view={store.view}
             onSelect={store.selectView}
@@ -154,7 +159,7 @@ export default function Sidebar({ store, collapsed = false, listMode = 'list', o
         <div className="sidebar-group">
           <SidebarGroup
             prefix="+"
-            label="标签"
+            label={labels.projects}
             items={stats.projects}
             view={store.view}
             onSelect={store.selectView}

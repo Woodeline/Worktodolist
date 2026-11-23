@@ -8,6 +8,7 @@ vi.mock('react', () => import('../../scripts/qa-react-shim.mjs'));
 
 import { __beginRender, __flushEffects, __resetHooks } from '../../scripts/qa-react-shim.mjs';
 import { useTodoStore } from './useTodoStore.js';
+import { serializeEntries } from '../lib/todoParser.js';
 
 const SEED = {
   'todo.txt': '(A) 2026-09-01 任务A\n(B) 2026-09-01 任务B\n(C) 2026-09-01 任务C\n',
@@ -16,9 +17,35 @@ const SEED = {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // 浏览器 API 替身：目录句柄 / 文件读写 / IndexedDB / 事件监听（可手动触发）
-function installBrowserStubs(seed) {
+//
+// 2026-11-21（B1 / R-14）替身改造：写入从「直写」改成「write 暂存、close 才提交」。
+// 旧替身是 `async write(t) { map[name] = t }` —— 直写、永远成功、永远原子。
+// 那正是「I/O 替身永远成功」的根因：真实链路上 `createWritable()` 的失败点在
+// `close()`（Chromium 先写交换文件、close 时原子提交），而旧替身连一个失败点
+// 都没有，于是「写盘失败」这条路径在单测里从未被走到过。
+//
+// hooks（可选，测试可以中途改同一个对象的字段）：
+//   failOn(name, phase) —— 返回 true 时该次写入失败（phase = 'write' | 'close'）
+//   delayMs             —— 每次 close 前等这么久（模拟慢盘）
+// control（返回值第三个成员）：
+//   hold() / release()  —— 卡住 / 放行所有 close（模拟「写盘在飞」）
+//   writes              —— 成功提交的记录 [{ name, text }]，按提交顺序
+//   attempts            —— 每次尝试 [{ name, phase, ok }]，按发生顺序（含失败）
+//   maxConcurrent       —— 同时打开的写入句柄峰值（串行闸门的直接证据）
+//   resetConcurrency()  —— 清零峰值计数
+function installBrowserStubs(seed, hooks = {}) {
   const fs = { ...seed };
   const listeners = { win: {}, doc: {} };
+  const state = {
+    hold: false,
+    pending: [],
+    writes: [],
+    attempts: [],
+    inflight: 0,
+    maxConcurrent: 0,
+  };
+  const shouldFail = (name, phase) =>
+    typeof hooks.failOn === 'function' && Boolean(hooks.failOn(name, phase));
   const track = (bucket, type, fn) => {
     if (!bucket[type]) bucket[type] = [];
     bucket[type].push(fn);
@@ -31,7 +58,42 @@ function installBrowserStubs(seed) {
       return { async text() { return map[name] ?? ''; } };
     },
     async createWritable() {
-      return { async write(t) { map[name] = t; }, async close() {} };
+      state.inflight += 1;
+      if (state.inflight > state.maxConcurrent) state.maxConcurrent = state.inflight;
+      const staged = [];
+      let settled = false;
+      // 句柄的「关闭」只结算一次：close 抛错也算结束，否则并发计数会漏减。
+      const settle = () => {
+        if (settled) return;
+        settled = true;
+        state.inflight -= 1;
+      };
+      return {
+        async write(chunk) {
+          const failed = shouldFail(name, 'write');
+          state.attempts.push({ name, phase: 'write', ok: !failed });
+          if (failed) {
+            settle();
+            throw new Error(`模拟写入失败：${name} (write)`);
+          }
+          staged.push(chunk);
+        },
+        async close() {
+          if (hooks.delayMs) await sleep(hooks.delayMs);
+          if (state.hold) await new Promise((resolve) => state.pending.push(resolve));
+          const failed = shouldFail(name, 'close');
+          state.attempts.push({ name, phase: 'close', ok: !failed });
+          settle();
+          if (failed) throw new Error(`模拟写入失败：${name} (close)`);
+          // 提交：只有 close 成功，内容才真正落到 map 上。
+          const text = staged.join('');
+          map[name] = text;
+          state.writes.push({ name, text });
+        },
+        async abort() {
+          settle();
+        },
+      };
     },
   });
   const makeDir = (map) => {
@@ -92,22 +154,33 @@ function installBrowserStubs(seed) {
     document: (type) => { (listeners.doc[type] || []).forEach((fn) => fn()); },
     window: (type) => { (listeners.win[type] || []).forEach((fn) => fn()); },
   };
-  return { fs, fire };
+  const control = {
+    hold() { state.hold = true; },
+    release() {
+      state.hold = false;
+      state.pending.splice(0).forEach((resolve) => resolve());
+    },
+    writes: state.writes,
+    attempts: state.attempts,
+    get maxConcurrent() { return state.maxConcurrent; },
+    resetConcurrency() { state.maxConcurrent = state.inflight; },
+  };
+  return { fs, fire, control };
 }
 
 function makeRenderer() {
   return () => { __beginRender(); const api = useTodoStore(); __flushEffects(); return api; };
 }
 
-async function bootStore(seed = SEED) {
+async function bootStore(seed = SEED, hooks = {}) {
   __resetHooks();
-  const { fs, fire } = installBrowserStubs(seed);
+  const { fs, fire, control } = installBrowserStubs(seed, hooks);
   const render = makeRenderer();
   let store = render();
   await store.pickDirectory();
   await sleep(5);
   store = render();
-  return { store, render, fs, fire };
+  return { store, render, fs, fire, control };
 }
 
 const byTitle = (entries, title) => entries.find((e) => e.title === title);
@@ -729,5 +802,292 @@ describe('useTodoStore 取消完成与撤销栈', () => {
 
     store.undo();
     expect(render().todoEntries).toHaveLength(countBefore);
+  });
+});
+
+// ——— B1 · 保存/关窗状态机（R-01 / R-02 / R-14 失败注入） ———
+//
+// 这一组全部是「写盘失败 / 写盘在飞」的注入用例。修复前它们应当红，修复后应当绿。
+// 它们锁的四件事：
+//   ① 写序「先 done 后 todo」—— 中断时最坏是重复，不是丢失；
+//   ② 失败终态是 `unsaved`，绝不报 `saved`（SettingsPage 只认 `unsaved`）；
+//   ③ `revision` 门控 —— 写盘期间进来的新改动不许被上一次 saveNow 标成已保存；
+//   ④ 串行闸门「排队不拒绝」—— 同一时刻最多一次写盘在飞，且后面的改动不丢。
+describe('B1 保存状态机（写盘失败 / 在飞竞态）', () => {
+  it('1.1 done.txt 写失败：内存仍含改动、状态 unsaved、磁盘不含（不得谎称已保存）', async () => {
+    const hooks = { failOn: (name) => name === 'done.txt' };
+    const { store, render, fs } = await bootStore(SEED, hooks);
+    const a = store.todoEntries[0];
+    store.toggleComplete(a);
+    await sleep(420); // fade 180 + 防抖 200 + 余量
+
+    // 最坏结果是「两处都没有」：旧实现先写 todo（成功、任务从清单里被删掉）
+    // 再写 done（失败），于是这条任务当场从两份文件里一起消失。
+    expect(fs['todo.txt']).toContain('任务A');
+    expect(fs['done.txt']).not.toContain('任务A');
+
+    const s = render();
+    // A 语义（方案 §8.1）：失败**不回滚**内存 —— 改动仍在本机内存，等下一次保存机会自愈。
+    // 这也是那句 toast「改动仍在本机内存」唯一为真的前提。
+    expect(s.doneEntries.some((e) => e.id === a.id)).toBe(true);
+    expect(s.saveStatus).toBe('unsaved'); // 灯必须诚实，不许报 saved
+    expect(s.toast.message).toContain('仍在本机内存');
+    expect(s.toast.message).not.toContain('已回滚');
+  });
+
+  it('1.2 todo.txt 写失败：先 done 后 todo，且 done 被补偿写回（不出现「两处都没有」）', async () => {
+    const hooks = { failOn: (name) => name === 'todo.txt' };
+    const { store, render, fs, control } = await bootStore(SEED, hooks);
+    store.toggleComplete(store.todoEntries[0]);
+    await sleep(420);
+
+    // 写序证据：第一次 done.txt 的尝试必须早于第一次 todo.txt 的尝试。
+    const firstDone = control.attempts.findIndex((x) => x.name === 'done.txt');
+    const firstTodo = control.attempts.findIndex((x) => x.name === 'todo.txt');
+    expect(firstDone).toBeGreaterThanOrEqual(0);
+    expect(firstTodo).toBeGreaterThan(firstDone);
+
+    // 补偿证据：done.txt 一度写进了已完成条目，todo.txt 失败后必须写回旧内容。
+    expect(fs['done.txt']).not.toContain('任务A');
+    expect(fs['todo.txt']).toContain('任务A');
+    expect(render().saveStatus).toBe('unsaved');
+  });
+
+  it('1.3 批量中途失败：第二次写盘失败时，第一条已完成记录与第二条任务都不丢', async () => {
+    let failing = false;
+    const hooks = { failOn: (name) => failing && name === 'done.txt' };
+    const { store, render, fs } = await bootStore(SEED, hooks);
+
+    store.toggleComplete(store.todoEntries.find((e) => e.title === '任务A'));
+    await sleep(420);
+    expect(fs['done.txt']).toContain('任务A'); // 第一条已落盘
+
+    failing = true;
+    const s0 = render();
+    const B = s0.todoEntries.find((e) => e.title === '任务B');
+    s0.toggleComplete(B);
+    await sleep(460);
+
+    // 已落盘的第一条不许被这次失败带走
+    expect(fs['done.txt']).toContain('任务A');
+    // 第二条也不许从两份文件里同时消失
+    expect(fs['todo.txt']).toContain('任务B');
+    expect(fs['done.txt']).not.toContain('任务B');
+    expect(render().saveStatus).toBe('unsaved');
+  });
+
+  it('1.4 串行闸门：并发两次 saveNow 同一时刻最多一次写盘在飞', async () => {
+    const { store, render, control } = await bootStore();
+    store.addTask('闸门验证');
+    control.hold();
+    control.resetConcurrency();
+
+    const p1 = store.saveNow(); // 卡在 close
+    const p2 = store.saveNow(); // 必须排队，而不是也开一个写句柄
+    await sleep(20);
+    expect(control.maxConcurrent).toBe(1);
+
+    control.release();
+    await Promise.all([p1, p2]);
+    // 排队不拒绝：第二次进来时内容已经不脏了，靠内容比对短路成 no-op。
+    expect(control.maxConcurrent).toBe(1);
+    expect(render().saveStatus).toBe('saved');
+  });
+
+  it('1.5 写盘失败后按撤销：任务只出现一行（stale undo 不得再插一次）', async () => {
+    // delete 分支的幂等守卫（`todo.some(id) → return`）的守门人 / 回归基线。
+    //   · 当前 A 语义（失败**不回滚**内存）下，「内存里已有 A + 撤销记录里也有 A」
+    //     这个组合不会出现，所以删掉守卫这条用例**仍然是绿的** —— 它是**基线**；
+    //   · 若将来恢复「失败回滚内存」（B 语义，2026-11-21 曾短暂采用并实测过），
+    //     该组合立刻复活，守卫被删则这条用例变红（B 版实测 length 1 vs 2）。
+    // 两种语义都写在这里，免得下次改语义又要翻一次口径。
+    const hooks = { failOn: (name) => name === 'todo.txt' };
+    const { store, render, fs } = await bootStore(SEED, hooks);
+    const A = store.todoEntries[0];
+    store.deleteTask(A);
+    await sleep(420); // 删除已提交，但写盘失败
+    const failed = render();
+    expect(failed.saveStatus).toBe('unsaved');
+    // A 语义：不回滚 → A 仍处于「已删除」（不在 todo 列表里），只是磁盘上还在
+    expect(failed.todoEntries.some((e) => e.id === A.id)).toBe(false);
+    expect(fs['todo.txt']).toContain('任务A');
+
+    hooks.failOn = () => false; // 磁盘恢复
+    store.undo(); // 用户点 toast 上的「撤销」
+    await sleep(560);
+
+    const s = render();
+    expect(s.todoEntries.filter((e) => e.id === A.id)).toHaveLength(1);
+    expect(s.todoEntries.map((e) => e.title).sort()).toEqual(['任务A', '任务B', '任务C']);
+    expect(fs['todo.txt'].split('\n').filter((l) => l.includes('任务A'))).toHaveLength(1);
+    expect(s.saveStatus).toBe('saved');
+  });
+
+  it('2.1 写盘在飞时的新改动不得被旧的 saveNow 标成 saved（revision 门控）', async () => {
+    const { store, render, control } = await bootStore();
+    store.addTask('第一条');
+    control.hold();
+    const saving = store.saveNow();
+    await sleep(20);
+    store.addTask('第二条'); // 写盘途中来了新改动
+    control.release();
+    await saving;
+
+    // 旧实现会在这里写 'saved'：状态灯说「已保存」，而「第二条」还在内存里。
+    expect(render().saveStatus).toBe('unsaved');
+    expect(render().todoEntries.some((e) => e.title === '第二条')).toBe(true);
+
+    // 让排队的那次接力落盘
+    await sleep(300);
+    expect(render().saveStatus).toBe('saved');
+  });
+
+  it('2.2 没有 dirty 时 saveNow 不得点亮 lastSavedAt（否则每次切窗都触发 git 自动提交）', async () => {
+    const { store, render } = await bootStore();
+    await store.saveNow(); // 刚载入完，内存与磁盘一致
+    expect(render().lastSavedAt).toBeNull();
+
+    store.addTask('有改动');
+    await store.saveNow();
+    const first = render().lastSavedAt;
+    expect(first).toBeInstanceOf(Date);
+
+    await sleep(5);
+    await store.saveNow(); // 这次没有 dirty
+    expect(render().lastSavedAt).toBe(first);
+  });
+
+  it('2.3 转 hidden 时无条件兜底刷盘：旧实现会把未落盘改动误标成 saved 而跳过这一步', async () => {
+    const { store, render, fs, fire, control } = await bootStore();
+    store.addTask('晚到的改动');
+    control.hold();
+    const saving = store.saveNow();
+    await sleep(20);
+    store.addTask('写盘途中新增');
+    control.release();
+    await saving; // 旧实现：这一刻状态被置成 saved → 下面的 flush 直接跳过
+
+    globalThis.document.visibilityState = 'hidden';
+    fire.document('visibilitychange');
+    await sleep(60);
+    globalThis.document.visibilityState = 'visible';
+
+    // 页面关掉时磁盘上必须含有最后那一条改动
+    expect(fs['todo.txt']).toContain('写盘途中新增');
+    expect(render().saveStatus).toBe('saved');
+  });
+  it('2.4 冲突覆盖期间来了新改动：不得把新改动标成已保存（与 runSave 同一套门控）', async () => {
+    const { store, render, control } = await bootStore();
+    store.addTask('第一条');
+    control.hold();
+    const overwriting = store.resolveConflictKeepLocal(); // 卡在 close
+    await sleep(20);
+    store.addTask('第二条'); // 覆盖途中来了新改动
+    control.release();
+    await overwriting;
+
+    // 写进磁盘的是「第一条」那个快照，不能宣称已保存
+    expect(render().saveStatus).toBe('unsaved');
+    await sleep(320);
+    expect(render().saveStatus).toBe('saved');
+  });
+});
+
+// ——— B1 · R-05a：重载后重置状态 ———
+// 重载意味着「内存换成了磁盘的另一份真相」：上一份数据留下的撤销栈 / 快照 /
+// 挂起定时器全部作废。否则 Ctrl+Z 会按不存在的下标插回任务（磁盘上已经有的那一条
+// 会变成两份），挂起的 fade 提交也会在重载之后再写一次盘。
+//
+// 取证要点：撤销记录里的 task 是整个对象快照（delete 分支），插回时不靠 id 匹配，
+// 所以「重载后 undo 仍然生效」一定能被观察到 —— 这比「靠 id 失效自然变成 no-op」
+// 可靠得多（运行时 id 由行文本现算、带序号，重解析本来就会变，那会让用例假绿）。
+describe('B1 重载后重置（R-05a）', () => {
+  it('5.1 重载后撤销栈为空：Ctrl+Z 不改 todo / done 任何一行', async () => {
+    const { store, render, fs } = await bootStore();
+    const A = store.todoEntries[0];
+    store.deleteTask(A);
+    await sleep(420); // fade 180 + 防抖 200 + 余量
+    expect(fs['todo.txt']).not.toContain('任务A');
+    expect(render().todoEntries).toHaveLength(2);
+
+    await store.manualReload();
+    expect(render().todoEntries).toHaveLength(2);
+
+    store.undo(); // 栈已清空 → 什么都不该发生
+    await sleep(260); // 若真的插回了，这里还会连带写一次盘
+    const final = render();
+    expect(final.todoEntries).toHaveLength(2);
+    expect(final.todoEntries.some((e) => e.title === '任务A')).toBe(false);
+    expect(fs['todo.txt']).not.toContain('任务A');
+  });
+
+  it('5.3 重载会清掉 fade 窗口里挂起的提交（重载后不得再写盘）', async () => {
+    const { store, render, control } = await bootStore();
+    store.toggleComplete(store.todoEntries[0]); // 180ms 后才 commit，此刻还在 fade 窗口内
+    await store.manualReload();
+    expect(render().saveStatus).toBe('saved');
+
+    const attemptsAfterReload = control.attempts.length;
+    await sleep(320); // 原定时器(180)若没被清掉，会在这里 commit → 防抖 200ms 后写盘
+
+    // 挂起的提交若还活着，就会在重载之后把状态改回 unsaved 并再写一次盘。
+    expect(render().saveStatus).toBe('saved');
+    expect(control.attempts.length).toBe(attemptsAfterReload);
+    expect(render().todoEntries).toHaveLength(3);
+    expect(render().doneEntries).toHaveLength(0);
+  });
+});
+
+// ——— B1 稳态与自愈（A 语义：失败不回滚内存） ———
+// QA 与 team-lead 各自实测确认的三件事（决定了这里每个期望值的方向）：
+//   · 坏盘时状态灯**全程** unsaved（因为内存 != 磁盘，dirty 一直为真）；
+//   · `MAX_SAVE_RETRIES` **真生效**：1 次首发 + 至多 3 次重试，约 920ms 后停止；
+//   · 磁盘恢复后**不需要用户重做**，下一次保存机会就把改动补写进去。
+describe('B1 稳态与自愈（1.6a / 1.6b）', () => {
+  it('1.6a 坏盘稳态：1200ms 后仍 unsaved，改动在内存、磁盘始终没有', async () => {
+    const hooks = { failOn: (name) => name === 'done.txt' };
+    const { store, render, fs, control } = await bootStore(SEED, hooks);
+    const base = control.attempts.length;
+    const task = store.todoEntries[0];
+    store.toggleComplete(task);
+    await sleep(1200);
+
+    const s = render();
+    // 无条件断言：A 语义下这里必须仍是 unsaved。写成 `if (saved)` 分支会在
+    // 回归成「永远 saved」时被静默跳过 —— 正是我们这一轮在抓的那类漏洞。
+    expect(s.saveStatus).toBe('unsaved');
+    expect(s.doneEntries.some((e) => e.id === task.id)).toBe(true); // 内存【含】
+    expect(fs['done.txt']).not.toContain('任务A'); // 磁盘【不含】
+    expect(s.toast.message).not.toContain('已回滚'); // 文案不得声称回滚
+    // 内存 ≠ 磁盘：这正是 A 的设计，也是它能自愈的前提。
+    expect(serializeEntries(s.doneEntries)).not.toBe(fs['done.txt']);
+
+    // 有界重试真的在重试：1 次首发 + 至多 3 次重试，之后必须停下来（无写入风暴）。
+    const attempts = control.attempts.length - base;
+    expect(attempts).toBeGreaterThanOrEqual(3);
+    expect(attempts).toBeLessThanOrEqual(5);
+    await sleep(600); // 再等一段，确认已经停止
+    expect(control.attempts.length - base).toBe(attempts);
+  });
+
+  it('1.6b 磁盘恢复后无需用户重做：下一次保存机会即自动补写', async () => {
+    const hooks = { failOn: (name) => name === 'done.txt' };
+    const { store, render, fs } = await bootStore(SEED, hooks);
+    const task = store.todoEntries[0];
+    store.toggleComplete(task);
+    await sleep(1200);
+    expect(render().saveStatus).toBe('unsaved');
+    expect(fs['done.txt']).not.toContain('任务A');
+
+    hooks.failOn = () => false; // 盘恢复，用户什么都没做
+    await store.saveNow(); // 「下一次保存机会」
+    await sleep(80);
+
+    const s = render();
+    expect(s.saveStatus).toBe('saved');
+    expect(fs['done.txt']).toContain('任务A'); // 改动自己补写进去了，没有重做
+    expect(serializeEntries(s.todoEntries)).toBe(fs['todo.txt']);
+    expect(serializeEntries(s.doneEntries)).toBe(fs['done.txt']);
+    expect(s.lastSavedAt).toBeInstanceOf(Date);
   });
 });

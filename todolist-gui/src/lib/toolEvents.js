@@ -1,12 +1,13 @@
 // 工具动作写入会话事件线 —— 「我做过什么」只有一条时间线。
 //
-// append-only NDJSON，按本地日历日归档为 session-YYYY-MM-DD.ndjson（ts 存 UTC ISO）：
+// append-only NDJSON，按本地日历月归档为
+// `.worktodolist/sessions/session-YYYY-MM.ndjson`（ts 存 UTC ISO）：
 //   tool.open    打开了某个工具
 //   tool.run     执行了一次计算/查询
 //   tool.export  导出了文件
 //   tool.apply   把提议确认落盘了
 //
-// seq 严格递增：每次写入前用 nextSeq 读当日最大值 +1，保证同一份日志里不出现重号。
+// seq 严格递增：每次写入前用 nextSeq 读当月最大值 +1，保证同一份日志里不出现重号。
 import dayjs from 'dayjs';
 import { appendEvent, loadEvents, makeEvent } from './eventLog.js';
 

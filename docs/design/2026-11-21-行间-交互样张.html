@@ -1,0 +1,2547 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>行间 · Interline — 交互样张</title>
+<style>
+/* ==========================================================================
+   行间 · Interline  交互样张 v1 / 2026-11-21
+   材质三叠：桌面 desk / 纸面 paper / 浮纸 slip
+   墨度三档：ink / ink-2 / ink-3
+   一格：右对齐的日期栏（账本的金额栏）
+   一线：完成时从左往右划出的墨线
+   ========================================================================== */
+
+:root {
+  --f-ui: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif;
+  --f-mono: "SF Mono", "SFMono-Regular", "JetBrains Mono", "Cascadia Mono", "Consolas", ui-monospace, monospace;
+
+  --fs-display: 27px;
+  --fs-title: 14px;
+  --fs-body: 13px;
+  --fs-nav: 12.5px;
+  --fs-meta: 10.5px;
+  --fs-key: 10px;
+
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+  --r-pill: 999px;
+
+  --row-h: 40px;
+
+  --ease: cubic-bezier(.2, .7, .25, 1);
+  --spring: linear(0, .32 14%, .66 28%, .88 42%, 1.01 58%, 1.02 72%, 1 100%);
+  --t-fast: 120ms;
+  --t-base: 200ms;
+  --t-slow: 320ms;
+}
+
+[data-theme="light"] {
+  --stage: #dcd8ce;
+  --stage-2: #e7e4dc;
+  --paper: #fbfaf6;
+  --paper-2: #f1efe7;
+  --paper-3: #e7e4d9;
+  --ink: #1b1a15;
+  --ink-2: #45433a;
+  --ink-3: #716d62;
+  --line: #e6e2d8;
+  --line-2: #cec8b9;
+  --ctl: #89847a;
+  --accent: #1d6b4e;
+  --accent-ink: #175641;
+  --accent-soft: #e4efe8;
+  --danger: #ab2a1e;
+  --danger-soft: #f7e5e2;
+  --flag-a: #b3261e;
+  --flag-b: #a35f06;
+  --flag-c: #1b4f96;
+  --flag-a-soft: #f3e0dd;
+  --flag-b-soft: #f4e8d6;
+  --flag-c-soft: #e2eaf6;
+  --shadow-1: 0 1px 0 rgba(255,255,255,.82) inset, 0 1px 2px rgba(32,28,18,.06);
+  --shadow-2: 0 1px 0 rgba(255,255,255,.9) inset, 0 14px 32px -14px rgba(32,28,18,.28), 0 2px 6px rgba(32,28,18,.05);
+  --shadow-3: 0 40px 100px -36px rgba(28,24,16,.5), 0 2px 14px rgba(28,24,16,.12);
+  --scrim: rgba(28, 26, 20, .32);
+  --glass: rgba(251, 250, 246, .94);
+  --frame-ring: rgba(0, 0, 0, .12);
+  --grain: .55;
+  --stage-ink: #3d3a33;
+}
+
+[data-theme="dark"] {
+  --stage: #0a0907;
+  --stage-2: #12110d;
+  --paper: #1a1915;
+  --paper-2: #232119;
+  --paper-3: #2c2a21;
+  --ink: #ece7da;
+  --ink-2: #c4bdaf;
+  --ink-3: #968f80;
+  --line: #2c2a22;
+  --line-2: #413d32;
+  --ctl: #7d7869;
+  --accent: #7ec9a2;
+  --accent-ink: #a2dbbd;
+  --accent-soft: #17332a;
+  --danger: #ef7a6b;
+  --danger-soft: #33201c;
+  --flag-a: #ef7a6b;
+  --flag-b: #dfa257;
+  --flag-c: #83abe2;
+  --flag-a-soft: #33201c;
+  --flag-b-soft: #302517;
+  --flag-c-soft: #1b2635;
+  --shadow-1: 0 1px 0 rgba(255,255,255,.07) inset, 0 1px 2px rgba(0,0,0,.5);
+  --shadow-2: 0 1px 0 rgba(255,255,255,.08) inset, 0 18px 40px -18px rgba(0,0,0,.8), 0 2px 8px rgba(0,0,0,.4);
+  --shadow-3: 0 44px 110px -30px rgba(0,0,0,.85), 0 2px 16px rgba(0,0,0,.5);
+  --scrim: rgba(0, 0, 0, .56);
+  --glass: rgba(26, 25, 21, .92);
+  --frame-ring: rgba(255, 255, 255, .08);
+  --grain: .38;
+  --stage-ink: #c9c3b4;
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; height: 100%; }
+
+body {
+  background:
+    radial-gradient(1200px 700px at 50% -10%, var(--stage-2), transparent 70%),
+    var(--stage);
+  color: var(--stage-ink);
+  font-family: var(--f-ui);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--grain);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='140' height='140' filter='n' opacity='.28'/></svg>");
+  mix-blend-mode: multiply;
+  z-index: 0;
+}
+
+[data-theme="dark"] body::before { mix-blend-mode: screen; opacity: .18; }
+
+/* ---------- 舞台与说明条 ---------- */
+
+.stage {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 0 24px 24px;
+}
+
+.docbar {
+  flex: 0 0 60px;
+  width: min(1320px, 100%);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.doc-tag {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  letter-spacing: .02em;
+}
+.doc-tag b {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: .18em;
+  color: var(--stage-ink);
+}
+.doc-tag span {
+  font: 10px/1 var(--f-mono);
+  color: var(--stage-ink);
+  opacity: .55;
+  letter-spacing: .1em;
+}
+
+.doc-ctl {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.seg {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: var(--r-pill);
+  background: rgba(255,255,255,.4);
+  border: 1px solid rgba(0,0,0,.06);
+  box-shadow: 0 1px 0 rgba(255,255,255,.6) inset;
+}
+[data-theme="dark"] .seg { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.08); }
+.seg button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: 11px/1 var(--f-ui);
+  padding: 5px 10px;
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  opacity: .55;
+  transition: background var(--t-fast), opacity var(--t-fast), color var(--t-fast);
+}
+.seg button.on {
+  background: var(--paper);
+  color: var(--ink);
+  opacity: 1;
+  box-shadow: 0 1px 2px rgba(0,0,0,.12);
+}
+[data-theme="dark"] .seg button.on { background: #2a2820; color: var(--ink); }
+
+.doc-btn {
+  border: 1px solid rgba(0,0,0,.08);
+  background: rgba(255,255,255,.36);
+  color: inherit;
+  font: 11px/1 var(--f-ui);
+  padding: 6px 12px;
+  border-radius: var(--r-pill);
+  cursor: pointer;
+}
+[data-theme="dark"] .doc-btn { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.08); }
+.doc-btn:hover { border-color: var(--accent); color: var(--accent-ink); }
+.doc-link { text-decoration: none; display: inline-flex; align-items: center; }
+
+.doc-hint {
+  font: 10px/1 var(--f-mono);
+  opacity: .5;
+  margin-left: 4px;
+  letter-spacing: .04em;
+}
+
+/* ---------- 窗口 ---------- */
+
+.frame {
+  width: min(1320px, 100%);
+  height: min(880px, calc(100vh - 84px));
+  margin: 0 auto;
+  border-radius: 18px;
+  background: var(--paper);
+  box-shadow: 0 60px 120px -50px rgba(0,0,0,.55), 0 0 0 1px var(--frame-ring);
+  overflow: hidden;
+  position: relative;
+}
+
+.app {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  color: var(--ink);
+  overflow: hidden;
+  font-size: var(--fs-body);
+}
+
+/* ---------- 标题栏 ---------- */
+
+.titlebar {
+  flex: 0 0 38px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--paper) 86%, #fff) 0%, var(--paper) 100%);
+  border-bottom: 1px solid var(--line);
+}
+
+[data-theme="dark"] .titlebar {
+  background: linear-gradient(180deg, #201f1a 0%, var(--paper) 100%);
+}
+
+.lights { display: flex; gap: 7px; }
+.lights i {
+  width: 11px; height: 11px; border-radius: 50%;
+  box-shadow: inset 0 0 0 .5px rgba(0,0,0,.18);
+}
+.lights i:nth-child(1) { background: #ff5f57; }
+.lights i:nth-child(2) { background: #febc2e; }
+.lights i:nth-child(3) { background: #28c840; }
+
+.tb-title {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  letter-spacing: .04em;
+}
+
+.tb-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tb-file {
+  font: 10px/1 var(--f-mono);
+  color: var(--ink-3);
+  letter-spacing: .04em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tb-file::before {
+  content: "";
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--accent);
+  opacity: .8;
+}
+
+.tb-btn {
+  width: 24px; height: 24px;
+  border: 0; background: transparent;
+  color: var(--ink-3);
+  border-radius: 6px;
+  display: grid; place-items: center;
+  cursor: pointer;
+}
+.tb-btn:hover { background: var(--paper-2); color: var(--ink); }
+
+/* ---------- 骨架 ---------- */
+
+.shell {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 214px minmax(0, 1fr);
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  padding: 14px 12px 10px;
+  background: var(--paper-2);
+  border-right: 1px solid var(--line);
+  min-height: 0;
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 8px 16px;
+}
+.brand b {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: .2em;
+  color: var(--ink);
+}
+.brand span {
+  font: 9px/1 var(--f-mono);
+  letter-spacing: .14em;
+  color: var(--ink-3);
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 7px;
+  color: var(--ink-2);
+  cursor: pointer;
+  position: relative;
+  font-size: var(--fs-nav);
+  user-select: none;
+}
+.nav:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.nav.on { background: var(--paper); color: var(--ink); box-shadow: var(--shadow-1); }
+.nav.on::before {
+  content: "";
+  position: absolute;
+  left: -12px; top: 7px; bottom: 7px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.nav .ic { flex: 0 0 16px; width: 16px; height: 16px; opacity: .72; }
+.nav.on .ic { opacity: 1; color: var(--accent-ink); }
+.nav .cnt {
+  margin-left: auto;
+  font: 10.5px/1 var(--f-mono);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.side-sep { height: 1px; background: var(--line); margin: 12px 8px 10px; }
+
+.side-head {
+  font: 9.5px/1 var(--f-mono);
+  letter-spacing: .16em;
+  color: var(--ink-3);
+  padding: 8px 8px 7px;
+}
+
+.dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 .5px rgba(0,0,0,.18);
+}
+.dot.a { background: #a9542f; }
+.dot.b { background: #4c6a92; }
+.dot.c { background: #7d7a3f; }
+
+.side-foot {
+  margin-top: auto;
+  padding-top: 10px;
+  display: flex;
+  gap: 2px;
+}
+.foot-btn {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-3);
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.foot-btn span { white-space: nowrap; }
+.foot-btn:hover { background: var(--paper); color: var(--ink); }
+.foot-btn.on { color: var(--accent-ink); background: var(--accent-soft); }
+
+/* ---------- 工作区 ---------- */
+
+.workspace {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--paper);
+}
+
+.topbar {
+  flex: 0 0 46px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 0 10px;
+}
+
+.crumb { font-size: 13px; font-weight: 600; letter-spacing: .01em; }
+.crumb em {
+  font-style: normal;
+  font-weight: 400;
+  color: var(--ink-3);
+  font: 10.5px/1 var(--f-mono);
+  margin-left: 9px;
+  letter-spacing: .04em;
+}
+
+.searchbox {
+  display: none;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  width: 240px;
+  padding: 0 9px;
+  border-radius: var(--r-pill);
+  background: var(--paper-2);
+  border: 1px solid var(--line-2);
+}
+.searchbox input {
+  flex: 1; min-width: 0;
+  border: 0; background: transparent; outline: none;
+  font: 12px/1 var(--f-ui); color: var(--ink);
+}
+.searchbox input::placeholder { color: var(--ink-3); }
+.topbar.searching .searchbox { display: flex; }
+.topbar.searching .crumb { display: none; }
+
+.top-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.icon-btn {
+  width: 26px; height: 26px;
+  border: 0; background: transparent;
+  color: var(--ink-2);
+  border-radius: 6px;
+  display: grid; place-items: center;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.icon-btn:hover { background: var(--paper-2); color: var(--ink); }
+
+.pal-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 5px 0 11px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-2);
+  background: var(--paper-2);
+  color: var(--ink-2);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: border-color var(--t-fast), color var(--t-fast), background var(--t-fast);
+}
+.pal-pill:hover { border-color: var(--accent); color: var(--accent-ink); background: var(--paper); }
+.pal-pill kbd {
+  font: 9px/1 var(--f-mono);
+  padding: 3px 4px;
+  border-radius: 4px;
+  border: 1px solid var(--line-2);
+  background: var(--paper);
+  color: var(--ink-3);
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: 28px;
+  scrollbar-width: thin;
+}
+.scroll::-webkit-scrollbar { width: 10px; }
+.scroll::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border: 3px solid var(--paper);
+  border-radius: 6px;
+}
+
+/* ---------- 页头 ---------- */
+
+.page-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 16px 10px 6px;
+}
+.hd-date {
+  font-size: var(--fs-display);
+  font-weight: 600;
+  letter-spacing: -.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.hd-sub {
+  font-size: 11px;
+  color: var(--ink-3);
+  padding-bottom: 2px;
+  letter-spacing: .04em;
+}
+.hd-right {
+  margin-left: auto;
+  text-align: right;
+}
+.hd-count {
+  font: 10px/1.5 var(--f-mono);
+  color: var(--ink-3);
+  letter-spacing: .04em;
+  font-variant-numeric: tabular-nums;
+}
+.hd-prog {
+  width: 96px;
+  height: 2px;
+  margin: 7px 0 0 auto;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.hd-prog i {
+  display: block; height: 100%;
+  background: var(--accent);
+  transition: width var(--t-slow) var(--ease);
+}
+
+/* ---------- 分组与行 ---------- */
+
+.ghead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 26px;
+  width: 100%;
+  max-width: 980px;
+  margin: 12px auto 0;
+  padding: 0 10px;
+}
+.ghead span {
+  font: 9.5px/1 var(--f-mono);
+  letter-spacing: .14em;
+  color: var(--ink-3);
+}
+.ghead span.is-danger { color: var(--danger); }
+.ghead i { flex: 1; height: 1px; background: var(--line); }
+.ghead b {
+  font: 400 10px/1 var(--f-mono);
+  color: var(--ink-3);
+}
+
+.rows { width: 100%; max-width: 980px; margin: 0 auto; padding: 2px 10px 0; }
+
+.row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px 18px minmax(0, 1fr) 56px 88px 16px;
+  align-items: center;
+  gap: 10px;
+  height: var(--row-h);
+  padding: 0 10px;
+  border-radius: 8px;
+  transition: background var(--t-fast), height var(--t-base) var(--ease), opacity var(--t-base);
+  cursor: default;
+  outline: none;
+}
+.row:hover, .row.is-active { background: var(--paper-2); }
+.row.is-active { box-shadow: inset 0 0 0 1px var(--line-2); }
+
+.flag {
+  width: 18px; height: 18px;
+  display: grid; place-items: center;
+}
+.flag svg { width: 14px; height: 14px; }
+.f-a { color: var(--flag-a); }
+.f-b { color: var(--flag-b); }
+.f-c { color: var(--flag-c); }
+
+.cb {
+  width: 18px; height: 18px;
+  border: 0; background: transparent;
+  padding: 0;
+  cursor: pointer;
+  display: grid; place-items: center;
+}
+.cb .box {
+  width: 15px; height: 15px;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px var(--ctl);
+  display: grid; place-items: center;
+  transition: box-shadow var(--t-fast), background var(--t-fast);
+  background: transparent;
+}
+.cb:hover .box { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.cb .box svg {
+  width: 9px; height: 9px;
+  color: var(--paper);
+  opacity: 0;
+  transform: scale(.6);
+  transition: opacity var(--t-fast), transform var(--t-fast) var(--spring);
+}
+.cb:focus-visible .box { box-shadow: inset 0 0 0 1.5px var(--accent), 0 0 0 3px var(--accent-soft); }
+
+.body { min-width: 0; transition: transform var(--t-base) var(--ease); }
+.title {
+  font-size: var(--fs-title);
+  line-height: 20px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+.title::after {
+  content: "";
+  position: absolute;
+  left: 0; top: 50%;
+  height: 1px;
+  width: 100%;
+  background: var(--ink-3);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 240ms var(--ease);
+}
+
+.meta {
+  position: absolute;
+  left: 66px;
+  right: 190px;
+  bottom: 1px;
+  height: 12px;
+  line-height: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-meta);
+  color: var(--ink-3);
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity var(--t-fast), transform var(--t-fast);
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.row.is-active .meta { opacity: 1; transform: none; }
+.row.is-active .body { transform: translateY(-6px); }
+.row:hover .meta, .row:focus-visible .meta { opacity: 1; transform: none; }
+.row:hover .body, .row:focus-visible .body { transform: translateY(-6px); }
+
+.meta .m { display: flex; align-items: center; gap: 4px; max-width: 15ch; overflow: hidden; text-overflow: ellipsis; }
+.meta .m svg { width: 11px; height: 11px; opacity: .8; flex: 0 0 11px; }
+.meta .sep { width: 1px; height: 8px; background: var(--line-2); }
+.meta .ctx::before { content: "@"; opacity: .55; }
+.meta .prj::before { content: "+"; opacity: .55; }
+.meta .sub-count { font-family: var(--f-mono); font-size: 9.5px; }
+.meta .is-danger { color: var(--danger); }
+
+.date {
+  text-align: right;
+  font: 11.5px/1 var(--f-mono);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .01em;
+  white-space: nowrap;
+}
+.date.is-today { color: var(--accent-ink); }
+.date.is-overdue { color: var(--danger); }
+
+.quick {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-fast);
+}
+.row:hover .quick, .row:focus-visible .quick { opacity: 1; pointer-events: auto; }
+.qbtn {
+  width: 21px; height: 21px;
+  border: 0; background: transparent;
+  color: var(--ink-3);
+  border-radius: 4px;
+  display: grid; place-items: center;
+  cursor: pointer;
+}
+.qbtn:hover { background: var(--paper-3); color: var(--ink); }
+.qbtn.danger:hover { color: var(--danger); }
+.qbtn svg { width: 13px; height: 13px; }
+
+.exp {
+  width: 16px; height: 16px;
+  display: grid; place-items: center;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.exp svg { width: 12px; height: 12px; transition: transform var(--t-base) var(--ease); }
+.row.open .exp svg { transform: rotate(90deg); }
+
+/* 子任务 */
+
+.kids {
+  position: relative;
+  margin-left: 47px;
+  padding-left: 14px;
+}
+.kids::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 10px;
+  width: 1px;
+  background: var(--line-2);
+}
+.child {
+  position: relative;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  height: calc(var(--row-h) - 6px);
+  padding: 0 8px 0 0;
+  border-radius: 6px;
+  cursor: default;
+}
+.child::before {
+  content: "";
+  position: absolute;
+  left: -14px; top: 50%;
+  width: 10px; height: 1px;
+  background: var(--line-2);
+}
+.child:hover { background: var(--paper-2); }
+.child .cb2 {
+  width: 14px; height: 14px;
+  border: 0; background: transparent; padding: 0;
+  display: grid; place-items: center; cursor: pointer;
+}
+.child .box2 {
+  width: 12px; height: 12px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--ctl);
+  display: grid; place-items: center;
+}
+.child .box2 svg { width: 7px; height: 7px; color: var(--paper); opacity: 0; }
+.child .t2 {
+  font-size: 12px;
+  color: var(--ink-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.child .done-flag {
+  font: 9px/1 var(--f-mono);
+  color: var(--ink-3);
+  text-align: right;
+}
+.child.is-done .t2 { color: var(--ink-3); text-decoration: line-through; text-decoration-color: var(--ink-3); }
+.child.is-done .box2 { background: transparent; box-shadow: inset 0 0 0 1px var(--line-2); }
+.child.is-done .box2 svg { opacity: 1; color: var(--ink-3); }
+
+/* 完成动画 */
+
+.row.done .title { color: var(--ink-3); }
+.row.done .title::after { transform: scaleX(1); }
+.row.done .cb .box { background: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.row.done .cb .box svg { opacity: 1; transform: scale(1); }
+.row.done .date { color: var(--ink-3); }
+.row.done .flag { opacity: .4; }
+
+.row.leaving {
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.row.spawned { animation: ink-settle .9s var(--ease); }
+.row.spawned .meta { opacity: 1; transform: none; }
+.row.spawned .body { transform: translateY(-6px); }
+@keyframes ink-settle {
+  0% { background: var(--accent-soft); }
+  60% { background: var(--accent-soft); }
+  100% { background: transparent; }
+}
+
+/* 日志视图 */
+
+.row.log-row { grid-template-columns: 18px 18px minmax(0, 1fr) 56px 88px 16px; }
+.row.log-row .cb { visibility: hidden; }
+.row.log-row .title { color: var(--ink-2); }
+
+/* ---------- 空态 ---------- */
+
+.empty {
+  padding: 64px 20px;
+  text-align: center;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.empty b { display: block; font-weight: 500; color: var(--ink-2); margin-bottom: 6px; font-size: 13px; }
+
+/* ---------- 专注 ---------- */
+
+.app.focus .sidebar,
+.app.focus .topbar,
+.app.focus .page-head .hd-right,
+.app.focus .ghead { opacity: .16; transition: opacity var(--t-base); }
+.app.focus .row:not(.is-active) { opacity: .14; }
+.app.focus .row:not(.is-active) .cb { visibility: hidden; }
+.focus-strip {
+  position: absolute;
+  top: 50px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-6px);
+  display: none;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 6px 5px 12px;
+  border-radius: var(--r-pill);
+  background: var(--paper);
+  box-shadow: var(--shadow-2);
+  font-size: 11px;
+  color: var(--ink-2);
+  z-index: 20;
+}
+.app.focus .focus-strip { display: flex; animation: drop-in var(--t-base) var(--ease); }
+@keyframes drop-in { from { opacity: 0; transform: translateX(-50%) translateY(-12px); } }
+.focus-strip kbd {
+  font: 9px/1 var(--f-mono);
+  padding: 3px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--line-2);
+  color: var(--ink-3);
+}
+
+/* ---------- 日历 ---------- */
+
+.cal-wrap { flex: 1; min-height: 0; overflow: auto; width: 100%; max-width: 980px; margin: 0 auto; padding: 4px 10px 18px; display: none; }
+.app.is-cal .cal-wrap { display: block; }
+.app.is-cal .scroll { display: none; }
+
+.cal-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 4px 14px;
+}
+.cal-month { font-size: 22px; font-weight: 600; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.cal-month span { font-size: 12px; font-weight: 400; color: var(--ink-3); margin-left: 6px; }
+.cal-nav { margin-left: auto; display: flex; gap: 4px; }
+.cal-nav button {
+  width: 26px; height: 26px; border: 1px solid var(--line); background: transparent;
+  border-radius: 6px; color: var(--ink-2); cursor: pointer; display: grid; place-items: center;
+}
+.cal-nav button:hover { background: var(--paper-2); }
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.cal-wd {
+  height: 26px;
+  display: flex; align-items: center;
+  padding-left: 8px;
+  font: 9.5px/1 var(--f-mono);
+  letter-spacing: .18em;
+  color: var(--ink-3);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-2);
+}
+.cal-cell {
+  position: relative;
+  min-height: 92px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 6px 6px 8px;
+  background: var(--paper);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--t-fast);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-top: 0; border-left: 0;
+  font-family: var(--f-ui);
+}
+.cal-cell:hover { background: var(--paper-2); }
+.cal-cell.is-out { background: color-mix(in srgb, var(--paper-2) 60%, var(--paper)); }
+.cal-cell.is-weekend { background: color-mix(in srgb, var(--paper-2) 70%, var(--paper)); }
+.cal-cell.is-out .dnum { color: var(--ink-3); opacity: .45; }
+.cal-cell.is-today { background: var(--accent-soft); }
+.cal-cell.is-drop { box-shadow: inset 0 0 0 2px var(--accent); }
+.dnum {
+  font: 11px/1 var(--f-mono);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  display: flex; align-items: center; gap: 5px;
+}
+.cal-cell.is-today .dnum {
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.cal-cell.is-today .dnum::after {
+  content: "今天";
+  font: 9px/1 var(--f-ui);
+  color: var(--accent-ink);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  padding: 0 5px 0 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+  cursor: grab;
+  border: 0;
+  text-align: left;
+  font-family: var(--f-ui);
+}
+.chip::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 2px;
+  background: var(--chip-fg);
+}
+.chip.c-a { background: var(--flag-a-soft); color: var(--flag-a); --chip-fg: var(--flag-a); }
+.chip.c-b { background: var(--flag-b-soft); color: var(--flag-b); --chip-fg: var(--flag-b); }
+.chip.c-c { background: var(--flag-c-soft); color: var(--flag-c); --chip-fg: var(--flag-c); }
+.chip.c-n { background: color-mix(in srgb, var(--ink-3) 12%, var(--paper)); color: var(--ink-2); --chip-fg: var(--ink-3); }
+.chip-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip.done { opacity: .5; text-decoration: line-through; }
+.chip.is-dragging { opacity: .35; }
+.chip:hover { filter: brightness(.97); box-shadow: inset 0 0 0 1px var(--chip-fg); }
+.cal-more { font: 9px/1 var(--f-mono); color: var(--ink-3); padding-left: 2px; }
+
+/* 当天浮纸 */
+
+.daypop {
+  position: absolute;
+  width: 288px;
+  background: var(--paper);
+  border-radius: 12px;
+  box-shadow: var(--shadow-3);
+  z-index: 30;
+  overflow: hidden;
+  animation: drop-in-sm 160ms var(--ease);
+}
+@keyframes drop-in-sm { from { opacity: 0; transform: translateY(-4px) scale(.99); } }
+.daypop-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.daypop-head b { font-size: 12px; font-weight: 600; }
+.daypop-head span { font: 9.5px/1 var(--f-mono); color: var(--ink-3); margin-left: auto; }
+.daypop-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+.daypop-row:hover { background: var(--paper-2); }
+.daypop-row .cbx {
+  width: 13px; height: 13px; flex: 0 0 13px;
+  border-radius: 4px; box-shadow: inset 0 0 0 1px var(--ctl);
+  display: grid; place-items: center;
+}
+.daypop-row .cbx svg { width: 8px; height: 8px; opacity: 0; }
+.daypop-row:hover .cbx { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.daypop-row .tt { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.daypop-row .pr { font: 9px/1 var(--f-mono); color: var(--ink-3); }
+.daypop-add {
+  display: flex; align-items: center; gap: 6px;
+  padding: 9px 12px;
+  font-size: 11px; color: var(--ink-2); cursor: pointer;
+  background: var(--paper-2);
+}
+.daypop-add:hover { color: var(--accent-ink); }
+.daypop-add svg { width: 12px; height: 12px; }
+
+/* ---------- 浮纸抽屉 ---------- */
+
+.drawer-wrap {
+  position: absolute; inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px;
+  background: var(--scrim);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-base);
+  z-index: 40;
+}
+.drawer-wrap.on { opacity: 1; pointer-events: auto; }
+
+.drawer {
+  width: 400px;
+  max-width: 100%;
+  height: 100%;
+  background: var(--paper);
+  border-radius: 14px;
+  box-shadow: var(--shadow-3), 0 0 0 1px var(--line-2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: translateX(14px) scale(.995);
+  transition: transform var(--t-slow) var(--ease);
+}
+.drawer-wrap.on .drawer { transform: none; }
+
+.dr-head {
+  padding: 16px 14px 0;
+}
+.dr-path {
+  font: 9.5px/1 var(--f-mono);
+  color: var(--ink-3);
+  letter-spacing: .06em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dr-path .sp { margin-left: auto; }
+.dr-titleline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.dr-title {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font: 600 17px/1.35 var(--f-ui);
+  color: var(--ink);
+  letter-spacing: -.01em;
+  padding: 2px 0 5px;
+  border-bottom: 1px solid transparent;
+  outline: none;
+  transition: border-color var(--t-fast);
+}
+.dr-title:hover { border-bottom-color: var(--line-2); }
+.dr-title:focus { border-bottom-color: var(--accent); }
+.dr-close {
+  width: 24px; height: 24px; flex: 0 0 24px;
+  border: 0; background: transparent; border-radius: 6px;
+  color: var(--ink-3); cursor: pointer; display: grid; place-items: center;
+}
+.dr-close:hover { background: var(--paper-2); color: var(--ink); }
+
+.dr-strip {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 3px;
+  background: var(--paper-2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.strip-cell {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  font: 10.5px/1 var(--f-mono);
+  color: var(--ink-2);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 4px;
+}
+.strip-cell:hover { background: var(--paper); color: var(--ink); }
+.strip-cell.is-empty { color: var(--ink-3); }
+.strip-cell.p-a { color: var(--flag-a); }
+.strip-cell.p-b { color: var(--flag-b); }
+.strip-cell.p-c { color: var(--flag-c); }
+.strip-cell.is-danger { color: var(--danger); }
+.strip-cell svg { width: 11px; height: 11px; flex: 0 0 11px; opacity: .75; }
+
+.dr-body { flex: 1; min-height: 0; overflow: auto; padding: 6px 14px 12px; display: flex; flex-direction: column; }
+
+.dr-row { flex: 0 0 auto; display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 38px;
+  border-bottom: 1px solid var(--line);
+}
+.dr-key {
+  font: 9.5px/1 var(--f-mono);
+  letter-spacing: .1em;
+  color: var(--ink-3);
+}
+
+.prio-ruler {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--line-2);
+  padding-bottom: 1px;
+}
+.pr-btn {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 5px 0 6px;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  font: 11px/1 var(--f-ui);
+  color: var(--ink-3);
+  cursor: pointer;
+  position: relative;
+}
+.pr-btn svg { width: 12px; height: 12px; }
+.pr-btn::after {
+  content: "";
+  position: absolute;
+  left: 6px; right: 6px; bottom: -1px;
+  height: 2px;
+  background: currentColor;
+  transform: scaleX(0);
+  transition: transform var(--t-base) var(--ease);
+}
+.pr-btn.on::after { transform: scaleX(1); }
+.pr-btn.on.f-a { color: var(--flag-a); }
+.pr-btn.on.f-b { color: var(--flag-b); }
+.pr-btn.on.f-c { color: var(--flag-c); }
+.pr-btn.on.f-none { color: var(--ink); }
+
+.chiprow { display: flex; flex-wrap: wrap; gap: 4px; }
+.tchip {
+  height: 24px;
+  padding: 0 9px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-2);
+  background: transparent;
+  font: 10.5px/1 var(--f-ui);
+  color: var(--ink-2);
+  cursor: pointer;
+  display: flex; align-items: center; gap: 5px;
+  white-space: nowrap;
+  transition: border-color var(--t-fast), color var(--t-fast), background var(--t-fast);
+}
+.tchip svg { width: 12px; height: 12px; }
+.tchip:hover { border-color: var(--ink-3); color: var(--ink); }
+.tchip.on { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-soft); }
+.tchip.is-empty { color: var(--ink-3); border-style: dashed; }
+.tchip .x { opacity: .6; font-style: normal; }
+
+.note {
+  width: 100%;
+  min-height: 76px;
+  border: 0;
+  resize: none;
+  outline: none;
+  font: 12px/24px var(--f-ui);
+  color: var(--ink-2);
+  padding: 2px 0 0;
+  background:
+    repeating-linear-gradient(180deg, transparent 0 23px, var(--line) 23px 24px);
+}
+
+.rawline {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.raw-key {
+  flex: 0 0 auto;
+  font: 9px/1 var(--f-mono);
+  letter-spacing: .14em;
+  color: var(--ink-3);
+}
+.raw-code {
+  flex: 1;
+  min-width: 0;
+  font: 10.5px/1.6 var(--f-mono);
+  color: var(--ink-2);
+  word-break: break-all;
+}
+
+.sub-list { display: flex; flex-direction: column; gap: 1px; }
+.sub-item {
+  display: flex; align-items: center; gap: 8px;
+  height: 26px; font-size: 12px; color: var(--ink-2);
+}
+.sub-item .bx {
+  width: 13px; height: 13px; border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--ctl);
+  flex: 0 0 13px; cursor: pointer;
+  display: grid; place-items: center;
+}
+.sub-item .bx svg { width: 8px; height: 8px; color: var(--paper); opacity: 0; }
+.sub-item.done .bx { background: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.sub-item.done .bx svg { opacity: 1; }
+.sub-item.done span { color: var(--ink-3); text-decoration: line-through; }
+.sub-add {
+  display: flex; align-items: center; gap: 6px;
+  height: 28px; color: var(--ink-3); font-size: 11px;
+  cursor: pointer;
+}
+.sub-add:hover { color: var(--accent-ink); }
+
+.dr-foot {
+  flex: 0 0 52px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-top: 1px solid var(--line);
+  background: var(--paper-2);
+}
+.dirty-dot {
+  display: none;
+  font: 10px/1 var(--f-mono);
+  color: var(--ink-3);
+  align-items: center;
+  gap: 5px;
+}
+.dirty-dot::before {
+  content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--flag-b);
+}
+.drawer.is-dirty .dirty-dot { display: flex; }
+.btn {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 7px;
+  border: 1px solid var(--line-2);
+  background: transparent;
+  color: var(--ink-2);
+  font: 11.5px/1 var(--f-ui);
+  cursor: pointer;
+  display: flex; align-items: center; gap: 5px;
+}
+.btn:hover { border-color: var(--ink-3); color: var(--ink); }
+.btn-primary {
+  margin-left: auto;
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+.btn-primary:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-del { color: var(--danger); border-color: transparent; }
+.btn-del:hover { border-color: var(--danger); color: var(--danger); }
+
+/* ---------- 命令行 ---------- */
+
+.pal-wrap {
+  position: absolute; inset: 0;
+  background: var(--scrim);
+  backdrop-filter: blur(3px);
+  display: none;
+  z-index: 60;
+}
+.pal-wrap.on { display: block; animation: fade-in 140ms var(--ease); }
+@keyframes fade-in { from { opacity: 0; } }
+
+.palette {
+  position: absolute;
+  top: 96px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 588px;
+  max-width: calc(100% - 48px);
+  background: var(--glass);
+  backdrop-filter: blur(26px) saturate(1.35);
+  -webkit-backdrop-filter: blur(26px) saturate(1.35);
+  border-radius: 14px;
+  box-shadow: var(--shadow-3), 0 0 0 1px var(--line-2);
+  overflow: hidden;
+  animation: pal-in 220ms var(--spring);
+}
+@keyframes pal-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-8px) scale(.985); }
+}
+.pal-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 14px 14px 16px;
+}
+.pal-caret {
+  width: 18px; height: 18px; flex: 0 0 18px;
+  color: var(--accent);
+  display: grid; place-items: center;
+}
+.pal-input {
+  flex: 1;
+  min-width: 0;
+  border: 0; outline: none; background: transparent;
+  font: 400 16px/1.4 var(--f-ui);
+  color: var(--ink);
+}
+.pal-input::placeholder { color: var(--ink-3); font-size: 15px; }
+.pal-esc {
+  font: 9px/1 var(--f-mono);
+  color: var(--ink-3);
+  border: 1px solid var(--line-2);
+  padding: 3px 5px;
+  border-radius: 4px;
+}
+
+.pal-echo {
+  margin: 0 12px 10px;
+  padding: 9px 11px;
+  background: var(--paper-2);
+  border-radius: 8px;
+}
+.pal-label {
+  font: 9px/1 var(--f-mono);
+  letter-spacing: .14em;
+  color: var(--ink-3);
+  margin-bottom: 7px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pal-label i { font-style: normal; color: var(--accent-ink); }
+.pal-code {
+  font: 12.5px/1.5 var(--f-mono);
+  color: var(--ink);
+  word-break: break-all;
+  min-height: 19px;
+}
+.tk-prio { color: var(--flag-a); }
+.tk-key { color: var(--ink-3); }
+.tk-due { color: var(--accent-ink); }
+.tk-tag { color: var(--ink-2); }
+.tk-prj { color: var(--ink-2); }
+.tk-empty { color: var(--ink-3); }
+
+.pal-list { padding: 0 6px 6px; }
+.pal-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 7px;
+  color: var(--ink-2);
+  font-size: 12px;
+  cursor: pointer;
+}
+.pal-item:hover, .pal-item.sel { background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink); }
+.pal-item svg { width: 14px; height: 14px; opacity: .65; }
+.pal-item kbd {
+  margin-left: auto;
+  font: 9px/1 var(--f-mono);
+  color: var(--ink-3);
+  border: 1px solid var(--line-2);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+.pal-foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--line);
+  font: 9.5px/1 var(--f-mono);
+  color: var(--ink-3);
+  letter-spacing: .04em;
+}
+.pal-foot b { font-weight: 400; color: var(--ink-2); }
+
+/* ---------- toast ---------- */
+
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%) translateY(10px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 34px;
+  padding: 0 6px 0 14px;
+  border-radius: var(--r-pill);
+  background: var(--paper);
+  box-shadow: var(--shadow-2), 0 0 0 1px var(--line-2);
+  font-size: 11.5px;
+  color: var(--ink-2);
+  z-index: 70;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-base), transform var(--t-base) var(--ease);
+}
+.toast.on { opacity: 1; transform: translateX(-50%); pointer-events: auto; }
+.toast button {
+  border: 0; background: transparent;
+  color: var(--accent-ink);
+  font: 11px/1 var(--f-ui);
+  padding: 5px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.toast button:hover { background: var(--accent-soft); }
+
+.flag svg path:nth-child(2), .pr-btn svg path:nth-child(2) { fill: currentColor; fill-opacity: .16; }
+
+/* ---------- 窄边 ---------- */
+
+@media (max-width: 960px) {
+  .shell { grid-template-columns: 64px minmax(0, 1fr); }
+  .sidebar { padding: 10px 8px; }
+  .brand b { font-size: 13px; letter-spacing: .1em; }
+  .brand span { display: none; }
+  .nav { justify-content: center; padding: 0; }
+  .nav span, .nav .cnt, .side-head, .side-sep { display: none; }
+  .nav.on::before { left: -8px; }
+  .foot-btn span { display: none; }
+  .doc-hint { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 1ms !important; animation-duration: 1ms !important; }
+}
+
+svg.ic { display: block; width: 14px; height: 14px; flex: 0 0 auto; }
+
+body.still *, body.still *::before, body.still *::after { animation: none !important; transition: none !important; }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <header class="docbar">
+    <div class="doc-tag"><b>行间</b><span>INTERLINE · 交互样张 v1</span></div>
+    <div class="doc-ctl">
+      <div class="seg" id="segTheme">
+        <button data-v="light" class="on">明</button>
+        <button data-v="dark">暗</button>
+      </div>
+      <div class="seg" id="segDensity">
+        <button data-v="compact">紧凑</button>
+        <button data-v="std" class="on">标准</button>
+        <button data-v="airy">宽松</button>
+      </div>
+      <a class="doc-btn doc-link" href="2026-11-21-行间-UI设计方案.html" target="_blank">方案</a>
+      <button class="doc-btn" id="focusBtn">专注</button>
+      <span class="doc-hint">⌘K 写一行　/ 搜索　↑↓ 移动　Enter 打开　X 完成</span>
+    </div>
+  </header>
+
+  <div class="frame">
+    <div class="app" id="app" data-density="std">
+
+      <div class="titlebar">
+        <div class="lights"><i></i><i></i><i></i></div>
+        <div class="tb-title">行间 · 待办</div>
+        <div class="tb-right">
+          <div class="tb-file">todo.txt · 已保存</div>
+          <button class="tb-btn" title="置顶"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M12 3v8M8.5 11h7l1 5h-9l1-5zM12 16v5"/></svg></button>
+          <button class="tb-btn" title="设置"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg></button>
+        </div>
+      </div>
+
+      <div class="shell">
+        <aside class="sidebar" id="sidebar"></aside>
+
+        <main class="workspace">
+          <div class="topbar" id="topbar">
+            <div class="crumb" id="crumb">今日<em>4 项</em></div>
+            <div class="searchbox">
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;color:var(--ink-3)"><circle cx="11" cy="11" r="6.5"/><path d="M15.8 15.8L20 20"/></svg>
+              <input id="searchInput" placeholder="搜任务、分类、列表" spellcheck="false">
+              <span style="font:9px/1 var(--f-mono);color:var(--ink-3)">esc</span>
+            </div>
+            <div class="top-actions">
+              <button class="icon-btn" id="searchBtn" title="搜索（/）"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="M15.8 15.8L20 20"/></svg></button>
+              <button class="icon-btn" id="sortBtn" title="排序"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M4 17l3 3 3-3M17 20V4M14 7l3-3 3 3"/></svg></button>
+              <button class="pal-pill" id="palBtn">写一行<kbd>⌘K</kbd></button>
+            </div>
+          </div>
+
+          <div class="scroll" id="scroll">
+            <header class="page-head" id="pageHead"></header>
+            <div id="list"></div>
+          </div>
+
+          <div class="cal-wrap" id="calWrap"></div>
+
+          <div class="focus-strip">
+            <span>专注中 · 只做这一件</span>
+            <kbd>esc</kbd>
+          </div>
+        </main>
+      </div>
+
+      <div class="drawer-wrap" id="drawerWrap">
+        <div class="drawer" id="drawer"></div>
+      </div>
+
+      <div class="pal-wrap" id="palWrap">
+        <div class="palette">
+          <div class="pal-line">
+            <span class="pal-caret"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 10-10-3-3-10 10-1 4zM14 6l3 3"/></svg></span>
+            <input class="pal-input" id="palInput" placeholder="写一行，due:明天 @研发 +阻燃项目" spellcheck="false" autocomplete="off">
+            <span class="pal-esc">esc</span>
+          </div>
+          <div class="pal-echo">
+            <div class="pal-label">写入 todo.txt <i id="palLine"></i></div>
+            <div class="pal-code" id="palCode"></div>
+          </div>
+          <div class="pal-list" id="palList"></div>
+          <div class="pal-foot"><span><b>Enter</b> 写入</span><span><b>Esc</b> 关闭</span><span>纯文本，一行一条</span></div>
+        </div>
+      </div>
+
+      <div class="toast" id="toast"><span id="toastMsg"></span><button id="toastAct">撤销</button></div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- 图标 ---------- */
+const P = {
+  check: '<path d="M4 12.5l5 5 11-11"/>',
+  flag: '<path d="M6 21V4"/><path d="M6 4l11 3.6-11 3.6"/>',
+  cal: '<rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/>',
+  grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  hist: '<path d="M12 7.5V12l3.5 2M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4 4.5v3.2h3.2"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="M15.8 15.8L20 20"/>',
+  sort: '<path d="M7 4v16M4 17l3 3 3-3M17 20V4M14 7l3-3 3 3"/>',
+  grip: '<path d="M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01"/>',
+  chev: '<path d="M9 5l7 7-7 7"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  pen: '<path d="M4 20l4-1 10-10-3-3-10 10-1 4zM14 6l3 3"/>',
+  trash: '<path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13"/>',
+  target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
+  pin: '<path d="M9 3h6M12 3v8M8.5 11h7l1 5h-9l1-5zM12 16v5"/>',
+  note: '<path d="M5 4h9l5 5v11H5z"/><path d="M14 4v5h5"/>',
+  repeat: '<path d="M4 11a7 7 0 0 1 12-4l2 2M20 13a7 7 0 0 1-12 4l-2-2"/><path d="M18 5v4h-4M6 19v-4h4"/>',
+  sub: '<path d="M4 6h4M4 12h4M4 18h4M11 18h9M11 12h9M16 6h4"/>',
+  corner: '<path d="M20 4v9a4 4 0 0 1-4 4H5M9 13l-4 4 4 4"/>',
+  sun: '<circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M5 5l1.8 1.8M17.2 17.2L19 19M19 5l-1.8 1.8M6.8 17.2L5 19"/>',
+};
+
+const ic = (name, cls = 'ic') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${P[name] || ''}</svg>`;
+const pinIco = ic('pin'), gearIco = ic('gear'), searchIco = ic('search'), sortIco = ic('sort'), penIco = ic('pen');
+
+/* ---------- 数据 ---------- */
+const pad = n => String(n).padStart(2, '0');
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const TODAY_D = new Date(); TODAY_D.setHours(0, 0, 0, 0);
+const T = iso(TODAY_D);
+const D = n => { const d = new Date(TODAY_D); d.setDate(d.getDate() + n); return iso(d); };
+
+let seq = 0;
+const uid = () => 'n' + (++seq);
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+let tasks = [
+  { id: 't1', t: '回复东丽关于 PA6 切片交期的邮件', due: T, prio: 'A', ctx: '采购', prj: '国产替代', note: 'DDP 报价要含关税与码头费', subs: [] },
+  { id: 't2', t: 'PC/ABS 阻燃配方 A3 样条送检', due: T, prio: 'B', ctx: '研发', prj: '阻燃项目', subs: [
+    { t: '称料并记录批号', done: true }, { t: '双螺杆挤出 3 kg', done: true }, { t: '注塑 12 根样条', done: false } ], note: '' },
+  { id: 't3', t: '整理 10 月磷腈阻燃剂对比数据', due: D(-2), prio: 'A', ctx: '研发', prj: '阻燃项目' },
+  { id: 't4', t: '给女儿打印期中复习提纲', due: T, ctx: '家庭' },
+  { id: 't5', t: '审阅供应商 UL 黄卡更新', due: D(1), prio: 'B', ctx: '研发' },
+  { id: 't6', t: '周报：国产替代进度同步', due: D(3), ctx: '研发', rec: '每周', note: '重点写三家的纳期变化' },
+  { id: 't7', t: '预约下周材料评审会', due: D(4), prio: 'C' },
+  { id: 't8', t: '更新 SIBS 增韧实验记录', due: D(2), ctx: '研发', note: '缺口冲击与 Tg 两组数据' },
+  { id: 't9', t: '寄出 3 组样条给第三方实验室', done: true, doneAt: T },
+  { id: 't10', t: '确认 DC30M 报价单', done: true, doneAt: T },
+  { id: 't11', t: '核对 GMA 接枝率检测报告', due: D(-5), prio: 'B', ctx: '研发' },
+  { id: 't12', t: '把三家供应商的 UL 黄卡归档', due: T, prio: 'C', ctx: '采购', prj: '阻燃项目' },
+  { id: 't13', t: '整理本月原料单价对比表', due: T, ctx: '采购' },
+  { id: 't14', t: '女儿科学展板的打印与裁边', due: D(6), ctx: '家庭' },
+];
+
+const state = {
+  view: 'today',
+  month: new Date(TODAY_D.getFullYear(), TODAY_D.getMonth(), 1),
+  selected: null,
+  search: '',
+  focus: false,
+  expanded: { t2: true },
+  sort: 'date',
+  draftId: null,
+  dirty: false,
+};
+
+const VIEW_LABEL = { today: '今日', upcoming: '即将到期', all: '全部', calendar: '日历', log: '日志' };
+
+/* ---------- 日期显示 ---------- */
+const WEEK = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+function dObj(s) { return new Date(s + 'T00:00:00'); }
+function humanDate(s) {
+  const diff = Math.round((dObj(s) - TODAY_D) / 86400000);
+  if (diff === 0) return '今天';
+  if (diff === 1) return '明天';
+  if (diff === 2) return '后天';
+  if (diff === -1) return '昨天';
+  return `${dObj(s).getMonth() + 1}月${dObj(s).getDate()}日`;
+}
+function colDate(s) {
+  const diff = Math.round((dObj(s) - TODAY_D) / 86400000);
+  if (diff === 0) return '今天';
+  if (diff === 1) return '明天';
+  if (diff > 1 && diff < 6) return WEEK[dObj(s).getDay()];
+  return `${dObj(s).getMonth() + 1}/${dObj(s).getDate()}`;
+}
+function overdueDays(s) { return Math.round((TODAY_D - dObj(s)) / 86400000); }
+
+/* ---------- 过滤 ---------- */
+function counts() {
+  const open = tasks.filter(t => !t.done);
+  return {
+    today: open.filter(t => t.due && t.due <= T).length,
+    upcoming: open.filter(t => t.due && t.due > T).length,
+    all: open.length,
+  };
+}
+
+function visible() {
+  let list = tasks.filter(t => !t.done);
+  if (state.view === 'today') list = list.filter(t => t.due && t.due <= T);
+  if (state.view === 'upcoming') list = list.filter(t => t.due && t.due > T);
+  if (state.view === 'all') list = list.filter(t => t.due || !t.due);
+  if (state.search) {
+    const q = state.search.toLowerCase();
+    list = list.filter(t => (t.t + ' ' + (t.ctx || '') + ' ' + (t.prj || '')).toLowerCase().includes(q));
+  }
+  const pv = { A: 0, B: 1, C: 2 };
+  list.sort((a, b) => {
+    if (state.view === 'all') {
+      const ad = a.due || '9999', bd = b.due || '9999';
+      if (ad !== bd) return ad < bd ? -1 : 1;
+    }
+    const ap = a.prio ? pv[a.prio] : 3, bp = b.prio ? pv[b.prio] : 3;
+    return ap - bp || (a.t > b.t ? 1 : -1);
+  });
+  return list;
+}
+
+function visibleDone() {
+  return tasks.filter(t => t.done).sort((a, b) => (b.doneAt || '') > (a.doneAt || '') ? 1 : -1);
+}
+
+/* ---------- 侧栏 ---------- */
+function renderSidebar() {
+  const c = counts();
+  const nav = (key, icon, label, cnt) => `
+    <div class="nav ${state.view === key ? 'on' : ''}" data-view="${key}">
+      ${ic(icon)}<span>${label}</span>${cnt != null ? `<span class="cnt">${cnt}</span>` : ''}
+    </div>`;
+  const cats = [
+    ['研发', 'a', tasks.filter(t => !t.done && t.ctx === '研发').length],
+    ['采购', 'b', tasks.filter(t => !t.done && t.ctx === '采购').length],
+    ['家庭', 'c', tasks.filter(t => !t.done && t.ctx === '家庭').length],
+  ];
+  document.getElementById('sidebar').innerHTML = `
+    <div class="brand"><b>行间</b><span>TODO</span></div>
+    ${nav('today', 'check', '今日', c.today)}
+    ${nav('upcoming', 'clock', '即将到期', c.upcoming)}
+    ${nav('all', 'grid', '全部', c.all)}
+    ${nav('calendar', 'cal', '日历', null)}
+    ${nav('log', 'hist', '日志', null)}
+    <div class="side-sep"></div>
+    <div class="side-head">分类</div>
+    ${cats.map(([n, k, v]) => `<div class="nav" data-ctx="${n}"><span class="dot ${k}"></span><span>${n}</span><span class="cnt">${v}</span></div>`).join('')}
+    <div class="side-head" style="padding-top:14px">列表</div>
+    <div class="nav" data-prj="阻燃项目"><span class="dot a"></span><span>阻燃项目</span><span class="cnt">${tasks.filter(t => !t.done && t.prj === '阻燃项目').length}</span></div>
+    <div class="nav" data-prj="国产替代"><span class="dot b"></span><span>国产替代</span><span class="cnt">${tasks.filter(t => !t.done && t.prj === '国产替代').length}</span></div>
+    <div class="side-foot">
+      <button class="foot-btn ${state.focus ? 'on' : ''}" id="sideFocus">${ic('target')}<span>专注</span></button>
+      <button class="foot-btn">${ic('gear')}<span>设置</span></button>
+      <button class="foot-btn" id="sideTheme">${ic('sun')}<span>外观</span></button>
+    </div>`;
+}
+
+/* ---------- 页头 ---------- */
+function renderHead() {
+  const el = document.getElementById('pageHead');
+  const c = counts();
+  const doneToday = tasks.filter(t => t.done && t.doneAt === T).length;
+  if (state.view === 'today') {
+    el.innerHTML = `
+      <div class="hd-date">${TODAY_D.getMonth() + 1}月${TODAY_D.getDate()}日</div>
+      <div class="hd-sub">${WEEK[TODAY_D.getDay()]}</div>
+      <div class="hd-right">
+        <div class="hd-count">${c.today} 项待办 · ${doneToday} 项已完成 · ${doneToday}/${c.today + doneToday}</div>
+        <div class="hd-prog"><i style="width:${Math.round(doneToday / Math.max(1, c.today + doneToday) * 100)}%"></i></div>
+      </div>`;
+    return;
+  }
+  if (state.view === 'log') {
+    el.innerHTML = `<div class="hd-date" style="font-size:22px">日志</div><div class="hd-sub">已完成 · 按完成日</div>
+      <div class="hd-right"><div class="hd-count">${visibleDone().length} 条记录</div></div>`;
+    return;
+  }
+  const map = { upcoming: '即将到期', all: '全部' };
+  el.innerHTML = `<div class="hd-date" style="font-size:22px">${map[state.view]}</div>
+    <div class="hd-sub">${state.view === 'upcoming' ? '按截止日升序' : '按截止日排序'}</div>
+    <div class="hd-right"><div class="hd-count">${state.view === 'upcoming' ? c.upcoming : c.all} 项</div></div>`;
+}
+
+/* ---------- 行 ---------- */
+function metaOf(t) {
+  const items = [];
+  if (t.prio) items.push(`<span class="m" style="font-family:var(--f-mono);font-size:9.5px;color:var(--flag-${t.prio.toLowerCase()})">(${t.prio})</span>`);
+  if (t.due && t.due < T) items.push(`<span class="m is-danger">逾期 ${overdueDays(t.due)} 天</span>`);
+  if (t.subs && t.subs.length) {
+    const d = t.subs.filter(s => s.done).length;
+    items.push(`<span class="m"><span class="sub-count">${d}/${t.subs.length}</span></span>`);
+  }
+  if (t.ctx) items.push(`<span class="m ctx">${esc(t.ctx)}</span>`);
+  if (t.prj) items.push(`<span class="m prj">${esc(t.prj)}</span>`);
+  if (t.rec) items.push(`<span class="m">${ic('repeat')}${t.rec}</span>`);
+  if (t.note) items.push(`<span class="m">${ic('note')}备注</span>`);
+  return items.length ? items.join('<span class="sep"></span>') : '';
+}
+
+function rowHTML(t) {
+  const over = t.due && t.due < T;
+  const kids = t.subs && t.subs.length;
+  const open = !!state.expanded[t.id];
+  const dateHtml = t.done
+    ? `<span class="date">${colDate(t.doneAt || T)}</span>`
+    : `<span class="date ${t.due === T ? 'is-today' : over ? 'is-overdue' : ''}">${t.due ? colDate(t.due) : '—'}</span>`;
+  const log = state.view === 'log';
+  return `
+  <div class="row ${log ? 'log-row' : ''} ${state.selected === t.id ? 'is-active' : ''} ${open ? 'open' : ''} ${t._spawn ? 'spawned' : ''}" data-id="${t.id}" tabindex="-1">
+    <span class="flag ${t.prio ? 'f-' + t.prio.toLowerCase() : ''}">${t.prio ? ic('flag') : ''}</span>
+    <button class="cb" aria-label="完成 ${esc(t.t)}"><span class="box">${ic('check')}</span></button>
+    <div class="body"><span class="title">${esc(t.t)}</span></div>
+    <div class="meta">${metaOf(t)}</div>
+    ${dateHtml}
+    <div class="quick">
+      ${log ? '' : `
+      <button class="qbtn" data-act="open" title="编辑">${ic('pen')}</button>
+      <button class="qbtn" data-act="cycle" title="换优先级">${ic('flag')}</button>
+      <button class="qbtn" data-act="done" title="完成">${ic('check')}</button>
+      <button class="qbtn danger" data-act="del" title="删除">${ic('trash')}</button>`}
+    </div>
+    <div class="exp">${kids ? ic('chev') : ''}</div>
+  </div>
+  ${kids && open ? `<div class="kids">${t.subs.map((s, i) => `
+    <div class="child ${s.done ? 'is-done' : ''}" data-sub="${t.id}:${i}">
+      <button class="cb2"><span class="box2">${ic('check')}</span></button>
+      <span class="t2">${esc(s.t)}</span>
+    </div>`).join('')}</div>` : ''}`;
+}
+
+function renderList() {
+  const host = document.getElementById('list');
+  if (state.view === 'log') {
+    host.innerHTML = `<div class="rows">${visibleDone().map(rowHTML).join('')}</div>`;
+    return;
+  }
+  const list = visible();
+  if (!list.length) {
+    host.innerHTML = `<div class="empty"><b>这里空了</b>${state.search ? '没有匹配的任务' : '按 ⌘K 写一行'}</div>`;
+    return;
+  }
+  let html = '';
+  if (state.view === 'today') {
+    const od = list.filter(t => t.due && t.due < T);
+    const td = list.filter(t => !t.due || t.due >= T);
+    if (od.length) html += `<div class="ghead"><span class="is-danger">逾期</span><i></i><b>${od.length}</b></div><div class="rows">${od.map(rowHTML).join('')}</div>`;
+    if (td.length) html += `<div class="ghead"><span>今天</span><i></i><b>${td.length}</b></div><div class="rows">${td.map(rowHTML).join('')}</div>`;
+  } else {
+    html += `<div class="ghead"><span>${VIEW_LABEL[state.view]}</span><i></i><b>${list.length}</b></div><div class="rows">${list.map(rowHTML).join('')}</div>`;
+  }
+  host.innerHTML = html;
+}
+
+/* ---------- 汇总渲染 ---------- */
+function renderAll() {
+  renderSidebar();
+  renderHead();
+  renderList();
+  renderChrome();
+  syncMode();
+}
+
+function renderChrome() {
+  const c = counts();
+  const el = document.getElementById('crumb');
+  el.innerHTML = `${VIEW_LABEL[state.view]}<em>${state.view === 'log' ? visibleDone().length + ' 条' : c[state.view] != null ? c[state.view] + ' 项' : ''}</em>`;
+  document.getElementById('app').classList.toggle('is-cal', state.view === 'calendar');
+  document.getElementById('app').classList.toggle('focus', state.focus);
+  if (state.view === 'calendar') renderCalendar();
+  tasks.forEach(t => delete t._spawn);
+}
+
+function syncMode() {
+  const app = document.getElementById('app');
+  app.dataset.density = app.dataset.density;
+}
+
+/* ---------- 日历 ---------- */
+function renderCalendar() {
+  const wrap = document.getElementById('calWrap');
+  const m = state.month;
+  const first = new Date(m.getFullYear(), m.getMonth(), 1);
+  const start = new Date(first);
+  start.setDate(first.getDate() - ((first.getDay() + 6) % 7));
+  let cells = '';
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    const s = iso(d);
+    const out = d.getMonth() !== m.getMonth();
+    const isToday = s === T;
+    const weekend = (d.getDay() === 0 || d.getDay() === 6) && !isToday;
+    const dayTasks = tasks.filter(t => !t.done && t.due === s);
+    const chips = dayTasks.slice(0, 3).map(t =>
+      `<button class="chip c-${t.prio ? t.prio.toLowerCase() : 'n'}" draggable="true" data-chip="${t.id}" title="${esc(t.t)}"><span class="chip-t">${esc(t.t)}</span></button>`).join('');
+    const more = dayTasks.length > 3 ? `<span class="cal-more">+${dayTasks.length - 3}</span>` : '';
+    cells += `<div class="cal-cell ${out ? 'is-out' : ''} ${weekend ? 'is-weekend' : ''} ${isToday ? 'is-today' : ''}" data-cell="${s}">
+      <span class="dnum">${d.getDate()}</span>${chips}${more}</div>`;
+  }
+  const monthCount = tasks.filter(t => {
+    if (t.done || !t.due) return false;
+    const dt = dObj(t.due);
+    return dt.getMonth() === m.getMonth() && dt.getFullYear() === m.getFullYear();
+  }).length;
+  wrap.innerHTML = `
+    <div class="cal-head">
+      <div class="cal-month">${m.getFullYear()} 年 ${m.getMonth() + 1} 月<span>${monthCount} 项排期</span></div>
+      <div class="cal-nav">
+        <button data-mv="-1">${ic('chev').replace('d="M9 5l7 7-7 7"', 'd="M15 5l-7 7 7 7"')}</button>
+        <button data-mv="1">${ic('chev')}</button>
+      </div>
+    </div>
+    <div class="cal-grid">
+      ${['一', '二', '三', '四', '五', '六', '日'].map(w => `<div class="cal-wd">周${w}</div>`).join('')}
+      ${cells}
+    </div>`;
+}
+
+/* ---------- 抽屉 ---------- */
+function openDrawer(id) {
+  const t = tasks.find(x => x.id === id);
+  if (!t) return;
+  state.draftId = id;
+  state.draft = JSON.parse(JSON.stringify(t));
+  state.dirty = false;
+  renderDrawer();
+  document.getElementById('drawerWrap').classList.add('on');
+}
+
+function draftSubDone() { return 0; }
+
+function renderDrawer() {
+  const d = state.draft;
+  const dd = document.getElementById('drawer');
+  dd.classList.toggle('is-dirty', state.dirty);
+  const pr = [['A', '高', 'f-a'], ['B', '中', 'f-b'], ['C', '低', 'f-c'], [null, '无', 'f-none']];
+  const dueChips = [
+    ['今天', T], ['明天', D(1)], ['下周一', nextMonday()]
+  ];
+  const recChips = ['从不', '每日', '每周', '每月'];
+  const customDue = d.due && !dueChips.some(x => x[1] === d.due);
+  const stripes = [
+    d.prio ? `(${d.prio})` : '无优先级',
+    d.due ? `${dObj(d.due).getMonth() + 1}/${dObj(d.due).getDate()} · ${humanDate(d.due)}` : '无日期',
+    d.rec || '不重复',
+    d.note ? '有备注' : '无备注',
+  ];
+  dd.innerHTML = `
+    <div class="dr-head">
+      <div class="dr-path">todo.txt<span class="sp">第 ${lineNo(d.id)} 行</span></div>
+      <div class="dr-titleline">
+        <input class="dr-title" id="drTitle" value="${esc(d.t)}" spellcheck="false">
+        <button class="dr-close" id="drClose">${ic('x')}</button>
+      </div>
+      <div class="dr-strip">
+        ${stripes.map((s, i) => `<button class="strip-cell ${i === 0 ? (d.prio ? 'p-' + d.prio.toLowerCase() : 'is-empty') : i === 1 ? (d.due ? '' : 'is-empty') : i > 1 && !d.note ? 'is-empty' : ''}" data-jump="${i}">${s}</button>`).join('')}
+      </div>
+    </div>
+    <div class="dr-body">
+      <div class="dr-row">
+        <div class="dr-key">优先级</div>
+        <div class="prio-ruler">
+          ${pr.map(([k, n, cls]) => `<button class="pr-btn ${cls} ${d.prio === k ? 'on' : ''}" data-prio="${k || ''}">${k ? ic('flag') : ''}<span>${n}</span></button>`).join('')}
+        </div>
+      </div>
+      <div class="dr-row">
+        <div class="dr-key">截止</div>
+        <div class="chiprow">
+          ${dueChips.map(([n, v]) => `<button class="tchip ${d.due === v ? 'on' : ''}" data-due="${v}">${n}</button>`).join('')}
+          <button class="tchip ${customDue ? 'on' : 'is-empty'}" data-pick="1">${ic('cal')}${customDue ? colDate(d.due) : '选择日期'}</button>
+        </div>
+      </div>
+      <div class="dr-row">
+        <div class="dr-key">重复</div>
+        <div class="chiprow">
+          ${recChips.map(n => `<button class="tchip ${(d.rec || '从不') === n ? 'on' : ''}" data-rec="${n}">${n}</button>`).join('')}
+        </div>
+      </div>
+      <div class="dr-row">
+        <div class="dr-key">分类</div>
+        <div class="chiprow">
+          ${['研发', '采购', '家庭'].map(n => `<button class="tchip ${d.ctx === n ? 'on' : ''}" data-ctx="${n}">@${n}</button>`).join('')}
+        </div>
+      </div>
+      <div class="dr-row">
+        <div class="dr-key">列表</div>
+        <div class="chiprow">
+          ${['阻燃项目', '国产替代'].map(n => `<button class="tchip ${d.prj === n ? 'on' : ''}" data-prj="${n}">+${n}</button>`).join('')}
+        </div>
+      </div>
+      <div class="dr-row" style="align-items:start;padding:8px 0 10px">
+        <div class="dr-key" style="padding-top:7px">子任务</div>
+        <div>
+          <div class="sub-list">
+            ${(d.subs || []).map((s, i) => `<div class="sub-item ${s.done ? 'done' : ''}" data-sub2="${i}"><span class="bx">${ic('check')}</span><span style="flex:1">${esc(s.t)}</span></div>`).join('')}
+          </div>
+          <div class="sub-add" id="subAdd">${ic('plus')}添加子任务</div>
+        </div>
+      </div>
+      <div class="dr-row" style="align-items:start;border-bottom:0;padding:8px 0 0">
+        <div class="dr-key" style="padding-top:5px">备注</div>
+        <textarea class="note" id="drNote" placeholder="给这一行留一条备注">${esc(d.note || '')}</textarea>
+      </div>
+      <div class="rawline">
+        <span class="raw-key">原文</span>
+        <code class="raw-code" id="drRaw">${rawHTML(d)}</code>
+      </div>
+    </div>
+    <div class="dr-foot">
+      <button class="btn btn-del" id="drDel">${ic('trash')}删除</button>
+      <span class="dirty-dot">未保存</span>
+      <button class="btn" id="drCancel" ${state.dirty ? 'style="color:var(--flag-b);border-color:var(--flag-b)"' : ''}>${state.dirty ? '放弃修改' : '取消'}</button>
+      <button class="btn btn-primary" id="drSave">保存</button>
+    </div>`;
+}
+
+function nextMonday() {
+  const d = new Date(TODAY_D);
+  const diff = (8 - d.getDay()) % 7 || 7;
+  d.setDate(d.getDate() + diff);
+  return iso(d);
+}
+
+/* ---------- 命令行 ---------- */
+function parseLine(raw) {
+  let s = raw.trim();
+  let prio = null, due = null, ctx = null, prj = null, rec = null;
+  s = s.replace(/\(([A-Za-z])\)/g, (m, g) => { prio = g.toUpperCase(); return ''; });
+  s = s.replace(/due:(\S+)/i, (m, g) => { due = parseDue(g); return ''; });
+  s = s.replace(/@([^\s]+)/g, (m, g) => { ctx = g; return ''; });
+  s = s.replace(/\+([^\s]+)/g, (m, g) => { prj = g; return ''; });
+  s = s.replace(/rec:(\S+)/i, (m, g) => { rec = recName(g); return ''; });
+  return { title: s.replace(/\s+/g, ' ').trim(), prio, due, ctx, prj, rec };
+}
+
+function parseDue(v) {
+  const now = new Date(TODAY_D);
+  if (v === '今天' || v === 'today') return T;
+  if (v === '明天') { now.setDate(now.getDate() + 1); return iso(now); }
+  if (v === '后天') { now.setDate(now.getDate() + 2); return iso(now); }
+  if (v === '昨天') { now.setDate(now.getDate() - 1); return iso(now); }
+  if (/^\+(\d+)$/.test(v)) { now.setDate(now.getDate() + Number(v.slice(1))); return iso(now); }
+  if (/^周([一二三四五六日天])$/.test(v)) {
+    const map = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 0, 天: 0 };
+    const target = map[v[1]];
+    let diff = (target - now.getDay() + 7) % 7;
+    if (diff === 0) diff = 7;
+    now.setDate(now.getDate() + diff);
+    return iso(now);
+  }
+  if (/^(\d{1,2})[-/](\d{1,2})$/.test(v)) {
+    const [, m, d] = v.match(/(\d{1,2})[-/](\d{1,2})/);
+    let y = now.getFullYear();
+    const cand = new Date(y, Number(m) - 1, Number(d));
+    if (cand < TODAY_D) y += 1;
+    return iso(new Date(y, Number(m) - 1, Number(d)));
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  return null;
+}
+
+function recName(v) {
+  if (['每日', '每天', 'daily'].includes(v)) return '每日';
+  if (['每周', 'weekly'].includes(v)) return '每周';
+  if (['每月', 'monthly'].includes(v)) return '每月';
+  return v;
+}
+
+function normalize(p) {
+  const seg = [];
+  if (p.prio) seg.push(`(${p.prio})`);
+  seg.push(p.title || '（空标题）');
+  if (p.due) seg.push(`due:${p.due}`);
+  if (p.ctx) seg.push('@' + p.ctx);
+  if (p.prj) seg.push('+' + p.prj);
+  if (p.rec) seg.push('rec:' + p.rec);
+  return seg.join(' ');
+}
+
+function hlCode(str) {
+  let out = esc(str);
+  out = out.replace(/\(\s*[A-Z]\s*\)/g, m => `<span class="tk-prio">${m}</span>`);
+  out = out.replace(/due:(\d{4}-\d{2}-\d{2})/g, (m, g) => `<span class="tk-key">due:</span><span class="tk-due">${g}</span>`);
+  out = out.replace(/@([^\s]+)/g, m => `<span class="tk-tag">${m}</span>`);
+  out = out.replace(/\+([^\s]+)/g, m => `<span class="tk-prj">${m}</span>`);
+  out = out.replace(/rec:([^\s]+)/g, (m, g) => `<span class="tk-key">rec:</span><span class="tk-due">${g}</span>`);
+  return out;
+}
+
+function highlightLine(p) {
+  if (!p.title) return '<span class="tk-empty">输入标题，下面会实时显示它写进 todo.txt 的样子</span>';
+  return hlCode(normalize(p));
+}
+
+function rawHTML(d) {
+  return hlCode(normalize({ title: d.t || '（空标题）', prio: d.prio, due: d.due, ctx: d.ctx, prj: d.prj, rec: d.rec }));
+}
+
+const COMMANDS = [
+  { label: '去「今日」', key: 'g t', icon: 'check', run: () => { state.view = 'today'; renderAll(); } },
+  { label: '看日历', key: 'g c', icon: 'cal', run: () => { state.view = 'calendar'; renderAll(); } },
+  { label: '搜索任务', key: '/', icon: 'search', run: () => openSearch() },
+  { label: '专注模式', key: 'f', icon: 'target', run: () => toggleFocus() },
+  { label: '打开设置', key: '⌘,', icon: 'gear', run: () => toast('设置页在这版样张里留白') },
+];
+
+function openPalette(prefill = '') {
+  const wrap = document.getElementById('palWrap');
+  wrap.classList.add('on');
+  const input = document.getElementById('palInput');
+  input.value = prefill;
+  setTimeout(() => input.focus(), 20);
+  renderPalette();
+}
+
+function closePalette() {
+  document.getElementById('palWrap').classList.remove('on');
+}
+
+function renderPalette() {
+  const input = document.getElementById('palInput');
+  const raw = input.value;
+  const p = parseLine(raw);
+  document.getElementById('palCode').innerHTML = highlightLine(p);
+  document.getElementById('palLine').textContent = p.title ? '· 第 ' + (tasks.length + 1) + ' 行' : '';
+  const list = document.getElementById('palList');
+  if (!raw.trim()) {
+    list.innerHTML = COMMANDS.map((c, i) => `
+      <div class="pal-item ${i === 0 ? 'sel' : ''}" data-cmd="${i}">${ic(c.icon)}<span>${c.label}</span><kbd>${c.key}</kbd></div>`).join('');
+  } else {
+    list.innerHTML = `<div class="pal-item sel" data-cmd="write">${ic('corner')}<span>写入这一行</span><kbd>enter</kbd></div>
+      <div class="pal-item" data-cmd="search">${ic('search')}<span>在全部任务里搜「${esc(raw)}」</span></div>`;
+  }
+}
+
+function commitPalette() {
+  const raw = document.getElementById('palInput').value.trim();
+  if (!raw) { COMMANDS[0].run(); closePalette(); return; }
+  const p = parseLine(raw);
+  if (!p.title) return;
+  const t = { id: uid(), t: p.title, due: p.due, prio: p.prio, ctx: p.ctx, prj: p.prj, rec: p.rec, note: '', subs: [], _spawn: true };
+  tasks.unshift(t);
+  state.search = '';
+  closePalette();
+  const here = state.view === 'all' || (state.view === 'today' && t.due && t.due <= T) || (state.view === 'upcoming' && t.due && t.due > T);
+  renderAll();
+  if (here) scrollTop();
+  toast(
+    p.due ? `已写入 todo.txt · 排到 ${humanDate(p.due)}` : '已写入 todo.txt · 收件箱',
+    () => { state.view = t.due && t.due <= T ? 'today' : 'upcoming'; renderAll(); },
+    here ? '撤销' : '去看'
+  );
+}
+
+/* ---------- 完成 / 删除 ---------- */
+function complete(id, viaCheckbox) {
+  const t = tasks.find(x => x.id === id);
+  if (!t || t.done) return;
+  const row = document.querySelector(`.row[data-id="${id}"]`);
+  t.done = true;
+  t.doneAt = T;
+  if (row) {
+    row.classList.add('done');
+    row.classList.remove('is-active');
+    setTimeout(() => row.classList.add('leaving'), 240);
+  }
+  let spawn = null;
+  if (t.rec) {
+    const next = new Date(t.due || T);
+    if (t.rec === '每日') next.setDate(next.getDate() + 1);
+    if (t.rec === '每周') next.setDate(next.getDate() + 7);
+    if (t.rec === '每月') next.setMonth(next.getMonth() + 1);
+    if (iso(next) <= T) next.setDate(TODAY_D.getDate() + 1);
+    spawn = { ...t, id: uid(), done: false, doneAt: null, due: iso(next), _spawn: true };
+  }
+  setTimeout(() => {
+    if (spawn) tasks.unshift(spawn);
+    renderAll();
+    if (spawn) toast(`已为你排到 ${humanDate(spawn.due)}`);
+    else toast('已完成', () => { t.done = false; t.doneAt = null; renderAll(); });
+  }, 520);
+}
+
+function removeTask(id, silent) {
+  const idx = tasks.findIndex(x => x.id === id);
+  if (idx < 0) return;
+  const [t] = tasks.splice(idx, 1);
+  renderAll();
+  if (!silent) toast('已删除', () => { tasks.splice(idx, 0, t); renderAll(); });
+}
+
+/* ---------- toast ---------- */
+let toastTimer = null;
+function toast(msg, action, label = '撤销') {
+  const el = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  const act = document.getElementById('toastAct');
+  act.textContent = label;
+  act.style.display = action ? '' : 'none';
+  act.onclick = () => { if (action) action(); el.classList.remove('on'); };
+  el.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('on'), 4200);
+}
+
+/* ---------- 专注 / 搜索 ---------- */
+function toggleFocus() {
+  state.focus = !state.focus;
+  if (state.focus && !state.selected) {
+    const first = visible()[0];
+    if (first) state.selected = first.id;
+  }
+  renderAll();
+}
+
+function openSearch() {
+  document.getElementById('topbar').classList.add('searching');
+  const inp = document.getElementById('searchInput');
+  inp.value = state.search;
+  setTimeout(() => inp.focus(), 10);
+}
+
+function closeSearch() {
+  document.getElementById('topbar').classList.remove('searching');
+  if (state.search) { state.search = ''; renderAll(); }
+}
+
+/* ---------- 键盘 ---------- */
+function isTyping(e) {
+  const el = e.target;
+  return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+}
+
+function moveSel(dir) {
+  const rows = [...document.querySelectorAll('.row')];
+  if (!rows.length) return;
+  const idx = rows.findIndex(r => r.dataset.id === state.selected);
+  let next = idx + dir;
+  if (idx < 0) next = 0;
+  next = Math.max(0, Math.min(rows.length - 1, next));
+  state.selected = rows[next].dataset.id;
+  rows.forEach(r => r.classList.toggle('is-active', r.dataset.id === state.selected));
+  rows[next].scrollIntoView({ block: 'nearest' });
+}
+
+function scrollTop() {
+  const s = document.getElementById('scroll');
+  if (s) s.scrollTop = 0;
+}
+
+/* ---------- 事件绑定 ---------- */
+document.addEventListener('click', e => {
+  const t = e.target;
+
+  if (popEl && !t.closest('.daypop') && !t.closest('.cal-cell')) closeDayPop();
+
+  const nav = t.closest('.nav');
+  if (nav) {
+    if (nav.dataset.view) {
+      state.view = nav.dataset.view === 'calendar' ? 'calendar' : nav.dataset.view;
+      state.selected = null;
+      renderAll();
+      return;
+    }
+    if (nav.dataset.ctx) { toast('已按分类筛选：' + nav.dataset.ctx); return; }
+    if (nav.dataset.prj) { toast('已按列表筛选：' + nav.dataset.prj); return; }
+  }
+
+  if (t.closest('#palBtn')) { openPalette(); return; }
+  if (t.closest('#searchBtn')) { openSearch(); return; }
+  if (t.closest('#sideTheme')) {
+    setTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');
+    return;
+  }
+  if (t.closest('#sideFocus') || t.closest('#focusBtn')) { toggleFocus(); return; }
+
+  if (t.closest('#palWrap') && !t.closest('.palette')) { closePalette(); return; }
+  if (t.closest('#drawerWrap') && !t.closest('.drawer')) { closeDrawer(); return; }
+
+  const cmd = t.closest('.pal-item');
+  if (cmd) {
+    if (cmd.dataset.cmd === 'write') commitPalette();
+    else if (cmd.dataset.cmd === 'search') { state.search = document.getElementById('palInput').value; closePalette(); openSearch(); renderAll(); }
+    else { COMMANDS[Number(cmd.dataset.cmd)].run(); closePalette(); }
+    return;
+  }
+
+  const daypopAdd = t.closest('.daypop-add');
+  if (daypopAdd) {
+    const date = daypopAdd.dataset.date;
+    closeDayPop();
+    openPalette('due:' + date + ' ');
+    return;
+  }
+
+  const calNav = t.closest('.cal-nav button');
+  if (calNav) {
+    const m = new Date(state.month);
+    m.setMonth(m.getMonth() + Number(calNav.dataset.mv));
+    state.month = m;
+    renderCalendar();
+    return;
+  }
+
+  const chip = t.closest('.chip');
+  if (chip) { e.stopPropagation(); if (Date.now() - dragAt < 300) return; openDayPop(chip.parentElement, chip.dataset.chip); return; }
+
+  const cell = t.closest('.cal-cell');
+  if (cell) { openDayPop(cell, null); return; }
+
+  const row = t.closest('.row');
+  if (row) {
+    const id = row.dataset.id;
+    state.selected = id;
+    document.querySelectorAll('.row').forEach(r => r.classList.toggle('is-active', r.dataset.id === id));
+
+    const qb = t.closest('.qbtn');
+    if (qb) {
+      e.stopPropagation();
+      const act = qb.dataset.act;
+      const task = tasks.find(x => x.id === id);
+      if (act === 'open') openDrawer(id);
+      if (act === 'done') complete(id, true);
+      if (act === 'del') removeTask(id);
+      if (act === 'cycle' && task) {
+        const order = [null, 'A', 'B', 'C'];
+        task.prio = order[(order.indexOf(task.prio) + 1) % 4];
+        renderAll();
+      }
+      return;
+    }
+    if (t.closest('.cb')) { e.stopPropagation(); complete(id, true); return; }
+    if (t.closest('.exp')) {
+      state.expanded[id] = !state.expanded[id];
+      renderAll();
+      return;
+    }
+    if (t.closest('.child')) {
+      const [pid, si] = t.closest('.child').dataset.sub.split(':');
+      const pt = tasks.find(x => x.id === pid);
+      pt.subs[si].done = !pt.subs[si].done;
+      renderAll();
+      return;
+    }
+    if (t.closest('.title') || t.closest('.date')) { openDrawer(id); return; }
+    return;
+  }
+
+  if (t.closest('#drClose') || t.closest('#drCancel')) { closeDrawer(); return; }
+  if (t.closest('#drSave')) { saveDrawer(); return; }
+  if (t.closest('#drDel')) { const id = state.draftId; closeDrawer(); removeTask(id); return; }
+
+  const pr = t.closest('.pr-btn');
+  if (pr) { state.draft.prio = pr.dataset.prio || null; markDirty(); renderDrawer(); return; }
+  if (t.closest('[data-pick]')) { toast('日期弹层在真机上打开'); return; }
+  const due = t.closest('[data-due]');
+  if (due) { state.draft.due = due.dataset.due; markDirty(); renderDrawer(); return; }
+  const rec = t.closest('[data-rec]');
+  if (rec) { state.draft.rec = rec.dataset.rec === '从不' ? null : rec.dataset.rec; markDirty(); renderDrawer(); return; }
+  const ctx = t.closest('[data-ctx]');
+  if (ctx) { state.draft.ctx = state.draft.ctx === ctx.dataset.ctx ? null : ctx.dataset.ctx; markDirty(); renderDrawer(); return; }
+  const prj = t.closest('[data-prj]');
+  if (prj) { state.draft.prj = state.draft.prj === prj.dataset.prj ? null : prj.dataset.prj; markDirty(); renderDrawer(); return; }
+  const sub2 = t.closest('[data-sub2]');
+  if (sub2) { const i = Number(sub2.dataset.sub2); state.draft.subs[i].done = !state.draft.subs[i].done; markDirty(); renderDrawer(); return; }
+  if (t.closest('#subAdd')) {
+    const s = prompt('子任务');
+    if (s) { state.draft.subs.push({ t: s, done: false }); markDirty(); renderDrawer(); }
+    return;
+  }
+});
+
+document.addEventListener('input', e => {
+  if (e.target.id === 'palInput') renderPalette();
+  if (e.target.id === 'searchInput') { state.search = e.target.value; renderList(); renderHead(); }
+  if (e.target.id === 'drTitle') {
+    state.draft.t = e.target.value;
+    markDirty();
+    const r = document.getElementById('drRaw');
+    if (r) r.innerHTML = rawHTML(state.draft);
+  }
+  if (e.target.id === 'drNote') { state.draft.note = e.target.value; markDirty(); }
+});
+
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); return; }
+  if (e.key === '/' && !isTyping(e)) { e.preventDefault(); openSearch(); return; }
+
+  if (e.key === 'Escape') {
+    if (document.getElementById('palWrap').classList.contains('on')) { closePalette(); return; }
+    if (document.getElementById('drawerWrap').classList.contains('on')) { closeDrawer(); return; }
+    if (document.querySelector('.daypop')) { closeDayPop(); return; }
+    if (document.getElementById('topbar').classList.contains('searching')) { closeSearch(); return; }
+    if (state.focus) { state.focus = false; renderAll(); return; }
+    return;
+  }
+
+  if (document.getElementById('palWrap').classList.contains('on')) {
+    if (e.key === 'Enter') { e.preventDefault(); commitPalette(); }
+    return;
+  }
+
+  if (isTyping(e)) return;
+
+  if (e.key === 'ArrowDown') { e.preventDefault(); moveSel(1); }
+  if (e.key === 'ArrowUp') { e.preventDefault(); moveSel(-1); }
+  if (e.key === 'Enter' && state.selected) { e.preventDefault(); openDrawer(state.selected); }
+  if ((e.key === 'x' || e.key === 'X') && state.selected) { e.preventDefault(); complete(state.selected, true); }
+  if (e.key === 'f' || e.key === 'F') { toggleFocus(); }
+});
+
+/* ---------- 抽屉逻辑 ---------- */
+function markDirty() { state.dirty = true; document.getElementById('drawer').classList.add('is-dirty'); }
+function closeDrawer() { document.getElementById('drawerWrap').classList.remove('on'); state.draftId = null; }
+function saveDrawer() {
+  if (!state.draft || !state.draft.t.trim()) {
+    const inp = document.getElementById('drTitle');
+    if (inp) { inp.focus(); inp.style.borderBottomColor = 'var(--danger)'; }
+    toast('标题不能为空');
+    return;
+  }
+  const idx = tasks.findIndex(x => x.id === state.draftId);
+  if (idx >= 0) tasks[idx] = { ...state.draft, _spawn: true };
+  closeDrawer();
+  renderAll();
+  toast('已保存到 todo.txt');
+}
+function lineNo(id) {
+  const order = [...tasks].sort((a, b) => (a.due || '9999') < (b.due || '9999') ? -1 : 1);
+  return order.findIndex(t => t.id === id) + 1 || 1;
+}
+
+/* ---------- 当天浮纸 ---------- */
+let popEl = null;
+function openDayPop(anchor, chipId) {
+  closeDayPop();
+  const date = anchor.dataset.cell || (chipId ? tasks.find(t => t.id === chipId).due : null);
+  if (!date) return;
+  const dayTasks = tasks.filter(t => t.due === date && !t.done);
+  const pop = document.createElement('div');
+  pop.className = 'daypop';
+  pop.innerHTML = `
+    <div class="daypop-head"><b>${humanDate(date)}</b><span>${date.replace(/-/g, '/')}</span></div>
+    ${dayTasks.length ? dayTasks.map(t => `<div class="daypop-row" data-pop="${t.id}"><span class="cbx">${ic('check')}</span><span class="tt">${esc(t.t)}</span><span class="pr">${t.prio || ''}</span></div>`).join('') : `<div class="daypop-row" style="color:var(--ink-3)">这天还没有任务</div>`}
+    <div class="daypop-add" data-date="${date}">${ic('plus')}在这天写一行</div>`;
+  const app = document.getElementById('app');
+  app.appendChild(pop);
+  const rect = anchor.getBoundingClientRect();
+  const appRect = app.getBoundingClientRect();
+  let left = rect.left - appRect.left + rect.width - 300;
+  let top = rect.bottom - appRect.top + 6;
+  if (left < 8) left = 8;
+  if (left + 288 > appRect.width - 8) left = appRect.width - 296;
+  if (top + 220 > appRect.height - 12) top = rect.top - appRect.top - 210;
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
+  app.classList.add('is-cal');
+  popEl = pop;
+}
+function closeDayPop() {
+  if (popEl) { popEl.remove(); popEl = null; }
+}
+
+/* ---------- 主题 / 密度 ---------- */
+function setTheme(v) {
+  document.documentElement.dataset.theme = v;
+  document.querySelectorAll('#segTheme button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+}
+const DENS = { compact: 34, std: 40, airy: 48 };
+function setDensity(v) {
+  document.getElementById('app').style.setProperty('--row-h', DENS[v] + 'px');
+  document.querySelectorAll('#segDensity button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+}
+document.getElementById('segTheme').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return; setTheme(b.dataset.v);
+});
+document.getElementById('segDensity').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return; setDensity(b.dataset.v);
+});
+
+/* 当天浮纸里的行点击 */
+document.addEventListener('click', e => {
+  const pr = e.target.closest('[data-pop]');
+  if (pr) {
+    const id = pr.dataset.pop;
+    if (e.target.closest('.cbx')) { closeDayPop(); complete(id); return; }
+    const row = document.querySelector(`.row[data-id="${id}"]`);
+    if (row) row.scrollIntoView({ block: 'center' });
+    closeDayPop();
+    openDrawer(id);
+  }
+}, true);
+
+/* ---------- 日历拖拽改期 ---------- */
+let dragId = null, dragAt = 0;
+document.addEventListener('dragstart', e => {
+  const chip = e.target.closest ? e.target.closest('.chip') : null;
+  if (!chip) return;
+  dragId = chip.dataset.chip;
+  dragAt = Date.now();
+  chip.classList.add('is-dragging');
+  if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', dragId); }
+});
+document.addEventListener('dragover', e => {
+  if (!dragId) return;
+  const cell = e.target.closest ? e.target.closest('.cal-cell') : null;
+  if (!cell) return;
+  e.preventDefault();
+  document.querySelectorAll('.cal-cell.is-drop').forEach(c => c.classList.remove('is-drop'));
+  cell.classList.add('is-drop');
+});
+document.addEventListener('drop', e => {
+  const cell = e.target.closest ? e.target.closest('.cal-cell') : null;
+  if (!cell || !dragId) return;
+  e.preventDefault();
+  const t = tasks.find(x => x.id === dragId);
+  if (t) {
+    t.due = cell.dataset.cell;
+    renderAll();
+    toast('已改期到 ' + humanDate(t.due));
+  }
+  dragId = null;
+});
+document.addEventListener('dragend', () => {
+  document.querySelectorAll('.chip.is-dragging').forEach(c => c.classList.remove('is-dragging'));
+  document.querySelectorAll('.cal-cell.is-drop').forEach(c => c.classList.remove('is-drop'));
+  dragId = null;
+});
+
+/* ---------- 启动 ---------- */
+setDensity('std');
+const qp = new URLSearchParams(location.search);
+if (qp.get('still')) document.body.classList.add('still');
+if (qp.get('theme')) setTheme(qp.get('theme'));
+if (qp.get('density')) setDensity(qp.get('density'));
+if (qp.get('view')) state.view = qp.get('view');
+if (qp.get('sel')) state.selected = qp.get('sel');
+renderAll();
+if (qp.get('drawer')) openDrawer(qp.get('drawer'));
+if (qp.get('palette')) openPalette(qp.get('palette') === '1' ? '' : qp.get('palette'));
+if (qp.get('focus')) { state.focus = true; renderAll(); }
+if (qp.get('daypop')) {
+  const cell = document.querySelector(`.cal-cell[data-cell="${qp.get('daypop')}"]`);
+  if (cell) openDayPop(cell, null);
+}
+
+/* 首次进入给一条提示，告诉用户样张能动 */
+if (!location.search) {
+  setTimeout(() => {
+    toast('样张可交互：⌘K 写一行，勾选看完成动效');
+  }, 600);
+}
+</script>
+</body>
+</html>

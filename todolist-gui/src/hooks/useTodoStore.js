@@ -21,6 +21,7 @@ import {
   readFileText,
   saveDirHandle,
   verifyPermission,
+  workspaceUsage,
   writeFileText,
 } from '../lib/fileStore';
 
@@ -28,6 +29,17 @@ import {
 // 200ms 配合下方 visibilitychange/pagehide 的转后台即时刷盘（P0-1），
 // 把丢失窗口从半秒压到接近零；再小会让连续编辑退化成逐键写盘。
 const SAVE_DEBOUNCE_MS = 200;
+// 写盘失败后的有界重试次数（R-01）。不重试会让一次瞬时失败累积成永久 unsaved；
+// 无限重试则会在磁盘真的只读时把主线程刷满 toast。
+//
+// 当前语义（A：失败**不回滚**内存）下它**真生效**：失败后 `dirty` 持续为真，
+// 所以每一次重试都会真的去写盘 —— 实测 1 次首发 + 3 次重试 = 4 次真实尝试，
+// 约 920ms 后停止，不会形成写入风暴。
+// ⚠ 若将来有人把 catch 改回「回滚内存」（B 语义，2026-11-21 曾短暂采用），
+// 这条机制会退化成**空转**：回滚后内存==磁盘 → `dirty === false` → 每次重试都在
+// 内容比对上短路，产生 0 次 I/O，看起来还在重试、其实什么都没做。
+// 也就是说：它不是「常开坏盘」的保险，别指望它兜住；兜住的是「内存 != 磁盘」本身。
+const MAX_SAVE_RETRIES = 3;
 const FADE_MS = 180;
 // 行内「闪光」时长：重复任务新生行的高亮交接 / 新建行的入场动画。
 // 与 index.css 的 --dur-flash / --dur-3 是同一次动作的两半：定时器负责
@@ -60,6 +72,8 @@ export function useTodoStore() {
   const [doneEntries, setDoneEntries] = useState([]);
   const [saveStatus, setSaveStatus] = useState('saved');
   const [lastSavedAt, setLastSavedAt] = useState(null);
+  // 运行态占用读数（备份 / 会话 / 日志）。只读；浏览器分支没有这项，保持 null。
+  const [dataUsage, setDataUsage] = useState(null);
   const [conflict, setConflict] = useState(false);
   const [toast, setToast] = useState(null);
   const [view, setView] = useState('today');
@@ -83,8 +97,21 @@ export function useTodoStore() {
   const todoEntriesRef = useRef([]);
   const doneEntriesRef = useRef([]);
   const saveStatusRef = useRef('saved');
+  // 写盘代次（revision）：只有「内容真变」的提交才 +1（另一处是 loadFromDisk）。
+  // saveNow 进入时捕获它、写成功后比对 —— 不一致就说明写盘期间又来了新改动，
+  // 绝不能把它标成 'saved'（旧实现在这里无条件置 saved，状态灯说谎、还会让
+  // 关窗时的兜底刷盘以为「没什么要写的」而整段跳过）。
+  const revisionRef = useRef(0);
+  // 串行闸门：上一次 saveNow 的「永不 reject」版本。同一时刻最多一次写盘在飞；
+  // 后来的**排队**而不是被拒绝 —— 拒绝会把最后 200ms 的改动永久留在内存里。
+  const saveChainRef = useRef(null);
+  // 指向最新的 saveNow。scheduleSave ↔ saveNow 互相需要（定时器要调 saveNow，
+  // saveNow 失败后要重排定时器），用 ref 断掉这个循环引用，避免把 saveNow
+  // 拆成两个 useCallback（拆了会改函数标识，连带影响使用它的 useEffect 依赖）。
+  const saveRunnerRef = useRef(null);
+  // 连续写盘失败次数：有界重试，成功即归零（不归零会累积成永久 unsaved）。
+  const saveFailCountRef = useRef(0);
   const diskStateRef = useRef({ todo: '', done: '' });
-  const snapshotRef = useRef(null);
   const saveTimerRef = useRef(null);
   const toastTimerRef = useRef(null);
   const undoStackRef = useRef([]);
@@ -154,76 +181,176 @@ export function useTodoStore() {
     setNoteIds(new Set(map.keys()));
   }, []);
 
+  // 重排唯一的防抖定时器。三处复用（commit / saveNow 失败重试 / revision 未对齐时的接力），
+  // 所以抽出来 —— 手抄三份迟早有一份忘了先 clearTimeout。
+  const scheduleSave = useCallback(() => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      // 经 ref 调用：saveNow 在下面才定义（它自己又要用 scheduleSave）。
+      const runner = saveRunnerRef.current;
+      if (runner) runner();
+    }, SAVE_DEBOUNCE_MS);
+  }, []);
+
   const loadFromDisk = useCallback(
     async (handle, { notify = false } = {}) => {
+      // 先等在途写盘落定（R-05a）：否则会读到「上一条 saveNow 即将覆盖的中间态」，
+      // 随后那次写盘把旧内容盖回去，用户看到的是「重载了但没变」。
+      if (saveChainRef.current) await saveChainRef.current;
       const todoText = normalizeText(await readFileText(handle, 'todo.txt'));
       const doneText = normalizeText(await readFileText(handle, 'done.txt'));
       setEntries(parseFile(todoText), parseFile(doneText));
       // 备注文件可能根本不存在（还没写过备注）—— readFileText 返回空串，解析出空 Map
       refreshNotes(await readFileText(handle, NOTES_FILE));
       diskStateRef.current = { todo: todoText, done: doneText };
+
+      // R-05a：内存已换成磁盘的另一份真相，上一份数据留下的一切挂起状态都作废。
+      // 不清的话：撤销栈会按不存在的下标插回任务（磁盘上已有的那一条变成两份），
+      // 挂起的 fade 提交会在重载之后再写一次盘。
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      for (const timer of flashTimersRef.current.values()) clearTimeout(timer);
+      flashTimersRef.current.clear();
+      for (const timer of pendingCompleteRef.current.values()) clearTimeout(timer);
+      pendingCompleteRef.current.clear();
+      for (const timer of pendingDeleteRef.current.values()) clearTimeout(timer);
+      pendingDeleteRef.current.clear();
+      // 撤销栈必须清：留着旧记录再按 Ctrl+Z 会按不存在的下标插回任务，
+      // 磁盘上已经有的那一条会变成两份（由 5.1 用例守着）。
+      undoStackRef.current = [];
+      saveFailCountRef.current = 0;
+      setFadingIds([]);
+      setSpawnedIds([]);
+      setEnteringIds([]);
+      // 代次再进一格：万一还有人在飞（理论上已被上面 await 住），它也不许点亮 saved。
+      revisionRef.current += 1;
+
+      // 刻意**不清**的三样：toastTimerRef（非数据态，清了会留一条永不到期的 toast）、
+      // editingId / focusedId（硬清会吞掉用户正在打的字；editingTask 找不到会返 null，
+      // 浮窗自己就关了）。
       setSyncStatus('saved');
       if (notify) showToast('已同步外部修改');
     },
     [refreshNotes, setEntries, setSyncStatus, showToast]
   );
 
-  const saveNow = useCallback(async () => {
+  // 真正执行一次写盘。**必须已经站在串行闸门内**（由 saveNow 保证）。
+  const runSave = useCallback(async () => {
     const handle = dirHandleRef.current;
     if (!handle) return;
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
+    const startRev = revisionRef.current;
     try {
       const todoText = serializeEntries(todoEntriesRef.current);
       const doneText = serializeEntries(doneEntriesRef.current);
       const prev = diskStateRef.current;
-      if (todoText !== prev.todo) await writeFileText(handle, 'todo.txt', todoText);
-      if (doneText !== prev.done) await writeFileText(handle, 'done.txt', doneText);
-      diskStateRef.current = { todo: todoText, done: doneText };
-      setSyncStatus('saved');
-      setLastSavedAt(new Date());
-    } catch (err) {
-      // 回滚 UI 到上次快照，并同步磁盘实际状态避免误报外部修改。
-      // 撤销栈也要清：这批未保存的改动已经整体回退，留着旧记录再按 Ctrl+Z
-      // 会按不存在的下标插回 / 删除任务，产生幽灵条目。
-      if (snapshotRef.current) {
-        setEntries(snapshotRef.current.todo, snapshotRef.current.done);
+      const todoDirty = todoText !== prev.todo;
+      const doneDirty = doneText !== prev.done;
+      const dirty = todoDirty || doneDirty;
+
+      // 写序：**先 done 后 todo**（R-01 的核心）。
+      // 中断时最坏是「同一条任务在两份文件里重复」—— 重复可核对、可恢复，
+      // 而且内存里还留着完整条目，重试会幂等地把 todo.txt 重写一遍；
+      // 反过来（先 todo 后 done）中断的后果是「两头都没有」，不可恢复。
+      if (doneDirty) await writeFileText(handle, 'done.txt', doneText);
+      if (todoDirty) {
+        try {
+          await writeFileText(handle, 'todo.txt', todoText);
+        } catch (err) {
+          // 补偿写回（只做一次，best effort）：done.txt 已经写进新内容了，
+          // todo.txt 却没写成功，必须把 done.txt 还原成这次写入前的样子，
+          // 否则会出现「任务只在日志里、清单里没有」的半提交状态。
+          // 代价：会覆盖这段时间里外部编辑器对 done.txt 的修改。可接受 ——
+          // 它只发生在「磁盘确实写不进去」的异常路径上，优先保证不丢数据。
+          if (doneDirty) {
+            try {
+              await writeFileText(handle, 'done.txt', prev.done);
+            } catch {
+              // 补偿也失败时什么都不做：内存里仍有完整条目，重试会再走一遍。
+            }
+          }
+          throw err;
+        }
       }
-      undoStackRef.current = [];
-      setSyncStatus('saved');
+
+      // 磁盘真相无条件更新：把它放进下面的 revision 门控会让外部变更检测读到旧值，
+      // 等于给「外部改了文件」这条检测逻辑开一个新洞。
+      diskStateRef.current = { todo: todoText, done: doneText };
+      saveFailCountRef.current = 0;
+
+      if (revisionRef.current === startRev) {
+        setSyncStatus('saved');
+        // 只在真有 dirty 时点亮 lastSavedAt：它会驱动 useNativeShell 里
+        // 「保存后 3 秒自动 git 提交」，没有改动也点亮 = 每次切窗都提交一次，
+        // 界面上完全看不出来，是这一批里最隐蔽的回归。
+        if (dirty) setLastSavedAt(new Date());
+      } else {
+        // 写盘期间又有新改动：保持 unsaved，并让排队的那一次接力。
+        setSyncStatus('unsaved');
+        scheduleSave();
+      }
+    } catch {
+      // 失败态复用 'unsaved'（不新增第三态）：SettingsPage 只认它，
+      // 任何别的值都会被静默读成「已保存」。
+      setSyncStatus('unsaved');
+      // 撤销栈**不在这里清**：清栈会退回旧行为（R-01 要修的另一半）；
+      // 重复插入由 undo 各分支的幂等保护挡住（QA 复核 P1-①）。
       try {
         const diskTodo = normalizeText(await readFileText(handle, 'todo.txt'));
         const diskDone = normalizeText(await readFileText(handle, 'done.txt'));
         diskStateRef.current = { todo: diskTodo, done: diskDone };
       } catch {
-        // 保持原 diskState
+        // 读不回来时保持原 diskState：下次写盘会按旧值全量重写，等价于重试。
       }
-      showToast(`保存失败，已回滚本地修改：${err.message || err}`);
+      // 文案与行为必须成套（A 语义：**不回滚**内存）：这批改动确实还在内存里，
+      // 只是没写进磁盘 —— 所以如实说「仍在本机内存」，用户下次保存机会会自动补写。
+      showToast('保存失败，改动仍在本机内存（未写入磁盘），请检查磁盘后重试');
+      if (saveFailCountRef.current < MAX_SAVE_RETRIES) {
+        saveFailCountRef.current += 1;
+        scheduleSave();
+      }
     }
-  }, [setEntries, setSyncStatus, showToast]);
+  }, [scheduleSave, setEntries, setSyncStatus, showToast]);
+
+  // 串行闸门（R-02）：`then(run, run)` 的双回调是关键 —— 前一次失败也要继续排。
+  // 用布尔 flag 拒绝并发会把「最后一次改动」永久留在内存，比现状更糟。
+  const saveNow = useCallback(() => {
+    const run = () => runSave();
+    const next = (saveChainRef.current || Promise.resolve()).then(run, run);
+    // 链上只留「永不 reject」的版本：一次失败不该让后面所有排队者一起炸掉。
+    saveChainRef.current = next.then(
+      () => {},
+      () => {}
+    );
+    return next;
+  }, [runSave]);
+  saveRunnerRef.current = saveNow;
 
   const commit = useCallback(
     (updater) => {
-      if (saveStatusRef.current === 'saved') {
-        snapshotRef.current = {
-          todo: todoEntriesRef.current,
-          done: doneEntriesRef.current,
-        };
-      }
-      const next = updater({
+      const prev = {
         todo: todoEntriesRef.current,
         done: doneEntriesRef.current,
-      });
+      };
+      const next = updater(prev);
+      // 同引用短路：updater 表示「什么都没变」时（reorder 落点相同、目标已被别的
+      // 操作处理掉等）不脏、不排盘、不递增 —— 旧实现会白排一次写盘。
+      if (next.todo === prev.todo && next.done === prev.done) return;
+      revisionRef.current += 1;
       setEntries(next.todo, next.done);
       setSyncStatus('unsaved');
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(() => {
-        saveNow();
-      }, SAVE_DEBOUNCE_MS);
+      scheduleSave();
     },
-    [setEntries, setSyncStatus, saveNow]
+    [scheduleSave, setEntries, setSyncStatus]
   );
 
   const undo = useCallback(() => {
@@ -264,6 +391,16 @@ export function useTodoStore() {
         return;
       }
       commit(({ todo, done }) => {
+        // ⚠ 承重结构：删掉下面这行 return 会让 `useTodoStore.test.js` 的 1.5
+        // 与 QA 的「失败后撤销」复现用例立刻变红（同一任务被插两次并落盘）。
+        // 2026-11-21 起「写盘失败不回滚内存」那道保险已被撤掉（裁决保留回滚），
+        // 所以这里是**唯一**挡住重复条目的地方。
+        //
+        // 幂等保护（QA 复核 P1-①）：任务已经在列表里就什么都不做。
+        // 缺这一条时，任何「内存里已经有 A、撤销记录里也有 A」的组合都会 splice
+        // 出第二行 A —— 而 todo.txt 是纯文本，落盘后就是两条一模一样的 `(A) …`。
+        // complete 分支一直有这层保护，delete 分支漏了（两条路径的写法不对称）。
+        if (todo.some((e) => e.id === action.task.id)) return { todo, done };
         const nextTodo = [...todo];
         const insertAt = Math.min(action.todoIndex, nextTodo.length);
         nextTodo.splice(insertAt, 0, action.task);
@@ -579,19 +716,43 @@ export function useTodoStore() {
     [commit]
   );
 
+  const refreshDataUsage = useCallback(async () => {
+    const handle = dirHandleRef.current;
+    if (!handle) return;
+    try {
+      setDataUsage(await workspaceUsage(handle));
+    } catch {
+      setDataUsage(null);
+    }
+  }, []);
+
   const bootWorkspace = useCallback(
     async (handle) => {
       await loadFromDisk(handle);
       setDirReady(true);
       try {
         const created = await ensureDailyBackup(handle, dayjs().format('YYYY-MM-DD'));
-        if (created) showToast('已创建今日备份 backup/');
+        if (created) showToast('已创建今日备份');
       } catch (err) {
         showToast(`每日备份失败：${err.message || err}`);
       }
+      await refreshDataUsage();
     },
-    [loadFromDisk, showToast]
+    [loadFromDisk, refreshDataUsage, showToast]
   );
+
+  const maintain = useCallback(async () => {
+    const handle = dirHandleRef.current;
+    if (!handle) return;
+    try {
+      // fs_backup 同时修剪过期备份与会话月份；再读一次占用。
+      const created = await ensureDailyBackup(handle, dayjs().format('YYYY-MM-DD'));
+      await refreshDataUsage();
+      showToast(created ? '已创建今日备份，并清理过期数据' : '已清理过期备份与会话');
+    } catch (err) {
+      showToast(`清理失败：${err.message || err}`);
+    }
+  }, [refreshDataUsage, showToast]);
 
   const pickDirectory = useCallback(async () => {
     try {
@@ -655,8 +816,13 @@ export function useTodoStore() {
   useEffect(() => {
     if (!dirReady) return;
     if (typeof document === 'undefined' || typeof window === 'undefined') return;
+    // **无条件**刷一次（R-02）：状态灯只是「上一次写盘的结果」，不能当
+    // 「内存里有没有未落盘改动」的判据 —— 旧实现正是靠这个判据把关窗兜底挡在门外
+    // （写盘在飞时状态被误标成 saved，于是这最后一次刷盘被整段跳过）。
+    // 真正的内容比对在 runSave 里：不脏时它会短路成 no-op，写不了假写。
     const flush = () => {
-      if (saveStatusRef.current === 'unsaved') saveNow();
+      const runner = saveRunnerRef.current;
+      if (runner) runner();
     };
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') flush();
@@ -667,7 +833,7 @@ export function useTodoStore() {
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pagehide', flush);
     };
-  }, [dirReady, saveNow]);
+  }, [dirReady]);
 
   // 窗口聚焦时检测外部修改
   useEffect(() => {
@@ -692,26 +858,61 @@ export function useTodoStore() {
     return () => window.removeEventListener('focus', onFocus);
   }, [dirReady, loadFromDisk]);
 
+  // 「用本地内容覆盖文件」—— 与 saveNow 同构（R-01）：先 done 后 todo、
+  // todo 失败时补偿写回 done、失败时保持 unsaved 且**不关闭冲突面板**。
+  // 旧实现在第一行就 setConflict(false)，写失败时用户以为「已经覆盖了」，
+  // 而磁盘上还是对方的内容。
   const resolveConflictKeepLocal = useCallback(async () => {
-    setConflict(false);
+    // 先让在途写盘落定，否则两边会互相覆盖。
+    if (saveChainRef.current) await saveChainRef.current;
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
+    const handle = dirHandleRef.current;
+    if (!handle) {
+      // 没选目录时关闭面板即可（调用方不该在欢迎页走到这里，但也别抛）。
+      setConflict(false);
+      return;
+    }
+    const startRev = revisionRef.current;
+    const prev = diskStateRef.current;
     try {
-      const handle = dirHandleRef.current;
       const todoText = serializeEntries(todoEntriesRef.current);
       const doneText = serializeEntries(doneEntriesRef.current);
-      await writeFileText(handle, 'todo.txt', todoText);
       await writeFileText(handle, 'done.txt', doneText);
+      try {
+        await writeFileText(handle, 'todo.txt', todoText);
+      } catch (err) {
+        // 补偿（只做一次，best effort）：把 done.txt 还原成写入前的内容。
+        try {
+          await writeFileText(handle, 'done.txt', prev.done);
+        } catch {
+          // 补偿也失败时保持内存里的完整条目，让用户重试。
+        }
+        throw err;
+      }
       diskStateRef.current = { todo: todoText, done: doneText };
-      setSyncStatus('saved');
-      setLastSavedAt(new Date());
+      saveFailCountRef.current = 0;
+      setConflict(false);
+      // 与 runSave 同一套 revision 门控（P2-1）：覆盖期间用户又改了东西的话，
+      // 这次写进磁盘的是**旧快照**，不能宣称「已保存」。
+      if (revisionRef.current === startRev) {
+        setSyncStatus('saved');
+        setLastSavedAt(new Date());
+      } else {
+        setSyncStatus('unsaved');
+        // 排一次接力，把覆盖期间的新改动也写下去 —— 否则它会一直挂在 unsaved 上，
+        // 直到用户再动一次或关窗。
+        scheduleSave();
+      }
       showToast('已用本地内容覆盖文件');
     } catch (err) {
+      // 面板必须留着：用户得知道这次覆盖没成功，才能再试或改用磁盘版本。
+      setSyncStatus('unsaved');
       showToast(`写入失败：${err.message || err}`);
     }
-  }, [setSyncStatus, showToast]);
+  }, [scheduleSave, setSyncStatus, showToast]);
 
   const resolveConflictUseDisk = useCallback(async () => {
     setConflict(false);
@@ -746,6 +947,7 @@ export function useTodoStore() {
     doneEntries,
     saveStatus,
     lastSavedAt,
+    dataUsage,
     conflict,
     toast,
     view,
@@ -785,6 +987,8 @@ export function useTodoStore() {
     pickDirectory,
     reauthorize,
     manualReload,
+    refreshDataUsage,
+    maintain,
     resolveConflictKeepLocal,
     resolveConflictUseDisk,
     saveNow,

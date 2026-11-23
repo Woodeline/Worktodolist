@@ -149,12 +149,57 @@ async function fileExists(dirHandle, name) {
   }
 }
 
-// 每日备份：当天首次调用时复制 todo.txt → backup/todo-YYYY-MM-DD.txt、
-// notes.md → backup/notes-YYYY-MM-DD.md（notes.md 不存在或为空则跳过），
+/** 运行态根目录：根目录只留 todo.txt / done.txt / notes.md。 */
+export const STATE_DIR = '.worktodolist';
+
+async function nestedDir(dirHandle, parts, create) {
+  let current = dirHandle;
+  for (const part of parts) {
+    current = await current.getDirectoryHandle(part, { create });
+  }
+  return current;
+}
+
+/**
+ * 读当月会话日志（`.worktodolist/sessions/session-YYYY-MM.ndjson`）。
+ * Tauri 侧由 Rust 走白名单内的月份校验；浏览器侧直接走嵌套目录句柄。
+ */
+export async function readSessionText(dirHandle, month) {
+  if (isTauri()) return invoke('fs_read_session', { month });
+  try {
+    const sessions = await nestedDir(dirHandle, [STATE_DIR, 'sessions'], false);
+    const fileHandle = await sessions.getFileHandle(`session-${month}.ndjson`);
+    return await (await fileHandle.getFile()).text();
+  } catch (err) {
+    if (err && (err.name === 'NotFoundError' || err.code === 8)) return '';
+    throw err;
+  }
+}
+
+export async function writeSessionText(dirHandle, month, text) {
+  if (isTauri()) {
+    await invoke('fs_write_session', { month, text });
+    return;
+  }
+  const sessions = await nestedDir(dirHandle, [STATE_DIR, 'sessions'], true);
+  const fileHandle = await sessions.getFileHandle(`session-${month}.ndjson`, { create: true });
+  const writable = await fileHandle.createWritable();
+  await writable.write(text);
+  await writable.close();
+}
+
+/** 运行态占用读数；浏览器侧不提供（dev 环境不需要），返回 null。 */
+export async function workspaceUsage(dirHandle) {
+  if (isTauri()) return invoke('fs_usage');
+  return null;
+}
+
+// 每日备份：当天首次调用时复制 todo.txt → .worktodolist/backup/todo-YYYY-MM-DD.txt、
+// notes.md → .worktodolist/backup/notes-YYYY-MM-DD.md（notes.md 不存在或为空则跳过），
 // 两个家族各自保留最近 30 份。与 Rust 侧 fs_backup 语义一致。
 export async function ensureDailyBackup(dirHandle, today) {
   if (isTauri()) return invoke('fs_backup', { today });
-  const backupDir = await dirHandle.getDirectoryHandle('backup', { create: true });
+  const backupDir = await nestedDir(dirHandle, [STATE_DIR, 'backup'], true);
   let created = false;
   // 两个家族独立判断「今天是否已有」：中午新建的 notes.md 不能因为早上已经
   // 备过 todo.txt 就错过当天的唯一备份窗口（反过来同理）。

@@ -1,0 +1,60 @@
+# 合并门禁（R-12）：任何分支的 push 与任何 PR 都要跑一遍完整的前端门禁。
+#
+# 为什么不复用出包 workflow：`build-macos.yml` / `build-windows.yml` 只在打 tag 或
+# 手动触发时跑，且会烧掉几分钟的 Rust 编译 —— 它们证明不了「这个 PR 是绿的」。
+# 出包是发布动作，这里是合并动作，两件事必须分开。
+#
+# 为什么只有三步（R-43）：`npm run test:guard` 内部已用 JSON reporter 重跑过一遍
+# 全量 vitest（并核对磁盘上的测试文件数与用例数，拦「静默丢文件」的假绿），
+# 所以**不再叠一轮裸的 `npm test`** —— 那只是白烧 30 多秒。
+#
+# 门禁顺序是刻意的：
+#   1. `test:guard` —— 单测 + 测试完整性（最快的红在这里）；
+#   2. `test:ui`    —— CSS 令牌 / 对比度 / 字阶 / Hooks 恒定（纯静态分析，秒级）；
+#   3. `build`      —— 打包能过（拦住「测试全绿但 build 崩」）。
+#
+# 三个浏览器门禁（responsive / settings / tools）不在这里跑：它们需要真实
+# Chromium + dev server，runner 上要额外装浏览器并起 vite，属 B0-1 之后的
+# 收尾工作（见补丁方案 §9.1「B0 必跑」）。本文件先保证「单测 + 静态门禁 + 构建」。
+
+name: CI
+
+on:
+  # 全部分支都跑：分支上的红必须在合并前被看见，而不是等推到 main 才发现。
+  push:
+    branches: ['**']
+  # PR 一律跑，不做 paths 过滤 —— 门禁可以慢一点，但不能漏掉任何一个 PR。
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      # 必须是 22+：qa-css-check.mjs / qa-hooks.mjs 用了 node:fs 的 globSync，
+      # 该导出 Node 22 才有，Node 20 下 test:ui 直接 SyntaxError。
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: todolist-gui/package-lock.json
+
+      # npm ci 而非 install：lock 与 package.json 不一致时必须报错，而不是悄悄改写 lock。
+      # 所有 npm 命令都在 todolist-gui/ 下跑（仓库根没有 package.json）。
+      - name: 安装前端依赖
+        working-directory: todolist-gui
+        run: npm ci
+
+      - name: 测试门禁（单测 / 完整性 / CSS·对比度·字阶·Hooks）
+        working-directory: todolist-gui
+        run: npm run test:guard && npm run test:ui
+
+      - name: 构建（vite build → dist/）
+        working-directory: todolist-gui
+        run: npm run build

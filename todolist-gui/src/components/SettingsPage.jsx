@@ -27,6 +27,12 @@ import {
 } from '../lib/readingDensity.js';
 import Icon from './Icon.jsx';
 import { SKINS, SKIN_LABELS, useSkin } from '../lib/skin.js';
+import {
+  GROUP_DEFAULT_LABELS,
+  GROUP_LABEL_MAX,
+  cleanGroupLabel,
+  useGroupLabels,
+} from '../lib/sidebarGroups.js';
 import { THEME_ICONS, THEME_LABELS, THEME_MODES } from '../lib/theme.js';
 
 // 键帽：把 "Ctrl + 1 / 2 / 3" 拆成一枚枚可扫的键，分隔符留在中间。
@@ -314,7 +320,7 @@ function ThemeSection({ themeMode = 'auto', onPickTheme }) {
   );
 }
 
-// 外观主题：四档皮肤（原版 / 素纸 / 夜航 / 园庭），与明暗档位正交。
+// 外观主题：三档皮肤（原版 / 素纸 / 夜航），与明暗档位正交。
 // 按钮上那三枚小样读 §1 的 --sw-* 样张令牌：画的是「目标档长什么样」，
 // 不是当前生效色 —— 否则在夜航里看夜航的样张就只剩一片黑。
 function SkinSection() {
@@ -349,12 +355,88 @@ function SkinSection() {
   );
 }
 
+// 侧栏分组：分类（@）/ 标签（+）在侧栏里的显示名。
+// 只改标题，todo.txt 的 @ / + 写法与数据都不动；留空恢复默认。
+function SidebarLabelRow({ kind, label, value, onRename }) {
+  const [draft, setDraft] = useState(value);
+  const skipBlurRef = useRef(false);
+
+  return (
+    <div className="settings-row">
+      <span className="settings-label">{label}</span>
+      <div className="settings-control">
+        <input
+          type="text"
+          data-group-label={kind}
+          value={draft}
+          maxLength={GROUP_LABEL_MAX}
+          placeholder={GROUP_DEFAULT_LABELS[kind]}
+          aria-label={label}
+          onChange={(e) => {
+            // 边打边落盘：关设置页 / 切分类时 blur 不一定轮得到，不能把改动留成草稿。
+            setDraft(e.target.value);
+            onRename(kind, e.target.value);
+          }}
+          onBlur={() => {
+            if (skipBlurRef.current) {
+              skipBlurRef.current = false;
+              return;
+            }
+            setDraft(cleanGroupLabel(draft, GROUP_DEFAULT_LABELS[kind]));
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              e.currentTarget.blur();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              skipBlurRef.current = true;
+              setDraft(value);
+              e.currentTarget.blur();
+            }
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function SidebarLabelsSection() {
+  const { labels, rename } = useGroupLabels();
+  return (
+    <section className="settings-group">
+      <div className="settings-group-side">
+        <h3 className="settings-group-title">侧栏分组</h3>
+        <p className="settings-group-note">
+          只改侧栏里的显示名；todo.txt 里 @ / + 的写法不变。留空恢复默认。
+        </p>
+      </div>
+      <div className="settings-fields">
+        <SidebarLabelRow kind="contexts" label="分类组名" value={labels.contexts} onRename={rename} />
+        <SidebarLabelRow kind="projects" label="标签组名" value={labels.projects} onRename={rename} />
+      </div>
+    </section>
+  );
+}
+
 // 数据：保存状态 + 两个以前挂在底栏上的动作。
 //
 // 2026-11-14 底栏整行删掉后，主界面不再报「已保存 / 上次保存」，
 // 但这件事不能凭空消失 —— 挪到这里，顺手把「手动重载 / 切换目录」也收进来。
 // 页面因此不再是纯只读：快捷键三节仍然只读，数据这两颗按钮是真动作。
+function formatBytes(n) {
+  if (!Number.isFinite(n)) return '—';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
 function DataSection({ store }) {
+  const refresh = store && store.refreshDataUsage;
+  // 设置页打开时读一次运行态占用（打开前的工具动作可能新增了会话文件）。
+  useEffect(() => {
+    if (refresh) refresh();
+  }, [refresh]);
   if (!store) return null;
   const savedAt = store.lastSavedAt ? dayjs(store.lastSavedAt).format('HH:mm:ss') : '—';
   const stateText = store.conflict
@@ -363,13 +445,18 @@ function DataSection({ store }) {
       ? '未保存'
       : '已保存';
   const lines = (store.todoEntries || []).filter((e) => e.kind === 'task').length;
+  const usage = store.dataUsage;
+  const usageText = usage
+    ? `备份 ${usage.backup_files} 个 · 会话 ${usage.session_files} 个 · 合计 ${formatBytes(usage.total_bytes)}`
+    : '—';
 
   return (
     <section className="settings-group">
       <div className="settings-group-side">
         <h3 className="settings-group-title">数据</h3>
         <p className="settings-group-note">
-          todo.txt / done.txt 在本机的读写。文件被外部程序改过、或换了数据目录，从这里重来一次。
+          todo.txt / done.txt 在本机的读写。备份与会话收在 .worktodolist/：备份留 30 天、
+          会话留 12 个月，启动时自动清理。
         </p>
       </div>
       <div className="settings-fields">
@@ -381,12 +468,21 @@ function DataSection({ store }) {
             </span>
           </div>
         </div>
+        <div className="settings-row">
+          <span className="settings-label">生成数据</span>
+          <div className="settings-control">
+            <span className="settings-range">{usageText}</span>
+          </div>
+        </div>
         <div className="settings-actions">
           <button type="button" className="btn" onClick={() => store.manualReload()}>
             手动重载
           </button>
           <button type="button" className="btn" onClick={() => store.pickDirectory()}>
             切换目录
+          </button>
+          <button type="button" className="btn" onClick={() => store.maintain && store.maintain()}>
+            清理生成数据
           </button>
         </div>
       </div>
@@ -440,8 +536,6 @@ export default function SettingsPage({ onClose, projects, store, themeMode = 'au
           <span>返回</span>
         </button>
         <h2 className="settings-title">设置</h2>
-        <span className="spacer" />
-        <span className="settings-head-note">本机偏好 · 快捷键速查只读</span>
       </div>
 
       <div className="settings-main">
@@ -475,6 +569,7 @@ export default function SettingsPage({ onClose, projects, store, themeMode = 'au
               <SkinSection />
               <ListStyleSection projects={projects} />
               <DensitySection />
+              <SidebarLabelsSection />
             </section>
 
             <section className="settings-cat" data-category="data" {...panel('data')}>
@@ -504,11 +599,6 @@ export default function SettingsPage({ onClose, projects, store, themeMode = 'au
             </section>
           </div>
         </div>
-      </div>
-
-      <div className="settings-foot">
-        <span className="spacer" />
-        <span className="settings-where">随时可查：活动栏「设置」/ Ctrl + ,</span>
       </div>
     </div>
   );

@@ -33,6 +33,8 @@ todolist-gui/vite.config.js.timestamp-*.mjs
 # src-tauri/target/ 由 todolist-gui/src-tauri/.gitignore 单独忽略（Tauri 脚手架约定），
 # 不需要在这里重复一条。
 
+# 数据目录若恰好是本仓库：运行态（备份 / 会话 / 日志 / 提醒状态）不进库。
+.worktodolist/
 # ---- 会话转录（WorkBuddy 落盘的历史，不属于项目源码）----
 session-*.ndjson
 

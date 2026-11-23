@@ -232,6 +232,39 @@ describe('子任务在「今天」/「即将到期」里的可见性', () => {
     expect(titles).toEqual(['备份']);
   });
 
+  it('「今天」也把父项的后代带上：子任务自己的未来日期不把它挡在屏外', () => {
+    const nested = T(['今日父 id:par001 due:2026-09-30', '未来子 parent:par001 due:2026-10-10']);
+    const titles = viewTasks(nested, 'today', 'auto', '', TODAY).map((t) => t.title);
+    expect(titles).toEqual(['今日父', '未来子']);
+    const g = todayGroups(viewTasks(nested, 'today', 'auto', '', TODAY), TODAY, buildNesting(nested));
+    expect(g.dueToday.map((t) => t.title)).toEqual(['今日父', '未来子']);
+    expect(g.noDate).toEqual([]);
+  });
+
+  it('分类 / 项目筛选也把父项的后代带上（按父项的 @ / + 进屏）', () => {
+    const tagged = T([
+      '团队任务 +团队 id:tea001',
+      '子步骤 parent:tea001',
+      '独立任务 +团队',
+      '领域任务 @工作 id:ctx001',
+      '领域子步骤 parent:ctx001',
+    ]);
+    expect(viewTasks(tagged, '+:团队', 'auto', '', TODAY).map((t) => t.title)).toEqual([
+      '团队任务',
+      '子步骤',
+      '独立任务',
+    ]);
+    expect(viewTasks(tagged, '@:工作', 'auto', '', TODAY).map((t) => t.title)).toEqual([
+      '领域任务',
+      '领域子步骤',
+    ]);
+  });
+
+  it('分类 / 项目筛选有搜索词时不补后代', () => {
+    const tagged = T(['团队任务 +团队 id:tea001', '子步骤 parent:t1']);
+    expect(viewTasks(tagged, '+:团队', 'auto', '任务', TODAY).map((t) => t.title)).toEqual(['团队任务']);
+  });
+
   it('todayGroups 不传 nesting 时保持老行为（父在前、子按自己的日期归组）', () => {
     const flat = tasksForView(entries, 'today', TODAY);
     const g = todayGroups(flat, TODAY);

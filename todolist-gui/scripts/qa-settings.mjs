@@ -9,19 +9,37 @@
 // 列表与阅读并入外观，显示模式与窗口置顶不再占设置项；
 // 顺带核对「没有文本输入控件」与「设置按钮紧邻应用菜单」。
 //
-// 用法：npm run test:settings   （需要先起 dev：npm run dev -- --port 15181 --strictPort）
+// 用法：npm run test:settings   （需要先起 dev：npm run dev）
 //      SG_BASE=http://localhost:15181 npm run test:settings
 //      --shots  额外输出 qa-artifacts/settings-*.png
+//
+// 退出码（R-42）：0 全绿 / 1 断言失败 / 2 环境未就绪（dev server 没起、找不到浏览器）
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import {
+  EXIT_ENV,
+  EXIT_FAIL,
+  EXIT_OK,
+  ensureServer,
+  exitWithError,
+  findBrowser,
+  resolveBase,
+} from './qa-preflight.mjs';
 
-const EDGE = process.env.EDGE || [
-  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
-  'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
-].find((p) => existsSync(p));
-const BASE = process.env.SG_BASE || 'http://localhost:15181';
+// 浏览器探测与端口都收敛到 preflight（R-11）：候选项不再只有 Windows 路径。
+const EDGE = findBrowser();
+// 端口取自 vite.config.js 的 DEV_PORT；SG_BASE 仍可覆盖。
+// 解析失败时 fail-loud 退 2（环境未就绪），不回落任何默认端口。
+function mustResolveBase() {
+  try {
+    return resolveBase();
+  } catch (err) {
+    exitWithError(err);
+  }
+}
+const BASE = mustResolveBase();
 // 9557 落在本机 Windows 排除端口段 9461-9560 内（netsh excludedportrange），
 // Edge CDP bind 会 0x271D 拒绝 —— 挪到段外，并允许环境变量覆盖。
 const PORT = Number(process.env.QA_CDP_PORT) || 9563;
@@ -107,7 +125,13 @@ class CDP {
 }
 
 async function main() {
-  if (!EDGE) throw new Error('找不到 Edge/Chrome，可设置 EDGE 环境变量');
+  if (!EDGE) {
+    const err = new Error('找不到 Edge/Chrome，可设置 EDGE 环境变量');
+    err.exitCode = EXIT_ENV;
+    throw err;
+  }
+  // 环境未就绪 → 退出码 2（与断言失败区分，R-42）。
+  await ensureServer(BASE);
   rmSync(PROFILE, { recursive: true, force: true });
 
   const proc = spawn(
@@ -225,7 +249,12 @@ async function main() {
         const d = r.querySelector('.settings-range');
         return k && k.textContent.trim() && d && d.textContent.trim();
       }),
-      hasInput: !!q('.settings input, .settings textarea, .settings input[type=checkbox]'),
+      // 2026-11-23：外观 → 侧栏分组有两枚文本输入；只读承诺收窄到快捷键分类。
+      hasInput: !!document.querySelector(
+        '.settings-cat[data-category="shortcuts"] input, ' +
+        '.settings-cat[data-category="shortcuts"] textarea, ' +
+        '.settings-cat[data-category="shortcuts"] input[type=checkbox]'
+      ),
       footButtons: document.querySelectorAll('.settings-foot button').length,
       // 设置页 2026-11-19 改版：左侧分类导航 + 右侧当前分类；默认只展示「外观」。
       settingsNav: document.querySelectorAll('.settings-nav').length,
@@ -267,28 +296,31 @@ async function main() {
       densityPreviewRows: document.querySelectorAll('.density-preview .dp-row').length,
       densityReset: document.querySelectorAll('.density-reset').length,
       // 主题只有一枚按钮，点一次轮换一档；按钮画的是当前档，不再有实心底。
-      // 外观主题：四枚样张按钮 × 三枚小样；恰好一档按下。
+      // 外观主题：三枚样张按钮 × 三枚小样；恰好一档按下。
       skinBtns: document.querySelectorAll('.skin-switch .skin-btn').length,
       skinPressed: Array.from(document.querySelectorAll('.skin-switch .skin-btn')).map((b) => b.getAttribute('aria-pressed')),
       skinLabels: Array.from(document.querySelectorAll('.skin-switch .skin-btn')).map((b) => b.textContent.trim()),
       skinSwatches: document.querySelectorAll('.skin-switch .skin-sw i').length,
+      groupLabels: Array.from(document.querySelectorAll('[data-group-label]')).map((i) => i.dataset.groupLabel),
+      groupValues: Array.from(document.querySelectorAll('[data-group-label]')).map((i) => i.value),
+      groupMax: Array.from(document.querySelectorAll('[data-group-label]')).map((i) => i.maxLength),
       themeBtns: document.querySelectorAll('.tabs .tab[data-mode]').length,
       themeMode: (document.querySelector('.tabs .tab[data-mode]') || {}).dataset?.mode || '',
       themeSolid: document.querySelectorAll('.tabs .tab[data-mode].is-solid').length,
       overflow: document.documentElement.scrollWidth - window.innerWidth,
     };
   })()`);
-  check('设置页结构完整（页头 / 返回 / 分组 / 底栏）', shape.head && shape.back && shape.foot, JSON.stringify(shape));
+  check('设置页结构完整（页头 / 返回 / 分组）', shape.head && shape.back && shape.groups > 0, JSON.stringify(shape));
   check('标题为「设置」', shape.title === '设置', `title=${shape.title}`);
   // 2026-11-19 第二轮：列表与阅读并入外观，显示模式与窗口置顶撤出设置页。
   const WANT_GROUPS = [
     '明暗模式', '外观主题',
-    '列表外观', '阅读密度',
+    '列表外观', '阅读密度', '侧栏分组',
     '数据',
     '全局', '列表页', '日历',
   ];
   check(
-    '设置节为「明暗模式 / 外观主题 / 列表外观 / 阅读密度 / 数据 / 全局 / 列表页 / 日历」',
+    '设置节为「明暗模式 / 外观主题 / 列表外观 / 阅读密度 / 侧栏分组 / 数据 / 全局 / 列表页 / 日历」',
     JSON.stringify(shape.groupTitles) === JSON.stringify(WANT_GROUPS),
     JSON.stringify(shape.groupTitles)
   );
@@ -319,14 +351,14 @@ async function main() {
   check('速查表列出日历键（翻月 / 回今天 / 在这天新建）', ['PageUp', 'PageDown', 'Home', '在选中那天新建'].every((k) => shape.keyText.includes(k)), shape.keyText.slice(0, 160));
   check('每组至少一条、且每条快捷键都有键名与说明', shape.rows >= 12 && shape.rowsComplete, `rows=${shape.rows} complete=${shape.rowsComplete}`);
   check('列表页速查不再列空格完成', !shape.keyText.includes('完成 / 取消完成当前选中任务'), shape.keyText.slice(0, 160));
-  check('页头注明本页只读', shape.note.includes('只读'), shape.note);
-  check('没有任何输入控件（只读页，不需要保存）', shape.hasInput === false);
-  check('底栏没有按钮（旧「保存 / 清除」入口已移除）', shape.footButtons === 0, `buttons=${shape.footButtons}`);
+  check('页头与底栏不摆说明文字（2026-11-19 清爽版）', shape.note === '' && shape.foot === false && shape.footButtons === 0,
+    JSON.stringify({ note: shape.note, foot: shape.foot, footButtons: shape.footButtons }));
+  check('快捷键三节没有任何输入控件（确实点不了）', shape.hasInput === false);
   check('旧「联网工具」控件不存在（白名单 / 超时 / 响应上限）', shape.oldNet === false);
   check(
-    '「手动重载 / 切换目录」在设置页数据节里（主界面不再有这两颗钮）',
+    '「手动重载 / 切换目录 / 清理生成数据」在设置页数据节里（主界面不再有这三颗钮）',
     shape.dataActions === 1 &&
-      JSON.stringify(shape.dataBtns) === JSON.stringify(['手动重载', '切换目录']),
+      JSON.stringify(shape.dataBtns) === JSON.stringify(['手动重载', '切换目录', '清理生成数据']),
     JSON.stringify(shape.dataBtns)
   );
   check('设置按钮紧邻应用菜单（活动栏一枚设置入口 + 菜单按钮仍在）',
@@ -407,10 +439,10 @@ async function main() {
     && densityReset.rootVar === '' && densityReset.navH === '26px',
     JSON.stringify(densityReset));
 
-  check('外观主题：四枚样张按钮（原版/素纸/夜航/园庭）、恰好一档按下、每枚三枚小样',
-    shape.skinBtns === 4 && shape.skinPressed.filter((v) => v === 'true').length === 1
-    && JSON.stringify(shape.skinLabels) === JSON.stringify(['原版', '素纸', '夜航', '园庭'])
-    && shape.skinSwatches === 12,
+  check('外观主题：三枚样张按钮（原版/素纸/夜航）、恰好一档按下、每枚三枚小样',
+    shape.skinBtns === 3 && shape.skinPressed.filter((v) => v === 'true').length === 1
+    && JSON.stringify(shape.skinLabels) === JSON.stringify(['原版', '素纸', '夜航'])
+    && shape.skinSwatches === 9,
     JSON.stringify({ btns: shape.skinBtns, pressed: shape.skinPressed, labels: shape.skinLabels, sw: shape.skinSwatches }));
 
   // 外观主题在「外观」分类里；从密度分类切回来再点。
@@ -418,7 +450,7 @@ async function main() {
 
   // 外观主题交互链路：点「夜航」→ data-skin 投影 + 落盘 + 令牌真的换；
   // 点回「原版」→ 基线宽度恢复。只证明按钮画出来不够，要证明偏好 → 投影 → 令牌这条链是通的。
-  // 2026-11-18 二改：侧栏四档同形 —— 换档不许动侧栏宽度与行高（夜航早期收到 56px
+  // 2026-11-18 二改：侧栏三档同形 —— 换档不许动侧栏宽度与行高（夜航早期收到 56px
   // 图标轨、行高 36，走的就是这里这条断言的反面），所以这里盯的是「换了档也不变」。
   const skinPick = await evalJs(`(() => {
     const btn = document.querySelector('.skin-btn[data-skin="night"]');
@@ -453,6 +485,33 @@ async function main() {
   check('外观主题：点回原版 → 侧栏仍 176（换档不改骨架）',
     skinBack && skinBack.attr === 'classic' && skinBack.sideW === '176px',
     JSON.stringify(skinBack));
+
+  check('侧栏分组：两行输入，默认 分类/标签，最长 8 字',
+    JSON.stringify(shape.groupLabels) === JSON.stringify(['contexts', 'projects'])
+    && JSON.stringify(shape.groupValues) === JSON.stringify(['分类', '标签'])
+    && JSON.stringify(shape.groupMax) === JSON.stringify([8, 8]),
+    JSON.stringify({ labels: shape.groupLabels, values: shape.groupValues, max: shape.groupMax }));
+
+  const groupRename = await evalJs(`(() => {
+    const input = document.querySelector('[data-group-label="projects"]');
+    if (!input) return null;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    setter.call(input, '团队');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    return new Promise((res) => setTimeout(() => {
+      const stored = localStorage.getItem('worktodolist.sidebar-groups');
+      // 还原：先走一次输入把界面值放回默认，再清掉配置，后续检查仍看到「标签」。
+      setter.call(input, '标签');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      setTimeout(() => {
+        localStorage.removeItem('worktodolist.sidebar-groups');
+        res({ stored, value: input.value });
+      }, 200);
+    }, 250));
+  })()`);
+  check('侧栏分组：标签改成「团队」→ 落盘，改回后清配置',
+    groupRename && (groupRename.stored || '').includes('团队') && groupRename.value === '标签',
+    JSON.stringify(groupRename));
 
   // 数据分类要能真的切出来：按钮在 hidden 面板里数得到不算数，得看得见。
   check('分类导航可切到「数据」', await switchCategory('数据'));
@@ -754,7 +813,7 @@ async function main() {
   })()`);
   check('390 宽下无横向溢出', narrow.overflow <= 0, `overflow=${narrow.overflow}`);
   check('390 宽下快捷键改为上下堆叠（单列）', narrow.singleColumn === true);
-  check('390 宽下底栏仍在（布局不塌）', narrow.footVisible === true);
+  check('390 宽下底栏不出现（说明文字已移除，布局不塌）', narrow.footVisible === false);
   check('390 宽下分类导航转横向并可横滚（不撑破页面）',
     narrow.navHorizontal === true && narrow.navOverflow >= 0,
     JSON.stringify({ horizontal: narrow.navHorizontal, navOverflow: narrow.navOverflow }));
@@ -778,9 +837,11 @@ main()
   .then(() => {
     const failed = results.filter((r) => !r.ok);
     console.log(`\n结果：${results.length - failed.length}/${results.length} 通过${failed.length ? '  ✗ 存在失败项' : '  全部通过'}`);
-    process.exit(failed.length ? 1 : 0);
+    process.exit(failed.length ? EXIT_FAIL : EXIT_OK);
   })
   .catch((err) => {
+    // 环境未就绪（dev server 没起 / 找不到浏览器）带 exitCode=2，断言失败退 1。
+    const code = err && Number.isInteger(err.exitCode) ? err.exitCode : EXIT_FAIL;
     console.error('✗ ' + (err && err.message ? err.message : err));
-    process.exit(1);
+    process.exit(code);
   });

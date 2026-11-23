@@ -3,16 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { SKINS, SKIN_LABELS, clean, loadSkin, applySkin, setSkin, subscribeSkin } from './skin.js';
 
 describe('skin：档位与归一', () => {
-  it('四档固定序，中文说法齐全', () => {
-    expect(SKINS).toEqual(['classic', 'paper', 'night', 'garden']);
-    expect(SKINS.map((s) => SKIN_LABELS[s])).toEqual(['原版', '素纸', '夜航', '园庭']);
+  it('三档固定序，中文说法齐全', () => {
+    expect(SKINS).toEqual(['classic', 'paper', 'night']);
+    expect(SKINS.map((s) => SKIN_LABELS[s])).toEqual(['原版', '素纸', '夜航']);
   });
 
   it('脏值一律回原版', () => {
     expect(clean('paper')).toBe('paper');
     expect(clean('night')).toBe('night');
-    expect(clean('garden')).toBe('garden');
     expect(clean('classic')).toBe('classic');
+    expect(clean('garden')).toBe('classic');
     expect(clean('dark')).toBe('classic');
     expect(clean('')).toBe('classic');
     expect(clean(undefined)).toBe('classic');
@@ -45,14 +45,14 @@ describe('skin：投影与落盘', () => {
     const seen = [];
     const off = subscribeSkin((s) => seen.push(s));
     try {
-      setSkin('garden');
-      expect(loadSkin()).toBe('garden');
-      expect(globalThis.document.documentElement.dataset.skin).toBe('garden');
-      expect(JSON.parse(mem.get('worktodolist.skin'))).toEqual({ skin: 'garden' });
-      expect(seen).toEqual(['garden']);
+      setSkin('night');
+      expect(loadSkin()).toBe('night');
+      expect(globalThis.document.documentElement.dataset.skin).toBe('night');
+      expect(JSON.parse(mem.get('worktodolist.skin'))).toEqual({ skin: 'night' });
+      expect(seen).toEqual(['night']);
       setSkin('nope');
       expect(loadSkin()).toBe('classic');
-      expect(seen).toEqual(['garden', 'classic']);
+      expect(seen).toEqual(['night', 'classic']);
     } finally {
       off();
       delete globalThis.localStorage;

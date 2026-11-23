@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { hideToTray, platformFromUA, usesCustomTitlebar } from './runtime.js';
+import { hideToTray, listen, platformFromUA, resolveListen, usesCustomTitlebar } from './runtime.js';
 
 describe('platformFromUA', () => {
   it('识别 macOS WebKit', () => {
@@ -85,5 +85,41 @@ describe('hideToTray', () => {
     });
     expect(ok).toBe(true);
     expect(calls).toEqual(['app_hide_to_tray']);
+  });
+});
+
+// ——— R-10：事件通道的解析（关窗握手的前提） ———
+// 旧实现拿不到能力时返回 noop：关窗握手在用户完全不知情的情况下退化成
+// 「什么都不做」，最后 200ms 的改动静默丢失。现在必须**抛错**，让调用方
+// （useNativeShell）显式降级到 pagehide 兜底刷盘。
+describe('resolveListen', () => {
+  const originalWindow = globalThis.window;
+
+  afterEach(() => {
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+  });
+
+  it('两级后备：__TAURI__.event 优先，其次 __TAURI_INTERNALS__.event；都拿不到就抛错', async () => {
+    // ① 公开面可用
+    globalThis.window = {
+      __TAURI__: { event: { listen: async () => () => {} } },
+    };
+    expect(typeof resolveListen()).toBe('function');
+
+    // ② 只有内部通道（注入时机偏晚）：仍能解析出来
+    globalThis.window = {
+      __TAURI_INTERNALS__: { event: { listen: async () => () => {} } },
+    };
+    expect(typeof resolveListen()).toBe('function');
+
+    // ③ 只有 invoke、没有 event 通道 —— 不许再退回 noop，必须抛错
+    globalThis.window = { __TAURI_INTERNALS__: { invoke: async () => {} } };
+    expect(() => resolveListen()).toThrow(/IPC 不可用/);
+    await expect(listen('shell://before-close', () => {})).rejects.toThrow(/IPC 不可用/);
+
+    // ④ 浏览器里（没有 window）同样抛错
+    delete globalThis.window;
+    expect(() => resolveListen()).toThrow(/IPC 不可用/);
   });
 });

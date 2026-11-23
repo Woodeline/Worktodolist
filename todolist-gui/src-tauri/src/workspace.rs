@@ -121,6 +121,251 @@ fn is_iso_date(s: &str) -> bool {
         })
 }
 
+fn is_iso_month(s: &str) -> bool {
+    let b = s.as_bytes();
+    b.len() == 7
+        && b[4] == b'-'
+        && b.iter().enumerate().all(|(i, c)| {
+            if i == 4 {
+                true
+            } else {
+                c.is_ascii_digit()
+            }
+        })
+}
+
+/// 日会话文件（旧布局）：`session-YYYY-MM-DD.ndjson`。
+fn is_daily_session_name(n: &str) -> bool {
+    n.starts_with("session-")
+        && n.ends_with(".ndjson")
+        && n.len() == 25
+        && is_iso_date(&n[8..18])
+}
+
+/// 月会话文件（新布局）：`session-YYYY-MM.ndjson`。
+fn is_monthly_session_name(n: &str) -> bool {
+    n.starts_with("session-")
+        && n.ends_with(".ndjson")
+        && n.len() == 22
+        && is_iso_month(&n[8..15])
+}
+
+/// YYYY-MM 往前推 n 个月。只做年月进位，足以给保留窗口算截止月。
+fn months_before(month: &str, n: i32) -> Option<String> {
+    if !is_iso_month(month) {
+        return None;
+    }
+    let y: i32 = month[0..4].parse().ok()?;
+    let m: i32 = month[5..7].parse().ok()?;
+    if !(1..=12).contains(&m) {
+        return None;
+    }
+    let total = y * 12 + (m - 1) - n;
+    Some(format!("{:04}-{:02}", total.div_euclid(12), total.rem_euclid(12) + 1))
+}
+
+/// 所有运行态都收在这个隐藏目录：根目录只留 todo.txt / done.txt / notes.md。
+pub(crate) const STATE_DIR: &str = ".worktodolist";
+
+pub(crate) fn state_dir(root: &Path) -> PathBuf {
+    root.join(STATE_DIR)
+}
+
+pub(crate) fn ensure_state_dirs(root: &Path) -> Result<PathBuf, String> {
+    let base = state_dir(root);
+    for sub in ["backup", "sessions", "sessions/legacy", "logs"] {
+        fs::create_dir_all(base.join(sub))
+            .map_err(|e| format!("创建运行态目录失败（{sub}）：{e}"))?;
+    }
+    Ok(base)
+}
+
+/// 失败留痕有上限：超过 64 KB 只保留最后约一半，避免两个点文件无线增长。
+pub(crate) fn append_capped_log(path: &Path, line: &str) {
+    const MAX: u64 = 64 * 1024;
+    if let Some(dir) = path.parent() {
+        let _ = fs::create_dir_all(dir);
+    }
+    let mut text = fs::read_to_string(path).unwrap_or_default();
+    text.push_str(line.trim_end());
+    text.push('\n');
+    if text.len() as u64 > MAX {
+        let keep = (MAX / 2) as usize;
+        let cut = text.len().saturating_sub(keep);
+        let boundary = text[cut..].find('\n').map(|i| cut + i + 1).unwrap_or(cut);
+        text = text[boundary..].to_string();
+    }
+    let tmp = path.with_extension("log.tmp");
+    if fs::write(&tmp, text).is_ok() {
+        let _ = fs::rename(&tmp, path);
+    }
+}
+
+/// 会话日志保留窗口：月文件只留最近 12 个月；旧布局的日文件按所属月同样处理。
+fn prune_sessions(base: &Path, today: &str) -> Result<(), String> {
+    let Some(cutoff) = today
+        .get(0..7)
+        .filter(|m| is_iso_month(m))
+        .and_then(|m| months_before(m, 11))
+    else {
+        return Ok(());
+    };
+    let sessions = base.join("sessions");
+    if let Ok(entries) = fs::read_dir(&sessions) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let month = if is_monthly_session_name(&name) {
+                &name[8..15]
+            } else {
+                continue;
+            };
+            if month < cutoff.as_str() {
+                let _ = fs::remove_file(entry.path());
+            }
+        }
+    }
+    let legacy = sessions.join("legacy");
+    if let Ok(entries) = fs::read_dir(&legacy) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !is_daily_session_name(&name) {
+                continue;
+            }
+            if &name[8..15] < cutoff.as_str() {
+                let _ = fs::remove_file(entry.path());
+            }
+        }
+    }
+    Ok(())
+}
+
+fn dir_usage(path: &Path) -> (u64, u64) {
+    let mut files = 0u64;
+    let mut bytes = 0u64;
+    if let Ok(entries) = fs::read_dir(path) {
+        for entry in entries.flatten() {
+            if let Ok(meta) = entry.metadata() {
+                if meta.is_file() {
+                    files += 1;
+                    bytes += meta.len();
+                }
+            }
+        }
+    }
+    (files, bytes)
+}
+
+#[derive(Serialize)]
+pub struct Usage {
+    pub backup_files: u64,
+    pub backup_bytes: u64,
+    pub session_files: u64,
+    pub session_bytes: u64,
+    pub log_bytes: u64,
+    pub total_bytes: u64,
+}
+
+fn usage_of(base: &Path) -> Usage {
+    let (backup_files, backup_bytes) = dir_usage(&base.join("backup"));
+    let (mut session_files, mut session_bytes) = dir_usage(&base.join("sessions"));
+    let (legacy_files, legacy_bytes) = dir_usage(&base.join("sessions").join("legacy"));
+    session_files += legacy_files;
+    session_bytes += legacy_bytes;
+    let (_, log_bytes) = dir_usage(&base.join("logs"));
+    Usage {
+        backup_files,
+        backup_bytes,
+        session_files,
+        session_bytes,
+        log_bytes,
+        total_bytes: backup_bytes + session_bytes + log_bytes,
+    }
+}
+
+/// 一次性迁移：旧根目录里的备份 / 日会话 / 提醒状态 / 失败日志搬进 `.worktodolist/`。
+/// 只认本程序生成的文件名；`backup/` 里认不出的文件原地不动，旧目录空了才删。
+/// 幂等：目标已存在时保留源文件，下次启动再试，不会覆盖或丢内容。
+fn migrate_state(root: &Path) -> Result<(), String> {
+    let base = ensure_state_dirs(root)?;
+
+    let old_backup = root.join("backup");
+    if old_backup.is_dir() {
+        if let Ok(entries) = fs::read_dir(&old_backup) {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if backup_family(&name).is_none() {
+                    continue; // 用户自己的文件，绝不碰
+                }
+                let target = base.join("backup").join(&name);
+                if !target.exists() {
+                    let _ = fs::rename(entry.path(), &target);
+                }
+            }
+        }
+        if fs::read_dir(&old_backup)
+            .map(|mut it| it.next().is_none())
+            .unwrap_or(false)
+        {
+            let _ = fs::remove_dir(&old_backup);
+        }
+    }
+
+    let legacy = base.join("sessions").join("legacy");
+    if let Ok(entries) = fs::read_dir(root) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !is_daily_session_name(&name) {
+                continue;
+            }
+            let target = legacy.join(&name);
+            if !target.exists() {
+                let _ = fs::rename(entry.path(), &target);
+            }
+        }
+    }
+
+    let old_fired = root.join(".todolist-remind-fired.txt");
+    if old_fired.is_file() {
+        let new_fired = base.join("remind-fired.txt");
+        let mut keys: Vec<String> = fs::read_to_string(&old_fired)
+            .unwrap_or_default()
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect();
+        if let Ok(text) = fs::read_to_string(&new_fired) {
+            keys.extend(text.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()));
+        }
+        keys.sort();
+        keys.dedup();
+        let start = keys.len().saturating_sub(1000);
+        let body = keys[start..].join("\n");
+        let body = if body.is_empty() { String::new() } else { format!("{body}\n") };
+        if fs::write(&new_fired, body).is_ok() {
+            let _ = fs::remove_file(&old_fired);
+        }
+    }
+
+    for (old, new) in [
+        (".todolist-backup.log", "backup.log"),
+        (".todolist-launch.log", "launch.log"),
+    ] {
+        let source = root.join(old);
+        if !source.is_file() {
+            continue;
+        }
+        let target = base.join("logs").join(new);
+        if let Ok(text) = fs::read_to_string(&source) {
+            for line in text.lines() {
+                append_capped_log(&target, line);
+            }
+            let _ = fs::remove_file(&source);
+        }
+    }
+
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // 原子写
 // ---------------------------------------------------------------------------
@@ -184,6 +429,9 @@ pub async fn ws_pick(app: AppHandle, state: State<'_, Workspace>) -> Result<Opti
             git_commit_on_save: read_prefs(&app).git_commit_on_save,
         },
     )?;
+    // 旧布局（根目录 backup/、session-YYYY-MM-DD.ndjson）一次性收进 .worktodolist/。
+    // 失败不阻塞打开：下次启动还会再试。
+    let _ = migrate_state(&dir);
     Ok(Some(dir.to_string_lossy().to_string()))
 }
 
@@ -205,6 +453,8 @@ pub fn ws_restore(app: AppHandle, state: State<'_, Workspace>) -> Option<String>
     if let Ok(mut slot) = state.dir.lock() {
         *slot = Some(dir.clone());
     }
+    // 启动即迁移；旧文件只在第一次成功后消失，幂等。
+    let _ = migrate_state(&dir);
     Some(dir.to_string_lossy().to_string())
 }
 
@@ -282,8 +532,8 @@ pub fn fs_backup(state: State<'_, Workspace>, today: String) -> Result<bool, Str
         return Err(format!("非法日期：{today}"));
     }
     let dir = current_dir(&state)?;
-    let backup_dir = dir.join("backup");
-    fs::create_dir_all(&backup_dir).map_err(|e| format!("创建 backup 目录失败：{e}"))?;
+    let base = ensure_state_dirs(&dir)?;
+    let backup_dir = base.join("backup");
 
     let mut created = false;
     {
@@ -309,7 +559,61 @@ pub fn fs_backup(state: State<'_, Workspace>, today: String) -> Result<bool, Str
         }
     }
     prune_backups(&backup_dir, 30)?;
+    prune_sessions(&base, &today)?;
     Ok(created)
+}
+
+/// 读当月会话日志（新布局：`.worktodolist/sessions/session-YYYY-MM.ndjson`）。
+#[tauri::command]
+pub fn fs_read_session(state: State<'_, Workspace>, month: String) -> Result<String, String> {
+    if !is_iso_month(&month) {
+        return Err(format!("非法月份：{month}"));
+    }
+    let dir = current_dir(&state)?;
+    let path = state_dir(&dir)
+        .join("sessions")
+        .join(format!("session-{month}.ndjson"));
+    match fs::read_to_string(path) {
+        Ok(text) => Ok(text),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        Err(e) => Err(format!("读取会话日志失败：{e}")),
+    }
+}
+
+/// 写当月会话日志（原子写 + 进程内串行）。首次创建某个月的文件时顺手清理过期月份。
+#[tauri::command]
+pub fn fs_write_session(
+    state: State<'_, Workspace>,
+    month: String,
+    text: String,
+) -> Result<(), String> {
+    if !is_iso_month(&month) {
+        return Err(format!("非法月份：{month}"));
+    }
+    let dir = current_dir(&state)?;
+    let base = ensure_state_dirs(&dir)?;
+    let path = base
+        .join("sessions")
+        .join(format!("session-{month}.ndjson"));
+    let existed = path.exists();
+    {
+        let _gate = state
+            .write_lock
+            .lock()
+            .map_err(|_| "写入闸门损坏".to_string())?;
+        atomic_write(&path, text.as_bytes())?;
+    }
+    if !existed {
+        prune_sessions(&base, &format!("{month}-01"))?;
+    }
+    Ok(())
+}
+
+/// 运行态占用读数：备份 / 会话 / 日志各多少文件、多少字节。
+#[tauri::command]
+pub fn fs_usage(state: State<'_, Workspace>) -> Result<Usage, String> {
+    let dir = current_dir(&state)?;
+    Ok(usage_of(&state_dir(&dir)))
 }
 
 /// 弹出原生「另存为」对话框，把字节写到用户选定的位置。
@@ -392,16 +696,13 @@ fn prune_backups(dir: &Path, keep: usize) -> Result<(), String> {
     Ok(())
 }
 
-/// 清理失败留痕。与 git.rs 的 `log_failure` 同一套思路：静默降级但留证据，
-/// 写在数据目录下而不是 stdout（用户是从桌面图标启动的，没有控制台）。
+/// 清理失败留痕。与 git.rs 的失败日志同一套思路：静默降级但留证据，
+/// 写在 `.worktodolist/logs/` 下而不是 stdout（用户是从桌面图标启动的，没有控制台）。
 fn log_prune_failure(dir: &Path, name: &str) {
-    if let Ok(mut fh) = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(dir.join(".todolist-backup.log"))
-    {
-        let _ = writeln!(fh, "[prune] 删除失败：{name}");
-    }
+    append_capped_log(
+        &state_dir(dir).join("logs").join("backup.log"),
+        &format!("[prune] 删除失败：{name}"),
+    );
 }
 
 #[cfg(test)]
@@ -475,5 +776,118 @@ mod tests {
             ]
         );
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    fn temp_root(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("ws-{tag}-{}-{}", std::process::id(), line!()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn 月份推进与保留窗口() {
+        assert_eq!(months_before("2026-11", 11).as_deref(), Some("2025-12"));
+        assert_eq!(months_before("2026-01", 1).as_deref(), Some("2025-12"));
+        assert_eq!(months_before("2026-13", 1), None);
+        assert!(is_monthly_session_name("session-2026-11.ndjson"));
+        assert!(!is_monthly_session_name("session-2026-11-20.ndjson"));
+        assert!(is_daily_session_name("session-2026-11-20.ndjson"));
+    }
+
+    #[test]
+    fn 会话日志按月保留_12_个月_旧日文件也按月份清理() {
+        let root = temp_root("sessions-prune");
+        let base = ensure_state_dirs(&root).unwrap();
+        for m in ["2025-10", "2025-11", "2025-12", "2026-11"] {
+            fs::write(base.join("sessions").join(format!("session-{m}.ndjson")), "").unwrap();
+        }
+        for d in ["2025-11-01", "2026-11-01"] {
+            fs::write(
+                base.join("sessions").join("legacy").join(format!("session-{d}.ndjson")),
+                "",
+            )
+            .unwrap();
+        }
+        // keep 12 个月：以 2026-11 为当前月，截止 2025-12
+        prune_sessions(&base, "2026-11-23").unwrap();
+        let mut names: Vec<String> = fs::read_dir(base.join("sessions"))
+            .unwrap()
+            .flatten()
+            .filter(|e| e.path().is_file())
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .collect();
+        names.sort();
+        assert_eq!(
+            names,
+            vec!["session-2025-12.ndjson".to_string(), "session-2026-11.ndjson".to_string()]
+        );
+        let legacy: Vec<String> = fs::read_dir(base.join("sessions").join("legacy"))
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .collect();
+        assert_eq!(legacy, vec!["session-2026-11-01.ndjson".to_string()]);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn 迁移把旧运行态收进隐藏目录且不碰用户文件() {
+        let root = temp_root("migrate");
+        fs::write(root.join("todo.txt"), "任务\n").unwrap();
+        fs::write(root.join("done.txt"), "").unwrap();
+        fs::write(root.join("notes.md"), "备注\n").unwrap();
+        fs::create_dir_all(root.join("backup")).unwrap();
+        fs::write(root.join("backup").join("todo-2026-10-01.txt"), "旧备份\n").unwrap();
+        fs::write(root.join("backup").join("notes-2026-10-01.md"), "旧备注\n").unwrap();
+        fs::write(root.join("backup").join("my-own-file.txt"), "别动我\n").unwrap();
+        fs::write(root.join("session-2026-10-01.ndjson"), "{}\n").unwrap();
+        fs::write(root.join(".todolist-remind-fired.txt"), "aaa|2026-10-01T09:00\n").unwrap();
+        fs::write(root.join(".todolist-launch.log"), "[autocommit] boom\n").unwrap();
+
+        migrate_state(&root).unwrap();
+
+        let base = state_dir(&root);
+        assert!(base.join("backup").join("todo-2026-10-01.txt").is_file());
+        assert!(base.join("backup").join("notes-2026-10-01.md").is_file());
+        assert!(!root.join("backup").join("todo-2026-10-01.txt").exists());
+        // 用户自己的文件留在旧 backup/，旧目录因此不删
+        assert!(root.join("backup").join("my-own-file.txt").is_file());
+        assert!(base.join("sessions").join("legacy").join("session-2026-10-01.ndjson").is_file());
+        assert!(!root.join("session-2026-10-01.ndjson").exists());
+        assert!(base.join("remind-fired.txt").is_file());
+        assert!(!root.join(".todolist-remind-fired.txt").exists());
+        assert!(base.join("logs").join("launch.log").is_file());
+        assert!(!root.join(".todolist-launch.log").exists());
+        // 根目录只剩事实文件 + 隐藏目录 + 用户自己的旧 backup/
+        let mut root_names: Vec<String> = fs::read_dir(&root)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .collect();
+        root_names.sort();
+        assert_eq!(
+            root_names,
+            vec![".worktodolist", "backup", "done.txt", "notes.md", "todo.txt"]
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn 占用读数只数运行态文件() {
+        let root = temp_root("usage");
+        let base = ensure_state_dirs(&root).unwrap();
+        fs::write(base.join("backup").join("todo-2026-10-01.txt"), "1234").unwrap();
+        fs::write(base.join("sessions").join("session-2026-10.ndjson"), "12").unwrap();
+        fs::write(base.join("sessions").join("legacy").join("session-2026-09-01.ndjson"), "1").unwrap();
+        fs::write(base.join("logs").join("launch.log"), "123").unwrap();
+        let usage = usage_of(&base);
+        assert_eq!(usage.backup_files, 1);
+        assert_eq!(usage.backup_bytes, 4);
+        assert_eq!(usage.session_files, 2);
+        assert_eq!(usage.session_bytes, 3);
+        assert_eq!(usage.log_bytes, 3);
+        assert_eq!(usage.total_bytes, 10);
+        let _ = fs::remove_dir_all(&root);
     }
 }

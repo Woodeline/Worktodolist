@@ -136,6 +136,19 @@ describe('组头一键展开 / 收起与子任务连接线', () => {
     expect(markup).not.toContain('group-toggle');
   });
 
+  it('「今天」的第一组头也带一键展开（逾期 / 今天到期 / 无日期都一样）', () => {
+    const markup = render('today');
+    expect(markup).toContain('class="group-toggle"');
+    expect(markup).toContain('aria-label="收起全部子任务"');
+  });
+
+  it('项目 / 标签筛选：子任务随父项进屏，组头也有一键展开', () => {
+    const tagged = parseFile('团队任务 +团队 id:zzz999\n子步骤 parent:zzz999');
+    const markup = render('+:团队', tagged);
+    expect(markup).toContain('子步骤');
+    expect(markup).toContain('class="group-toggle"');
+  });
+
   it('连续子行只给末行收尾：竖脊不会一路垂到行底', () => {
     const markup = render('all', parseFile('父任务 id:ccc333\n子一 parent:ccc333\n子二 parent:ccc333'));
     const kids = rowsOf(markup).filter((r) => r.child);

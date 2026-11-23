@@ -4,6 +4,15 @@ import { useTodoStore } from './hooks/useTodoStore';
 import { useNativeShell } from './hooks/useNativeShell';
 import { useAlwaysOnTop } from './hooks/useAlwaysOnTop';
 import { useTheme } from './hooks/useTheme';
+import SidebarResizeHandle from './components/SidebarResizeHandle.jsx';
+import {
+  SIDEBAR_WIDTH_DEFAULT,
+  clampSidebarWidth,
+  clearSidebarWidth,
+  hasCustomSidebarWidth,
+  loadSidebarWidth,
+  saveSidebarWidth,
+} from './lib/sidebarWidth.js';
 import { THEME_ICONS, THEME_LABELS } from './lib/theme.js';
 import { hostPlatform, isTauri, hideToTray, usesCustomTitlebar } from './lib/runtime.js';
 import { resolveEscape } from './lib/escape.js';
@@ -400,10 +409,18 @@ export function MainList({
     const overdueTails = childRunTails(overdue, depthOf);
     const dueTodayTails = childRunTails(dueToday, depthOf);
     const noDateTails = childRunTails(noDate, depthOf);
+    // 一键展开 / 收起只摆一枚，挂在最上面那个非空分组头上；它作用于本屏所有
+    // 可展开父项（不只是这一组），这样「今日」也有一眼可见的总开关。
+    const topGroup = overdue.length > 0 ? 'overdue' : dueToday.length > 0 ? 'dueToday' : 'noDate';
     return (
       <div className="task-list">
         {overdue.length > 0 && (
-          <GroupHead label="逾期" count={groups.overdue.length} tone="overdue" />
+          <GroupHead
+            label="逾期"
+            count={groups.overdue.length}
+            tone="overdue"
+            action={topGroup === 'overdue' ? toggleAllAction : null}
+          />
         )}
         {overdue.map((t) => (
           <TaskRow
@@ -415,7 +432,11 @@ export function MainList({
           />
         ))}
         {dueToday.length > 0 && (
-          <GroupHead label="今天到期" count={groups.dueToday.length} />
+          <GroupHead
+            label="今天到期"
+            count={groups.dueToday.length}
+            action={topGroup === 'dueToday' ? toggleAllAction : null}
+          />
         )}
         {dueToday.map((t) => (
           <TaskRow
@@ -426,7 +447,13 @@ export function MainList({
             {...rowProps(t, dueTodayTails.has(t.id))}
           />
         ))}
-        {noDate.length > 0 && <GroupHead label="无日期" count={groups.noDate.length} />}
+        {noDate.length > 0 && (
+          <GroupHead
+            label="无日期"
+            count={groups.noDate.length}
+            action={topGroup === 'noDate' ? toggleAllAction : null}
+          />
+        )}
         {noDate.map((t) => (
           <TaskRow
             key={t.id}
@@ -662,6 +689,25 @@ export default function App() {
   const [tab, setTab] = useState('list');
   // 侧栏折叠只是"看不看目录"，不影响任何数据 —— 因此不进 store，也不落盘。
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // 任务侧栏宽度：本机偏好，只在宽边可拖（折叠 / 窄屏时边界不渲染）。
+  // 没拖过时不写内联 --sidebar-w，让 CSS 的 176 / 中等屏 156 继续生效。
+  const [sidebarWidth, setSidebarWidth] = useState(loadSidebarWidth);
+  const [sidebarWidthCustom, setSidebarWidthCustom] = useState(hasCustomSidebarWidth);
+  const previewSidebarWidth = useCallback((width) => {
+    setSidebarWidth(width);
+    setSidebarWidthCustom(true);
+  }, []);
+  const commitSidebarWidth = useCallback((width) => {
+    const next = clampSidebarWidth(width);
+    setSidebarWidth(next);
+    setSidebarWidthCustom(true);
+    saveSidebarWidth(next);
+  }, []);
+  const resetSidebarWidth = useCallback(() => {
+    clearSidebarWidth();
+    setSidebarWidth(SIDEBAR_WIDTH_DEFAULT);
+    setSidebarWidthCustom(false);
+  }, []);
   // 搜索平时只是一枚放大镜：输入框按需挂载，所以开关状态在 App 里（/ 键、右键
   // 菜单、应用菜单都要能把它打开，三处不能各存一份）。
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1012,6 +1058,11 @@ export default function App() {
             (!settingsOpen && tab === 'list' ? ' layout' : '') +
             (tabSwitching ? ' is-switching' : '')
           }
+          style={
+            !settingsOpen && tab === 'list' && sidebarWidthCustom
+              ? { '--sidebar-w': `${sidebarWidth}px` }
+              : undefined
+          }
         >
           {settingsOpen ? (
             <SettingsPage
@@ -1033,6 +1084,14 @@ export default function App() {
                 listMode={preferredMode}
                 onPickListMode={pickMode}
               />
+              {!sidebarCollapsed && (
+                <SidebarResizeHandle
+                  width={sidebarWidthCustom ? sidebarWidth : null}
+                  onPreview={previewSidebarWidth}
+                  onCommit={commitSidebarWidth}
+                  onReset={resetSidebarWidth}
+                />
+              )}
               <main
                 ref={setMainEl}
                 className={'main' + (isCalendar ? ' main-calendar' : '')}

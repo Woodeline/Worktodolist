@@ -1,4 +1,4 @@
-// 外观主题（皮肤）：原版 / 素纸 / 夜航 / 园庭 四档，与明暗档位正交。
+// 外观主题（皮肤）：原版 / 素纸 / 夜航 三档，与明暗档位正交。
 //
 // 与 theme.js 同一套形状：本机配置是唯一真相，界面只是投影 ——
 // 偏好落 configStore（一个能力一个键），DOM 上投 <html data-skin>，
@@ -8,11 +8,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createConfigStore } from './configStore.js';
 
-/** 档位：原版（现行登记簿）/ 素纸 / 夜航 / 园庭。 */
-export const SKINS = ['classic', 'paper', 'night', 'garden'];
+/** 档位：原版（现行登记簿）/ 素纸 / 夜航。 */
+export const SKINS = ['classic', 'paper', 'night'];
 
 /** 档位的中文说法（设置页按钮与样张署名共用一份）。 */
-export const SKIN_LABELS = { classic: '原版', paper: '素纸', night: '夜航', garden: '园庭' };
+export const SKIN_LABELS = { classic: '原版', paper: '素纸', night: '夜航' };
 
 const skinPrefs = createConfigStore({
   key: 'worktodolist.skin',

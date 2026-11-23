@@ -129,10 +129,16 @@ export function compareUpcoming(a, b) {
 export function viewTasks(entries, view, sortMode, query, today) {
   const nesting = buildNesting(entries);
   const base = tasksForView(entries, view, today, nesting);
-  // 「即将到期」= 有截止日且晚于今天。子任务的截止日往往空着（它回答的是
-  // "这事分几步"），于是父项有箭头、点开空空如也 —— 父项在本屏时带上它的后代。
-  // 有搜索词时不补：搜索是在收窄，凭空多出没命中的行只会让人怀疑筛选坏了。
-  const pool = view === 'upcoming' && !query ? withDescendants(base, nesting) : base;
+  // 父项在本屏时，后代跟着进屏 —— 「即将到期」「今天」与分类 / 项目筛选都用这条。
+  // 子任务回答的是"这事分几步"，通常不带父项的 due / @ / +，只按自己的字段过滤
+  // 会让父项画出箭头、点开却空的。有搜索词时不补：搜索是在收窄，凭空多出没命中的
+  // 行只会让人怀疑筛选坏了。
+  const descendantsView =
+    view === 'upcoming' ||
+    view === 'today' ||
+    view.startsWith('@:') ||
+    view.startsWith('+:');
+  const pool = descendantsView && !query ? withDescendants(base, nesting) : base;
   const filtered = pool.filter((t) => searchMatch(t, query));
   const sorted =
     view === 'upcoming'

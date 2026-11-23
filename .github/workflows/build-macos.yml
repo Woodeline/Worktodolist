@@ -25,9 +25,27 @@ on:
       - 'v*'
     branches:
       - main
+    # R-12：paths 必须覆盖「改了就影响产物」的全部文件，否则改了依赖 / 构建配置 /
+    # 门禁脚本时出包流水线不跑，等打 tag 才发现坏了。逐条理由：
+    #   src/**           产品码
+    #   src-tauri/**     Rust 壳（已含 Cargo.toml / Cargo.lock，不重复列）
+    #   package.json     依赖集（含 optionalDependencies 的 esbuild 平台包）
+    #   package-lock.json 锁定的实际版本（npm ci 直接吃它）
+    #   vite.config.js   端口 + 打包行为 + vitest 的 .tmp 重定向
+    #   index.html       前端入口
+    #   scripts/**       门禁脚本本体（test:guard / test:ui 全在这里）
+    #   .gitattributes   决定 checkout 出来的换行符 —— 一批源码断言依赖 LF
+    #   AGENTS.md        本项目对 Agent 的唯一规则源
     paths:
       - 'todolist-gui/src/**'
       - 'todolist-gui/src-tauri/**'
+      - 'todolist-gui/package.json'
+      - 'todolist-gui/package-lock.json'
+      - 'todolist-gui/vite.config.js'
+      - 'todolist-gui/index.html'
+      - 'todolist-gui/scripts/**'
+      - '.gitattributes'
+      - 'AGENTS.md'
       - '.github/workflows/build-macos.yml'
 
 permissions:

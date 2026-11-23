@@ -7,7 +7,7 @@
 //
 // 运行：npm run dev → http://localhost:<端口>/styleguide.html?view=list
 //       （端口见项目根 .todolist-server.port，默认 15180）
-// 视图：?view=tokens|icons|list|list-all|settings|welcome|reauth|unsupported|empty|drawer|toast|modal
+// 视图：?view=tokens|icons|list|list-all|list-team|settings|welcome|reauth|unsupported|empty|drawer|toast|modal
 //       ?view=calendar             日历模式（清单的第二种显示模式，演示数据相对今天生成）
 //       ?view=calendar-done        日历 · 已完成（按完成日期锚定，只读）
 //       ?view=tools                工具集（默认选中清单里第一个工具）
@@ -31,6 +31,15 @@ import {
 } from './App.jsx';
 import TopBar from './components/TopBar.jsx';
 import Sidebar from './components/Sidebar.jsx';
+import SidebarResizeHandle from './components/SidebarResizeHandle.jsx';
+import {
+  SIDEBAR_WIDTH_DEFAULT,
+  clampSidebarWidth,
+  clearSidebarWidth,
+  hasCustomSidebarWidth,
+  loadSidebarWidth,
+  saveSidebarWidth,
+} from './lib/sidebarWidth.js';
 import BottomNav from './components/BottomNav.jsx';
 import QuickAdd from './components/QuickAdd.jsx';
 import EditDrawer from './components/EditDrawer.jsx';
@@ -352,6 +361,24 @@ function AppShell({
   // 页眉的搜索与排序在舞台里也是活的：搜索框按需挂载、排序真的能切档 ——
   // 静态空转的话，截图与 CDP 都验证不了这两枚钮"点了到底有没有用"。
   const [searchOpen, setSearchOpen] = useState(false);
+  // 侧栏宽度在舞台里也真实可拖；与产品共用同一份 configStore 偏好。
+  const [sidebarWidth, setSidebarWidth] = useState(loadSidebarWidth);
+  const [sidebarCustom, setSidebarCustom] = useState(hasCustomSidebarWidth);
+  const previewSidebarWidth = (w) => {
+    setSidebarWidth(w);
+    setSidebarCustom(true);
+  };
+  const commitSidebarWidth = (w) => {
+    const next = clampSidebarWidth(w);
+    setSidebarWidth(next);
+    setSidebarCustom(true);
+    saveSidebarWidth(next);
+  };
+  const resetSidebarWidth = () => {
+    clearSidebarWidth();
+    setSidebarWidth(SIDEBAR_WIDTH_DEFAULT);
+    setSidebarCustom(false);
+  };
   const [search, setSearch] = useState(base.search);
   const [sortMode, setSortMode] = useState(base.sortMode);
   // 编辑浮窗在舞台里也要能真打开：行内「编辑」按钮、双击任务都走 store.openEditor。
@@ -419,12 +446,21 @@ function AppShell({
             setSearch('');
           }}
         />
-        <div className={'content' + (isList ? ' layout' : '')}>
+        <div
+          className={'content' + (isList ? ' layout' : '')}
+          style={isList && sidebarCustom ? { '--sidebar-w': `${sidebarWidth}px` } : undefined}
+        >
           <>
             {/* 侧栏的「日历」条目就是显示模式的入口（2026-11-15 起页眉开关已退场）：
                 舞台必须把偏好与切换接上，否则窄边降级那组断言量不到
                 「偏好仍是日历、只是这次按列表排」。 */}
             <Sidebar store={s} listMode={listMode} onPickListMode={isList ? onPickListMode : undefined} />
+            <SidebarResizeHandle
+              width={sidebarCustom ? sidebarWidth : null}
+              onPreview={previewSidebarWidth}
+              onCommit={commitSidebarWidth}
+              onReset={resetSidebarWidth}
+            />
               <main
                 ref={autoNarrowFallback ? setMainEl : undefined}
                 className={'main' + (isCalendar ? ' main-calendar' : '')}
@@ -842,6 +878,10 @@ function Root() {
       return stage(<AppShell store={makeStore()} tab="list" listView="today" />);
     case 'list-all':
       return stage(<AppShell store={makeStore()} tab="list" listView="all" />);
+    case 'list-team':
+      // 分类 / 项目筛选的样张：demo 数据里「复盘」父项带两个子任务，
+      // 用来核对「筛父项时子任务跟进来 + 组头一键展开」。
+      return stage(<AppShell store={makeStore()} tab="list" listView="+:复盘" />);
     case 'calendar':
       // 日历模式：交互舞台（拖改期 / 双击新建 / 勾完成 / 搜索都真实生效）
       return stage(<CalendarStage />);

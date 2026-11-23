@@ -41,13 +41,22 @@ export function useAlwaysOnTop() {
     let off = null;
     let disposed = false;
     (async () => {
-      const un = await listen('shell://always-on-top', (e) => {
-        const v = Boolean(e && e.payload);
-        shellPrefs.save({ alwaysOnTop: v });
-        setOnTop(v);
-      });
-      if (disposed) un();
-      else off = un;
+      try {
+        const un = await listen('shell://always-on-top', (e) => {
+          const v = Boolean(e && e.payload);
+          shellPrefs.save({ alwaysOnTop: v });
+          setOnTop(v);
+        });
+        if (disposed) un();
+        else off = un;
+      } catch {
+        // runtime.listen 现在拿不到事件通道时**抛错**（R-10），不再返回 noop。
+        // 这里必须自己兜住，否则会留下一个未捕获的 rejection（而且只在
+        // 「isTauri() 为真、但 __TAURI__.event 缺失」这种半壳环境里复现）。
+        // 后果是可接受的降级：按钮依旧能改置顶（走 invoke），只是托盘菜单那一侧
+        // 的改动同步不到界面；下次启动时 hook 会把偏好重新应用到窗口，
+        // 所以不会永久错位。
+      }
     })();
 
     return () => {

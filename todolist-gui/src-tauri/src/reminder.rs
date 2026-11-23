@@ -159,11 +159,17 @@ fn is_completed_line(line: &str) -> bool {
 
 /// 已提醒记录文件的路径。
 fn fired_path(dir: &Path) -> PathBuf {
+    dir.join(".worktodolist").join("remind-fired.txt")
+}
+
+fn legacy_fired_path(dir: &Path) -> PathBuf {
     dir.join(FIRED_FILE)
 }
 
 fn load_fired(dir: &Path) -> HashSet<String> {
+    // 先读新位置；迁移还没跑过时回落到旧根目录文件。
     std::fs::read_to_string(fired_path(dir))
+        .or_else(|_| std::fs::read_to_string(legacy_fired_path(dir)))
         .map(|text| text.lines().map(|l| l.trim().to_string()).collect())
         .unwrap_or_default()
 }
@@ -175,9 +181,13 @@ fn save_fired(dir: &Path, fired: &HashSet<String>) {
     let start = keys.len().saturating_sub(FIRED_KEEP);
     let body = keys[start..].join("\n");
     let body = if body.is_empty() { String::new() } else { format!("{body}\n") };
-    let tmp = fired_path(dir).with_extension("txt.tmp");
+    let path = fired_path(dir);
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let tmp = path.with_extension("txt.tmp");
     if std::fs::write(&tmp, body).is_ok() {
-        let _ = std::fs::rename(&tmp, fired_path(dir));
+        let _ = std::fs::rename(&tmp, path);
     }
 }
 

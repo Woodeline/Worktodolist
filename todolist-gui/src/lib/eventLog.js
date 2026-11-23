@@ -1,28 +1,29 @@
 // Append-only 会话事件日志（工具动作的「我做过什么」时间线）。
 //
-// 落盘文件：数据目录下的 session-YYYY-MM-DD.ndjson（NDJSON，一行一事件）。
+// 落盘文件：`.worktodolist/sessions/session-YYYY-MM.ndjson`（NDJSON，一行一事件）。
+// 按月归档：文件数一年最多 12 个，配合 12 个月保留窗口，长期不会把数据目录塞满。
 // 语义：只追加。实现上采用“读现有内容 → 追加一行 → 整体写回”（File System Access API
 // 不支持就地 append，会话文件很小，整体写回可接受）；关键约定是——已写入的历史行
-// 永不修改、永不重排、永不删除，因此文件内容即为不可变的事件流。
-import { readFileText, writeFileText } from './fileStore';
+// 永不修改、永不重排、永不删除（保留窗口到期由壳侧清理整月文件）。
+import { readSessionText, writeSessionText } from './fileStore';
 
 /**
- * 会话日志文件名。
- * @param {string} date 'YYYY-MM-DD'
+ * 会话日志文件名（按月）。
+ * @param {string} date 'YYYY-MM-DD' 或 'YYYY-MM'
  */
 export function sessionFileName(date) {
-  return `session-${date}.ndjson`;
+  return `session-${String(date).slice(0, 7)}.ndjson`;
 }
 
-// 事件时间戳 → 会话文件日期（本地日历日）。
-// 注意：makeEvent 的 ts 为 UTC ISO 字符串，若直接 slice(0,10) 取的是 UTC 日期；
-// 而读取侧用本地 today(dayjs) 定位日志文件，二者在 UTC+8 的 00:00–08:00 会相差一天，
+// 事件时间戳 → 会话文件月份（本地日历月）。
+// 注意：makeEvent 的 ts 为 UTC ISO 字符串，若直接 slice(0,7) 取的是 UTC 月份；
+// 而读取侧用本地 today(dayjs) 定位日志文件，二者在 UTC+8 的月初会相差一个月，
 // 导致该时段事件落盘到错误文件、刷新后无法回放。故此处统一按本地日期归档。
-function tsToDate(ts) {
+function tsToMonth(ts) {
   const d = new Date(ts || '');
   if (Number.isNaN(d.getTime())) return '';
   const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
 }
 
 /**
@@ -42,13 +43,12 @@ export function makeEvent(seq, type, payload, ts) {
  */
 export async function appendEvent(dirHandle, event) {
   if (!dirHandle || !event) return false;
-  const date = tsToDate(event.ts);
-  if (!date) return false;
-  const name = sessionFileName(date);
-  const existing = await readFileText(dirHandle, name);
+  const month = tsToMonth(event.ts);
+  if (!month) return false;
+  const existing = await readSessionText(dirHandle, month);
   const line = JSON.stringify(event);
   const base = existing && !existing.endsWith('\n') ? `${existing}\n` : existing || '';
-  await writeFileText(dirHandle, name, `${base}${line}\n`);
+  await writeSessionText(dirHandle, month, `${base}${line}\n`);
   return true;
 }
 
@@ -57,7 +57,8 @@ export async function appendEvent(dirHandle, event) {
  */
 export async function loadEvents(dirHandle, date) {
   if (!dirHandle || !date) return [];
-  const text = await readFileText(dirHandle, sessionFileName(date));
+  const month = String(date).slice(0, 7);
+  const text = await readSessionText(dirHandle, month);
   const events = [];
   for (const rawLine of String(text).split(/\r?\n/)) {
     const s = rawLine.trim();

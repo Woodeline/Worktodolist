@@ -462,12 +462,12 @@ describe('TaskRow 子任务行：独立版式（2026-11-15）', () => {
       'utf8'
     );
     // 明暗两套令牌都要在：只加一套，另一主题会退回旧线。
-    // 2026-11-18 四档皮肤后：基线明暗 2 套 + 素纸/夜航/园庭 各明暗 2 套 = 8 处；
+    // 2026-11-18 皮肤后：基线明暗 2 套 + 两档皮肤各明暗 2 套 = 6 处；
     // 皮肤暗块漏重述就会漏浅色值进深色，所以逐档检查暗块里真的有这条令牌。
-    expect((css.match(/\n  --row-line:/g) || []).length).toBe(8);
-    expect((css.match(/\n  --row-line-child:/g) || []).length).toBe(8);
-    expect((css.match(/\n  --row-line-halo:/g) || []).length).toBe(8);
-    for (const skin of ['paper', 'night', 'garden']) {
+    expect((css.match(/\n  --row-line:/g) || []).length).toBe(6);
+    expect((css.match(/\n  --row-line-child:/g) || []).length).toBe(6);
+    expect((css.match(/\n  --row-line-halo:/g) || []).length).toBe(6);
+    for (const skin of ['paper', 'night']) {
       const at = css.indexOf(`:root[data-skin="${skin}"][data-theme="dark"] {`);
       expect(at).toBeGreaterThan(-1);
       const body = css.slice(at, css.indexOf('}', at));
@@ -483,6 +483,47 @@ describe('TaskRow 子任务行：独立版式（2026-11-15）', () => {
     const childBody = css.slice(childAt, css.indexOf('}', childAt));
     expect(childBody).toContain('border-bottom-color: var(--row-line-child)');
     expect(childBody).toContain('box-shadow: none');
+  });
+
+  // 2026-11-23：原版行悬停浮起。只挂 classic，素纸 / 夜航保持原有悬停底色。
+  // 只动 transform / 阴影 / 背景 / 边框色，行高与相邻行位置不许变。
+  it('样式契约：原版悬停浮起只挂 classic，2px 上浮 + 阴影且不碰行高', () => {
+    const css = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'index.css'),
+      'utf8'
+    );
+    const hoverRule = css
+      .split(':root[data-skin="classic"] .main .task-row:not(.is-child):hover {')[1]
+      .split('}')[0];
+    expect(hoverRule).toContain('transform: translateY(-2px)');
+    expect(hoverRule).toContain('box-shadow: var(--row-float-sh)');
+    expect(hoverRule).toContain('border-radius: var(--r-xs)');
+    expect(hoverRule).toContain('border-bottom-color: transparent');
+    expect(hoverRule).toContain('z-index: 2');
+    expect(hoverRule).not.toMatch(/(?:min-height|padding|margin)\s*:/);
+    // 明暗各一套浮起阴影
+    expect((css.match(/\n  --row-float-sh\s*:/g) || []).length).toBe(2);
+    // 素纸 / 夜航不跟浮起；园庭已移除
+    expect(css).not.toContain('[data-skin="paper"] .main .task-row:not(.is-child):hover');
+    expect(css).not.toContain('[data-skin="night"] .main .task-row:not(.is-child):hover');
+    expect(css).not.toContain('data-skin="garden"');
+  });
+
+  // 2026-11-23：行内快捷按钮不再是一张浮窗卡片，只留四枚图标嵌在行里。
+  it('样式契约：行内快捷按钮嵌在列表里，没有边框 / 底色 / 阴影 / 圆角', () => {
+    const css = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'index.css'),
+      'utf8'
+    );
+    const at = css.indexOf('.row-quick {');
+    const body = css.slice(at, css.indexOf('}', at));
+    expect(body).toContain('background: transparent');
+    expect(body).toContain('border: 0');
+    expect(body).toContain('border-radius: 0');
+    expect(body).toContain('box-shadow: none');
+    const btnAt = css.indexOf('.row-quick-btn:hover {');
+    const btn = css.slice(btnAt, css.indexOf('}', btnAt));
+    expect(btn).toContain('background: transparent');
   });
 });
 
