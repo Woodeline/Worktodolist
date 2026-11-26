@@ -42,6 +42,7 @@ import {
 } from './lib/sidebarWidth.js';
 import BottomNav from './components/BottomNav.jsx';
 import QuickAdd from './components/QuickAdd.jsx';
+import SortModeButton from './components/SortModeButton.jsx';
 import EditDrawer from './components/EditDrawer.jsx';
 import SettingsPage from './components/SettingsPage.jsx';
 import ToolsPage from './components/tools/ToolsPage.jsx';
@@ -434,8 +435,6 @@ function AppShell({
           tab={tab}
           sidebarCollapsed={false}
           onToggleSidebar={() => {}}
-          listMode={listMode}
-          effectiveMode={effectiveMode}
           onPickListMode={isList ? onPickListMode || (() => {}) : undefined}
           searchOpen={searchOpen}
           onOpenSearch={() => setSearchOpen(true)}
@@ -469,6 +468,7 @@ function AppShell({
                 {!isCalendar && (
                   <div className="quick-add-bar">
                     <QuickAdd store={s} inputRef={s.quickAddRef} />
+                    <SortModeButton store={s} />
                   </div>
                 )}
                 <LayoutNotice
@@ -502,6 +502,28 @@ function AppShell({
       {s.conflict && <ConflictModal store={s} />}
     </div>
   );
+}
+
+// ------------------------------------------------------------------ 日志列表舞台
+// 2026-11-25：日志（done.txt）的勾选框可以撤回。这里用一份内存状态走完整回路，
+// 点一下就能看见那一行从日志里消失、计数减一，不写任何文件。
+function DoneStage() {
+  const [todo, setTodo] = useState(TODO_ENTRIES);
+  const [done, setDone] = useState(DONE_ENTRIES);
+  const store = makeStore({
+    todoEntries: todo,
+    doneEntries: done,
+    toggleComplete: (task) => {
+      if (task.completed) {
+        setDone((list) => list.filter((t) => t.id !== task.id));
+        setTodo((list) => [...list, { ...task, completed: false, completedAt: null }]);
+        return;
+      }
+      setTodo((list) => list.filter((t) => t.id !== task.id));
+      setDone((list) => [...list, { ...task, completed: true }]);
+    },
+  });
+  return <AppShell store={store} tab="list" listView="done" />;
 }
 
 // ------------------------------------------------------------------ 日历交互舞台
@@ -892,6 +914,8 @@ function Root() {
       // 窄边自动降级：偏好仍是日历，主区可用宽度不足时临时按列表排。
       // 与产品 App 走同一套 useLayoutMode / LayoutNotice，可截图、可被 QA 量。
       return stage(<CalendarStage autoNarrow />);
+    case 'done':
+      return stage(<DoneStage />);
     case 'settings':
       return stage(<SettingsStage />);
     case 'tools':

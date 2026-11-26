@@ -125,6 +125,12 @@
   --danger: #b3261e;
   --danger-soft: #fbe9e7;
   --danger-line: #f0c8c4;
+  /* 今日 / 即将到期里高优先级行的底色提醒（2026-11-25）：父行一档、子行再淡一档。
+     语义层令牌，皮肤不换；逾期红字仍由 --danger 承担。 */
+  --prio-row-bg: #fbefed;
+  --prio-row-bg-child: #fcf1ee;
+  --prio-row-bg-hover: #f7e5e1;
+  --prio-row-bg-child-hover: #fae7e3;
   /* 实心危险按钮上的字（编辑浮窗「确认删除」）：明色反白、暗色用墨底字，
      与 --accent-fg 同一套翻转逻辑，但语义独立 —— 别互相引用。 */
   --danger-fg: #ffffff;
@@ -310,6 +316,8 @@
   --row-h: var(--pref-row-h, 32px); /* 2026-11-15 九改：40→32（行距再收 20%）。触屏兜底仍 44 */
   --row-pad: 20px; /* 列表左右留白，行 / 分组头共用 */
   --row-expand-w: 20px; /* 行尾展开箭头的固定槽宽：快捷按钮靠它让位，两者永不重叠 */
+  /* 行内快捷四枚按钮的总宽：4×22 + 3×1。行内标题编辑的下划线要在它左侧结束。 */
+  --row-quick-w: 91px;
   /* 复选框列宽：网格第一列，也是读数行绝对定位时算左缘的那一格（见 .task-meta）。 */
   --cb-size: 18px;
   /* 标题左侧的旗标槽：14px 旗 + 4px 呼吸。没有旗的行也留着这一格 ——
@@ -454,6 +462,10 @@
   --danger: #f0968d;
   --danger-soft: #3a211d;
   --danger-line: #5f3430;
+  --prio-row-bg: #35211e;
+  --prio-row-bg-child: #2f1e1b;
+  --prio-row-bg-hover: #402722;
+  --prio-row-bg-child-hover: #382520;
   --danger-fg: #0d1f17;
   --warn: #dfb567;
   --warn-soft: #352b16;
@@ -1285,14 +1297,16 @@ code {
   to { opacity: 1; }
 }
 
-/* --- 新建任务：列表首行是一个**看得出来的输入框**。
-       上一版做成无边界的一行，读起来像列表里的说明文字，
-       用户不知道这里可以打字。现在给它描边、浅底、圆角与聚焦环，
-       外加一根常驻的 "+"，让它自己说明"这是输入位"。 --- */
+/* --- 新建任务：2026-11-23 起原版改成与行内标题编辑同一套 —— 一条下划线输入行，
+       不再画方框 / 铺底色；常驻 "+" 仍说明这是输入位。排序图标在整条右端。
+       素纸 / 夜航的皮肤盒（描边纸盒 / 凹槽）保留在 §9.5，不跟这层底样式。 --- */
 .quick-add-bar {
   position: sticky;
   top: 0;
   z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
   /* 吸顶时背后会滑过任务行，所以这一条必须自带上不透明的底 */
   background: var(--surface);
   padding: var(--quickadd-pad-t) var(--row-pad) var(--quickadd-pad-b);
@@ -1343,25 +1357,25 @@ code {
 .quick-add {
   display: flex;
   align-items: center;
-  /* 左内边距 8 + 图标 16 + 间隙 6：提示文字与任务标题同一条竖线（2px 微调属控件内 nudges） */
+  flex: 1;
+  min-width: 0;
+  /* 下划线从 "+" 开始；输入文字与图标之间的 6px 是控件内 nudges */
   gap: 6px;
   height: var(--quickadd-h);
-  padding: 0 var(--sp-3) 0 var(--sp-2);
-  background: var(--surface-2);
-  border: 1px solid var(--control-line);
-  border-radius: var(--r-lg);
-  transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out),
-    box-shadow var(--dur-1) var(--ease-out);
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  transition: border-color var(--dur-1) var(--ease-out);
 }
 
 .quick-add:hover {
-  border-color: var(--border-strong);
+  border-bottom-color: var(--border-strong);
 }
 
 .quick-add:focus-within {
-  background: var(--surface);
-  border-color: var(--accent);
-  box-shadow: var(--ring);
+  border-bottom-color: var(--accent);
 }
 
 .quick-add .plus {
@@ -1946,6 +1960,30 @@ code {
   cursor: default;
 }
 
+/* 今日 / 即将到期：高优先级行铺一层淡红提醒（2026-11-25）。
+   只在这两个视图生效，父行一档、子行再淡一档；选中态让位给 --sel，
+   悬停加深一档，保住「这一行可点」的反馈。 */
+.task-list[data-view='today'] .task-row.prio-high:not(.is-child):not(.selected),
+.task-list[data-view='upcoming'] .task-row.prio-high:not(.is-child):not(.selected) {
+  background: var(--prio-row-bg);
+}
+.task-list[data-view='today'] .task-row.is-child.prio-high:not(.selected),
+.task-list[data-view='today'] .task-row.parent-prio-high:not(.selected),
+.task-list[data-view='upcoming'] .task-row.is-child.prio-high:not(.selected),
+.task-list[data-view='upcoming'] .task-row.parent-prio-high:not(.selected) {
+  background: var(--prio-row-bg-child);
+}
+.task-list[data-view='today'] .task-row.prio-high:hover:not(.is-child):not(.selected),
+.task-list[data-view='upcoming'] .task-row.prio-high:hover:not(.is-child):not(.selected) {
+  background: var(--prio-row-bg-hover);
+}
+.task-list[data-view='today'] .task-row.is-child.prio-high:hover:not(.selected),
+.task-list[data-view='today'] .task-row.parent-prio-high:hover:not(.selected),
+.task-list[data-view='upcoming'] .task-row.is-child.prio-high:hover:not(.selected),
+.task-list[data-view='upcoming'] .task-row.parent-prio-high:hover:not(.selected) {
+  background: var(--prio-row-bg-child-hover);
+}
+
 .task-row.completed .task-title {
   text-decoration: line-through;
   text-decoration-color: var(--border-strong);
@@ -2082,7 +2120,8 @@ code {
   pointer-events: auto;
 }
 
-.row-quick-btn {
+.row-quick-btn,
+.quick-sort {
   display: grid;
   place-items: center;
   width: 22px;
@@ -2096,12 +2135,21 @@ code {
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 
-.row-quick-btn:hover {
-  background: transparent;
+.row-quick-btn:hover,
+.quick-sort:hover {
+  background: var(--surface-3);
   color: var(--text);
 }
 
+.row-quick-btn:active,
+.quick-sort:active {
+  background: var(--surface-2);
+}
+
+.quick-sort { flex-shrink: 0; }
+
 .row-quick-del:hover {
+  background: var(--danger-soft);
   color: var(--danger);
 }
 
@@ -2167,16 +2215,19 @@ code {
   flex-shrink: 0;
 }
 
-/* 复选框：18px 圆形。选中用强调色 —— 复选框表达的是"勾选"，
-   不是"成功"，用绿色会把状态语义和选择语义混在一起。
-   视觉 18px，触屏下把可点区域撑到 44px。 */
+/* 复选框：18px 方形（2026-11-25 换掉原来的圆形）。
+   列表行本身就是直角语言（行线、分隔线、旗标槽全是方的），圆球在 32px 行里
+   会读成一枚「按钮」，方形与行结构同族；完成态仍是整块强调色 + 白勾，
+   勾从 11px 收到 10px，18px 方框里上下各留 4px 呼吸，与 14px 标题的字面高度接近。
+   选中用强调色 —— 复选框表达的是"勾选"，不是"成功"，
+   用绿色会把状态语义和选择语义混在一起。视觉 18px，触屏下把可点区域撑到 44px。 */
 .task-row .checkbox {
   position: relative;
   width: 18px;
   height: 18px;
   min-width: 18px;
   border: 1.5px solid var(--control-line);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   background: transparent;
   padding: 0;
   transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out);
@@ -2203,9 +2254,9 @@ code {
   inset: 0;
   background: var(--accent-fg);
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E")
-    center / 11px 11px no-repeat;
+    center / 10px 10px no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E")
-    center / 11px 11px no-repeat;
+    center / 10px 10px no-repeat;
 }
 
 .task-row .checkbox.disabled {
@@ -2289,22 +2340,28 @@ code {
   font-size: var(--fs-nav);
 }
 
-/* 慢速双击后的行内编辑：坐在 .task-title 里，字体三件套直接继承，
+/* 慢速双击后的行内编辑：与编辑浮窗的子任务行内编辑同一套观感 ——
+   一条 accent 下划线，不画方框、不铺底色；字体三件套直接继承标题，
    打开时不会突然变细或变小。 */
 .row-title-input {
   box-sizing: border-box;
-  width: 100%;
-  height: var(--h-control);
+  /* 下划线止于行内快捷四枚图标的左侧（图标组本身压进内容列右缘 8px，
+     所以这里只让出总宽，终点自然落在第一枚图标前 8px）。 */
+  width: calc(100% - var(--row-quick-w));
+  height: 22px;
   margin: 0;
-  padding: 0 var(--sp-2);
-  border: 1px solid var(--accent);
-  border-radius: var(--r-xs);
-  background: var(--surface);
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--accent);
+  border-radius: 0;
+  background: transparent;
   color: var(--text);
   font-family: inherit;
   font-size: inherit;
   font-weight: inherit;
+  line-height: inherit;
   outline: none;
+  box-shadow: none;
 }
 
 /* --- 优先级 = 旗标（列表）：标题最左边一枚**中空旗**，颜色就是档位。
@@ -2554,16 +2611,18 @@ code {
   background: var(--border);
 }
 
-/* 勾选框跟着子任务字号收小；对勾的 mask 也一起缩，否则 14px 的框里塞 11px 的勾。 */
+/* 勾选框跟着子任务字号收小；对勾的 mask 也一起缩，否则 14px 的框里塞 10px 的勾。
+   14px 方框用 3px 圆角（18px 主框 4px），小尺寸下同比例才不显圆。 */
 .task-row.is-child .checkbox {
   width: var(--cb-child);
   height: var(--cb-child);
   min-width: var(--cb-child);
+  border-radius: 3px;
 }
 
 .task-row.is-child .checkbox.checked::after {
-  -webkit-mask-size: 9px 9px;
-  mask-size: 9px 9px;
+  -webkit-mask-size: 8px 8px;
+  mask-size: 8px 8px;
 }
 
 /* 单行正文：勾选框与文字**作为一组**垂直居中（两者同一条中轴），
@@ -2649,15 +2708,15 @@ code {
 
 .subtask-list li:last-child { border-bottom: 0; }
 
-/* 子任务行的勾选框不属于 .task-row，拿不到列表那套圆形样式；这里单独画。
-   16px 圆环 + 选中实心 + mask 对勾，悬停提亮边框，焦点环跟按钮同一档。 */
+/* 子任务行的勾选框不属于 .task-row，拿不到列表那套方形样式；这里单独画。
+   16px 方框（同 --r-xs）+ 选中实心 + mask 对勾，悬停提亮边框，焦点环跟按钮同一档。 */
 .subtask-list .checkbox {
   position: relative;
   width: 16px;
   height: 16px;
   min-width: 16px;
   border: 1.5px solid var(--control-line);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   background: transparent;
   padding: 0;
   flex-shrink: 0;

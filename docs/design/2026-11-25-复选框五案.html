@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>复选框五案 · 2026-11-25</title>
+<style>
+  :root {
+    --bg: #edebe6;
+    --surface: #f7f6f2;
+    --surface-2: #efede8;
+    --text: #24221d;
+    --muted: #6f6b61;
+    --border: #dcd9d1;
+    --border-strong: #b7b3a9;
+    --accent: #1e6b4f;
+    --accent-soft: #dfe9e3;
+    --danger: #a3372a;
+    --font-ui: -apple-system, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 26px 24px 40px; background: var(--bg); color: var(--text);
+    font-family: var(--font-ui); font-size: 13px; -webkit-font-smoothing: antialiased;
+  }
+  .case {
+    width: 760px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 20px 20px; margin-bottom: 18px;
+  }
+  .case-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .case-head b { font-size: 15px; font-weight: 500; }
+  .case-head .idx {
+    font-family: var(--font-mono); font-size: 10px; color: var(--muted);
+    letter-spacing: 0.1em;
+  }
+  .case-head .say { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .note { font-size: 11px; color: var(--muted); line-height: 1.7; margin: 4px 0 14px; }
+  .stage {
+    display: flex; align-items: center; gap: 26px;
+    padding: 14px 16px; border: 1px dashed var(--border); border-radius: 8px; margin-bottom: 14px;
+  }
+  .zoom {
+    display: grid; place-items: center; width: 78px; height: 78px;
+    background: var(--surface-2); border-radius: 8px;
+  }
+  .zoom .label, .st-label { font-family: var(--font-mono); font-size: 9px; color: var(--muted); display: block; text-align: center; margin-top: 6px; }
+  .zoom-wrap { display: flex; flex-direction: column; align-items: center; }
+  .zoom-wrap .zoom { --scale: 2.6; }
+  .states { display: flex; gap: 26px; align-items: flex-end; }
+  .st { display: flex; flex-direction: column; align-items: center; }
+  .st-box { width: 34px; height: 34px; display: grid; place-items: center; }
+  .rows { border-top: 1px solid var(--border); }
+  .row {
+    display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 10px;
+    height: 32px; padding: 0 4px; border-bottom: 1px solid #e6e3dc;
+  }
+  .row .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+  .row .d { font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+  .row.done .t { color: var(--muted); }
+  .scale { transform: scale(var(--scale, 1)); transform-origin: center; }
+
+  /* ===== A 实心方 + 白勾 ===== */
+  .cbA {
+    width: 18px; height: 18px; border-radius: 3px; border: 1px solid var(--border-strong);
+    background: transparent; display: grid; place-items: center; position: relative;
+  }
+  .cbA.hover { border-color: var(--accent); }
+  .cbA.on { background: var(--accent); border-color: var(--accent); }
+  .cbA.on::after {
+    content: ""; width: 9px; height: 5px; border-left: 1.5px solid #fff; border-bottom: 1.5px solid #fff;
+    transform: rotate(-45deg) translateY(-1px);
+  }
+
+  /* ===== B 线框 + 细墨勾 ===== */
+  .cbB {
+    width: 18px; height: 18px; border-radius: 2px; border: 1px solid #c9c5bb;
+    background: transparent; position: relative;
+  }
+  .cbB.hover { border-color: var(--accent); }
+  .cbB.on { border-color: var(--accent); background: transparent; }
+  .cbB.on::after {
+    content: ""; position: absolute; left: 3px; top: 4px; width: 9px; height: 5px;
+    border-left: 1px solid var(--accent); border-bottom: 1px solid var(--accent);
+    transform: rotate(-45deg);
+  }
+  .rowB.done .t { text-decoration: line-through; text-decoration-color: #c4c0b6; }
+
+  /* ===== C 墨环 + 方心 ===== */
+  .cbC {
+    width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--border-strong);
+    background: transparent; position: relative; display: grid; place-items: center;
+  }
+  .cbC.hover { border-color: var(--accent); }
+  .cbC.hover::before { content: ""; width: 4px; height: 4px; background: var(--accent); opacity: .45; }
+  .cbC.on { border: 1.5px solid var(--accent); }
+  .cbC.on::before { content: ""; width: 6px; height: 6px; background: var(--accent); }
+
+  /* ===== D 切角方 + 细勾 ===== */
+  .cbD {
+    width: 18px; height: 18px; background: var(--border-strong); position: relative;
+    clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+  }
+  .cbD-in {
+    position: absolute; inset: 1px; background: var(--surface);
+    clip-path: polygon(3.6px 0, 100% 0, 100% calc(100% - 3.6px), calc(100% - 3.6px) 100%, 0 100%, 0 3.6px);
+    display: grid; place-items: center;
+  }
+  .cbD.hover { background: var(--accent); }
+  .cbD.on { background: var(--accent); }
+  .cbD.on .cbD-in { background: var(--accent); }
+  .cbD.on .cbD-in::after {
+    content: ""; width: 8px; height: 4.5px; border-left: 1.5px solid #fff; border-bottom: 1.5px solid #fff;
+    transform: rotate(-45deg) translateY(-1px);
+  }
+
+  /* ===== E 一点 + 划除 ===== */
+  .cbE {
+    width: 18px; height: 18px; background: transparent; position: relative; border: 0;
+    border-bottom: 1px solid transparent;
+  }
+  .cbE::before {
+    content: ""; position: absolute; left: 6px; top: 6px; width: 5px; height: 5px;
+    border: 1px solid var(--border-strong); background: transparent;
+  }
+  .cbE.hover::before { border-color: var(--accent); background: var(--accent-soft); }
+  .cbE.on::before { background: var(--accent); border-color: var(--accent); width: 6px; height: 6px; left: 5.5px; top: 5.5px; }
+  .rowE.done .t {
+    text-decoration: line-through; text-decoration-color: var(--accent);
+    text-decoration-thickness: 1px; color: var(--muted);
+  }
+  .rowE.done .d { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- ===== 案 1 ===== -->
+<div class="case" id="case1">
+  <div class="case-head"><span class="idx">01</span><b>墨实方块</b><span class="say">把圆改方，勾最稳</span></div>
+  <p class="note">方形贴合账簿的刻度感，完成态是一整块墨绿，白勾只占中段。18px 视觉，命中区仍是整枚按钮。</p>
+  <div class="stage">
+    <div class="zoom-wrap"><div class="zoom"><span class="cbA scale" style="--scale:2.6"></span></div><span class="label">18px</span></div>
+    <div class="states">
+      <div class="st"><div class="st-box"><span class="cbA"></span></div><span class="st-label">未完成</span></div>
+      <div class="st"><div class="st-box"><span class="cbA hover"></span></div><span class="st-label">悬停</span></div>
+      <div class="st"><div class="st-box"><span class="cbA on"></span></div><span class="st-label">完成</span></div>
+    </div>
+  </div>
+  <div class="rows">
+    <div class="row"><span class="cbA"></span><span class="t">写第 10 周回测报告</span><span class="d">11/27</span></div>
+    <div class="row"><span class="cbA hover"></span><span class="t">周线复盘：人民网</span><span class="d">今天</span></div>
+    <div class="row done"><span class="cbA on"></span><span class="t">季报复核</span><span class="d">09/25</span></div>
+  </div>
+</div>
+
+<!-- ===== 案 2 ===== -->
+<div class="case" id="case2">
+  <div class="case-head"><span class="idx">02</span><b>细线墨勾</b><span class="say">框退让，勾自己说话</span></div>
+  <p class="note">完成时方框不填色，边框转墨绿，勾只有 1px。整行文字加一条浅灰删除线，安静，适合长清单。</p>
+  <div class="stage">
+    <div class="zoom-wrap"><div class="zoom"><span class="cbB scale" style="--scale:2.6"></span></div><span class="label">18px</span></div>
+    <div class="states">
+      <div class="st"><div class="st-box"><span class="cbB"></span></div><span class="st-label">未完成</span></div>
+      <div class="st"><div class="st-box"><span class="cbB hover"></span></div><span class="st-label">悬停</span></div>
+      <div class="st"><div class="st-box"><span class="cbB on"></span></div><span class="st-label">完成</span></div>
+    </div>
+  </div>
+  <div class="rows">
+    <div class="row"><span class="cbB"></span><span class="t">写第 10 周回测报告</span><span class="d">11/27</span></div>
+    <div class="row"><span class="cbB hover"></span><span class="t">周线复盘：人民网</span><span class="d">今天</span></div>
+    <div class="row rowB done"><span class="cbB on"></span><span class="t">季报复核</span><span class="d">09/25</span></div>
+  </div>
+</div>
+
+<!-- ===== 案 3 ===== -->
+<div class="case" id="case3">
+  <div class="case-head"><span class="idx">03</span><b>墨环方心</b><span class="say">换掉绿色的球，不用勾</span></div>
+  <p class="note">外圈一层细环，中心一枚方块。未完成是空环，悬停浮出淡方点，完成时环变粗、方点落定。视觉重心从「对勾」移到「环与点」。</p>
+  <div class="stage">
+    <div class="zoom-wrap"><div class="zoom"><span class="cbC scale" style="--scale:2.6"></span></div><span class="label">18px</span></div>
+    <div class="states">
+      <div class="st"><div class="st-box"><span class="cbC"></span></div><span class="st-label">未完成</span></div>
+      <div class="st"><div class="st-box"><span class="cbC hover"></span></div><span class="st-label">悬停</span></div>
+      <div class="st"><div class="st-box"><span class="cbC on"></span></div><span class="st-label">完成</span></div>
+    </div>
+  </div>
+  <div class="rows">
+    <div class="row"><span class="cbC"></span><span class="t">写第 10 周回测报告</span><span class="d">11/27</span></div>
+    <div class="row"><span class="cbC hover"></span><span class="t">周线复盘：人民网</span><span class="d">今天</span></div>
+    <div class="row done"><span class="cbC on"></span><span class="t">季报复核</span><span class="d">09/25</span></div>
+  </div>
+</div>
+
+<!-- ===== 案 4 ===== -->
+<div class="case" id="case4">
+  <div class="case-head"><span class="idx">04</span><b>切角方块</b><span class="say">角上做减法</span></div>
+  <p class="note">左上与右下各切一角，顺着行的走向。完成时整块墨绿，勾仍是白的。这案最「报表」，细看才认得出来。</p>
+  <div class="stage">
+    <div class="zoom-wrap"><div class="zoom"><span class="cbD scale" style="--scale:2.6"><span class="cbD-in"></span></span></div><span class="label">18px</span></div>
+    <div class="states">
+      <div class="st"><div class="st-box"><span class="cbD"><span class="cbD-in"></span></span></div><span class="st-label">未完成</span></div>
+      <div class="st"><div class="st-box"><span class="cbD hover"><span class="cbD-in"></span></span></div><span class="st-label">悬停</span></div>
+      <div class="st"><div class="st-box"><span class="cbD on"><span class="cbD-in"></span></span></div><span class="st-label">完成</span></div>
+    </div>
+  </div>
+  <div class="rows">
+    <div class="row"><span class="cbD"><span class="cbD-in"></span></span><span class="t">写第 10 周回测报告</span><span class="d">11/27</span></div>
+    <div class="row"><span class="cbD hover"><span class="cbD-in"></span></span><span class="t">周线复盘：人民网</span><span class="d">今天</span></div>
+    <div class="row done"><span class="cbD on"><span class="cbD-in"></span></span><span class="t">季报复核</span><span class="d">09/25</span></div>
+  </div>
+</div>
+
+<!-- ===== 案 5 ===== -->
+<div class="case" id="case5">
+  <div class="case-head"><span class="idx">05</span><b>一点划除</b><span class="say">不画勾，动作留痕</span></div>
+  <p class="note">未完成只有一枚 5px 小方点，完成时方点落墨，那条线由「划过标题的墨绿细线」承担。整行像被登进账簿后划掉，最贴近登记簿的气质，也最不像常见待办 App。</p>
+  <div class="stage">
+    <div class="zoom-wrap"><div class="zoom"><span class="cbE scale" style="--scale:2.6"></span></div><span class="label">18px</span></div>
+    <div class="states">
+      <div class="st"><div class="st-box"><span class="cbE"></span></div><span class="st-label">未完成</span></div>
+      <div class="st"><div class="st-box"><span class="cbE hover"></span></div><span class="st-label">悬停</span></div>
+      <div class="st"><div class="st-box"><span class="cbE on"></span></div><span class="st-label">完成</span></div>
+    </div>
+  </div>
+  <div class="rows">
+    <div class="row"><span class="cbE"></span><span class="t">写第 10 周回测报告</span><span class="d">11/27</span></div>
+    <div class="row"><span class="cbE hover"></span><span class="t">周线复盘：人民网</span><span class="d">今天</span></div>
+    <div class="row rowE done"><span class="cbE on"></span><span class="t">季报复核</span><span class="d">09/25</span></div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -202,6 +202,26 @@ describe('useTodoStore 撤销链路 / fade 窗口竞态', () => {
     expect(s.todoEntries.filter((e) => e.id === a.id)).toHaveLength(1);
   });
 
+  it('R1 日志里的条目撤回：done.txt 少一行、todo.txt 多一条未完成', async () => {
+    const DONE_SEED = {
+      'todo.txt': '任务D\n',
+      'done.txt': 'x 2026-09-25 季报复核 id:r3q9zm\n',
+    };
+    const { store, render, fs } = await bootStore(DONE_SEED);
+    const done = store.doneEntries[0];
+    expect(done.completed).toBe(true);
+    store.toggleComplete(done);
+    await sleep(260);
+    const s = render();
+    expect(s.doneEntries).toHaveLength(0);
+    const revived = byTitle(s.todoEntries, '季报复核');
+    expect(revived).toBeTruthy();
+    expect(revived.completed).toBe(false);
+    expect(fs['done.txt']).not.toContain('季报复核');
+    expect(fs['todo.txt']).toContain('季报复核');
+    expect(fs['todo.txt']).not.toContain('x 2026-09-25');
+  });
+
   it('C2 180ms 内双击完成不应产生重复 done 条目', async () => {
     const { store, render } = await bootStore();
     const a = store.todoEntries[0];

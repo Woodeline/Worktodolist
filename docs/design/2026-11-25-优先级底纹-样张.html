@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>优先级底纹 · 样张（2026-11-25）</title>
+<style>
+  :root {
+    --bg: #edebe6;
+    --surface: #f7f6f2;
+    --surface-2: #efede8;
+    --text: #24221d;
+    --muted: #6f6b61;
+    --border: #dcd9d1;
+    --border-strong: #b7b3a9;
+    --accent: #1e6b4f;
+    --danger: #a3372a;
+    --flag-high: #a3372a;
+    --sel: #e4e0d8;
+    --row-line: #e6e3dc;
+    --row-line-child: #eeece6;
+    --prio-row-bg: #fbefed;
+    --prio-row-bg-child: #fcf1ee;
+    --prio-row-bg-hover: #f7e5e1;
+    --prio-row-bg-child-hover: #fae7e3;
+    --row-h: 32px;
+    --row-child-h: 26px;
+    --radius: 8px;
+    --font-ui: -apple-system, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #161511;
+    --surface: #1e1d18;
+    --surface-2: #26251f;
+    --text: #e8e4da;
+    --muted: #918c80;
+    --border: #31302a;
+    --border-strong: #4a4840;
+    --accent: #6cc59c;
+    --danger: #e08275;
+    --flag-high: #e08275;
+    --sel: #2c2a23;
+    --row-line: #2a2924;
+    --row-line-child: #24231e;
+    --prio-row-bg: #35211e;
+    --prio-row-bg-child: #2f1e1b;
+    --prio-row-bg-hover: #402722;
+    --prio-row-bg-child-hover: #382520;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .shell { max-width: 1080px; margin: 0 auto; padding: 28px 24px 48px; }
+  .head {
+    display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+    padding-bottom: 14px; border-bottom: 1px solid var(--border); margin-bottom: 18px;
+  }
+  .head h1 { font-size: 19px; font-weight: 500; margin: 0; letter-spacing: 0.01em; }
+  .head .tag {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .ctrl { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .btn {
+    height: 28px; padding: 0 11px; border: 1px solid var(--border-strong);
+    background: var(--surface); color: var(--text); border-radius: 6px;
+    font-size: 12px; cursor: pointer; font-family: var(--font-ui);
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.on { border-color: var(--accent); color: var(--accent); background: var(--surface-2); }
+  .seg { display: flex; border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; }
+  .seg button {
+    height: 26px; padding: 0 12px; border: 0; background: var(--surface);
+    color: var(--muted); font-size: 12px; cursor: pointer; font-family: var(--font-ui);
+  }
+  .seg button.on { background: var(--accent); color: var(--surface); }
+
+  .panel {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .panel-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  .panel-head b { font-weight: 500; font-size: 13px; }
+  .panel-head .crumb { color: var(--muted); font-size: 12px; }
+  .quick {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px; border-bottom: 1px solid var(--row-line); color: var(--muted);
+    font-size: 12px;
+  }
+  .quick .plus { color: var(--accent); font-family: var(--font-mono); }
+
+  .group-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px 6px; font-size: 11px; color: var(--muted);
+    font-family: var(--font-mono); letter-spacing: 0.04em;
+  }
+  .group-head .bar { width: 2px; height: 10px; background: var(--border-strong); }
+  .group-head.warn .bar { background: var(--danger); }
+  .group-head .count { margin-left: auto; color: var(--muted); }
+
+  .list { padding: 0 0 6px; }
+  .row {
+    position: relative; display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) 20px;
+    align-items: center; gap: 10px;
+    min-height: var(--row-h); padding: 0 14px;
+    border-bottom: 1px solid var(--row-line);
+    transition: background 120ms ease;
+  }
+  .row:last-child { border-bottom: 0; }
+  .row.is-child {
+    min-height: var(--row-child-h);
+    grid-template-columns: 14px minmax(0, 1fr);
+    padding-left: 42px; border-bottom-color: var(--row-line-child);
+    font-size: 12px; color: var(--muted);
+  }
+  .row.is-child .cb { width: 14px; height: 14px; }
+  .row .cb {
+    width: 18px; height: 18px; border: 1px solid var(--border-strong); border-radius: 50%;
+    background: transparent; cursor: pointer; position: relative; padding: 0;
+  }
+  .row .cb:hover { border-color: var(--accent); }
+  .row .cb.on { border-color: var(--accent); background: var(--accent); }
+  .row .cb.on::after {
+    content: ""; position: absolute; inset: 0; margin: auto;
+    width: 8px; height: 5px; border-left: 1.5px solid var(--surface);
+    border-bottom: 1.5px solid var(--surface); transform: rotate(-45deg) translateY(-1px);
+  }
+  .row .title { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .row .title span {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .row .title s { color: var(--muted); text-decoration-color: var(--border-strong); }
+  .flag { width: 12px; height: 12px; flex: 0 0 12px; }
+  .flag path { fill: none; stroke: currentColor; stroke-width: 1.6; }
+  .flag.high { color: var(--flag-high); }
+  .flag.mid { color: #b06a1f; }
+  .flag.low { color: #4a6d9c; }
+
+  .row.overdue .date { color: var(--danger); }
+  .row.overdue::before {
+    content: ""; position: absolute; left: 0; top: 6px; bottom: 6px;
+    width: 2px; background: var(--danger);
+  }
+  .meta {
+    position: absolute; left: 42px; right: 38px; bottom: 2px;
+    font-size: 10px; color: var(--muted); font-family: var(--font-mono);
+    opacity: 0; transform: translateY(2px); transition: opacity 120ms, transform 120ms;
+    pointer-events: none;
+  }
+  .row:hover .meta { opacity: 1; transform: none; }
+  .row.is-child .meta { display: none; }
+  .row .arrow {
+    width: 20px; text-align: center; color: var(--muted); font-size: 10px; justify-self: end;
+  }
+  .row .quick-btns {
+    position: absolute; right: 38px; display: flex; gap: 2px;
+    opacity: 0; pointer-events: none; transition: opacity 120ms;
+  }
+  .row:hover .quick-btns { opacity: 1; pointer-events: auto; }
+  .quick-btns button {
+    width: 22px; height: 22px; border: 0; border-radius: 6px; background: transparent;
+    color: var(--muted); cursor: pointer; font-size: 12px; line-height: 1;
+  }
+  .quick-btns button:hover { background: var(--surface-2); color: var(--text); }
+  .quick-btns button.del:hover { color: var(--danger); }
+
+  .row.prio-high:not(.is-child) { background: var(--prio-row-bg); }
+  .row.prio-high:not(.is-child):hover { background: var(--prio-row-bg-hover); }
+  .row.is-child.parent-high { background: var(--prio-row-bg-child); }
+  .row.is-child.parent-high:hover { background: var(--prio-row-bg-child-hover); }
+
+  .menu {
+    position: fixed; min-width: 148px; padding: 4px;
+    background: var(--surface); border: 1px solid var(--border-strong);
+    border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.18); z-index: 40;
+  }
+  .menu button {
+    display: flex; width: 100%; align-items: center; gap: 8px; justify-content: flex-start;
+    padding: 6px 8px; border: 0; border-radius: 4px; background: transparent;
+    color: var(--text); font-size: 12px; font-family: var(--font-ui); cursor: pointer; text-align: left;
+  }
+  .menu button:hover { background: var(--surface-2); }
+  .menu button.del:hover { color: var(--danger); }
+  .menu .k { margin-left: auto; color: var(--muted); font-family: var(--font-mono); font-size: 10px; }
+  .menu .note {
+    padding: 5px 8px 3px; color: var(--muted); font-size: 10px;
+    border-top: 1px solid var(--border); margin-top: 3px;
+  }
+
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 18px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px;
+  }
+  .card h2 { font-size: 12px; font-weight: 500; margin: 0 0 10px; color: var(--muted); letter-spacing: 0.04em; }
+  .card ul { margin: 0; padding-left: 16px; }
+  .card li { color: var(--text); font-size: 12px; line-height: 1.7; }
+  .card li em { color: var(--muted); font-style: normal; }
+  .swatches { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .sw { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+  .sw i { width: 26px; height: 26px; border-radius: 4px; border: 1px solid var(--border); display: block; }
+  .hint { color: var(--muted); font-size: 11px; line-height: 1.7; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="head">
+    <h1>优先级底纹</h1>
+    <span class="tag">2026-11-25 · 样张</span>
+    <div class="ctrl">
+      <div class="seg" id="themeSeg">
+        <button data-theme-v="light" class="on">明</button>
+        <button data-theme-v="dark">暗</button>
+      </div>
+      <div class="seg" id="prioSeg">
+        <button data-prio="A" class="on">父任务 (A)</button>
+        <button data-prio="B">父任务 (B)</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <b>今日</b><span class="crumb">12 项</span>
+      <span class="crumb" style="margin-left:auto" id="stateNote">父任务 A · 子行淡一档</span>
+    </div>
+    <div class="quick"><span class="plus">＋</span> 添加任务，回车创建</div>
+
+    <div class="group-head warn"><span class="bar"></span>逾期<span class="count">7</span></div>
+    <div class="list" id="list">
+      <div class="row overdue prio-high" data-kind="parent" data-prio="A" data-title="季报复核">
+        <button class="cb" aria-label="完成"></button>
+        <div class="title">
+          <svg class="flag high" viewBox="0 0 16 16"><path d="M4 2v12M4 2h8l-2 3 2 3H4"/></svg>
+          <span>季报复核</span>
+        </div>
+        <span class="arrow">⌄</span>
+        <div class="meta">09/25 · 逾期 1 天</div>
+        <div class="quick-btns"><button title="编辑">✎</button><button title="旗标">⚑</button><button title="今天">▣</button><button class="del" title="删除">✕</button></div>
+      </div>
+
+      <div class="row" data-kind="parent" data-title="写第 10 周回测报告">
+        <button class="cb" aria-label="完成"></button>
+        <div class="title"><span>写第 10 周回测报告</span></div>
+        <span class="arrow"></span>
+        <div class="meta">本周五 · 硬件</div>
+        <div class="quick-btns"><button title="编辑">✎</button><button title="旗标">⚑</button><button title="今天">▣</button><button class="del" title="删除">✕</button></div>
+      </div>
+
+      <div class="row" data-kind="parent" data-title="周线复盘：人民网">
+        <button class="cb" aria-label="完成"></button>
+        <div class="title"><span>周线复盘：人民网</span></div>
+        <span class="arrow"></span>
+        <div class="meta">今天 · 复盘</div>
+        <div class="quick-btns"><button title="编辑">✎</button><button title="旗标">⚑</button><button title="今天">▣</button><button class="del" title="删除">✕</button></div>
+      </div>
+
+      <div class="row" id="target" data-kind="parent" data-title="准备季度复盘材料">
+        <button class="cb" aria-label="完成"></button>
+        <div class="title">
+          <svg class="flag high" id="targetFlag" viewBox="0 0 16 16"><path d="M4 2v12M4 2h8l-2 3 2 3H4"/></svg>
+          <span>准备季度复盘材料</span>
+        </div>
+        <span class="arrow">⌃</span>
+        <div class="meta">无日期 · 复盘 · 2 个子任务</div>
+        <div class="quick-btns"><button title="编辑">✎</button><button title="旗标">⚑</button><button title="今天">▣</button><button class="del" title="删除">✕</button></div>
+      </div>
+
+      <div class="row is-child" data-kind="child" data-title="收集各部门数据">
+        <button class="cb" aria-label="完成"></button>
+        <div class="title"><span>收集各部门数据</span></div>
+      </div>
+      <div class="row is-child" data-kind="child" data-title="整理会议纪要">
+        <button class="cb" aria-label="完成"></button>
+        <div class="title"><span>整理会议纪要</span></div>
+      </div>
+
+      <div class="row" data-kind="parent" data-title="核对军信股份的周线信号">
+        <button class="cb" aria-label="完成"></button>
+        <div class="title"><span>核对军信股份的周线信号</span></div>
+        <span class="arrow"></span>
+        <div class="meta">明天 · 复盘</div>
+        <div class="quick-btns"><button title="编辑">✎</button><button title="旗标">⚑</button><button title="今天">▣</button><button class="del" title="删除">✕</button></div>
+      </div>
+    </div>
+
+    <div class="group-head"><span class="bar"></span>无日期<span class="count">5</span></div>
+    <div class="list">
+      <div class="row" data-kind="parent" data-title="整理 QuantDinger 的策略清单">
+        <button class="cb" aria-label="完成"></button>
+        <div class="title"><span>整理 QuantDinger 的策略清单</span></div>
+        <span class="arrow"></span>
+        <div class="meta">量化</div>
+        <div class="quick-btns"><button title="编辑">✎</button><button title="旗标">⚑</button><button title="今天">▣</button><button class="del" title="删除">✕</button></div>
+      </div>
+      <div class="row" data-kind="parent" data-title="买网线">
+        <button class="cb" aria-label="完成"></button>
+        <div class="title"><span>买网线</span></div>
+        <span class="arrow"></span>
+        <div class="meta">无标签</div>
+        <div class="quick-btns"><button title="编辑">✎</button><button title="旗标">⚑</button><button title="今天">▣</button><button class="del" title="删除">✕</button></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="hint">在行上右键：父任务给完整菜单，子任务只给「标记完成 / 删除」，这就是本轮收回的入口。子行不带旗标、不浮快捷按钮，读数行也不渲染。</p>
+
+  <div class="grid2">
+    <div class="card">
+      <h2>撤掉的编辑入口</h2>
+      <ul>
+        <li>双击 / 慢双击 <em>editable = !isChild</em></li>
+        <li>右键菜单 <em>只剩两项</em></li>
+        <li>全局 E、Enter <em>同一道守卫</em></li>
+        <li>父被删后子行回到顶层 <em>isChildInList</em></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2>四枚令牌（当前档）</h2>
+      <div class="swatches" id="swatches"></div>
+      <p class="hint">父行一档、子行再淡一档；中、低两档不铺底色。</p>
+    </div>
+  </div>
+</div>
+
+<div id="menuRoot"></div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var target = document.getElementById('target');
+  var targetFlag = document.getElementById('targetFlag');
+  var stateNote = document.getElementById('stateNote');
+  var menuRoot = document.getElementById('menuRoot');
+  var prio = 'A';
+
+  function children() {
+    return Array.prototype.slice.call(document.querySelectorAll('.row.is-child'));
+  }
+  function applyPrio() {
+    var isA = prio === 'A';
+    target.classList.toggle('prio-high', isA);
+    targetFlag.style.visibility = isA ? 'visible' : 'hidden';
+    children().forEach(function (r) { r.classList.toggle('parent-high', isA); });
+    stateNote.textContent = isA ? '父任务 A · 子行淡一档' : '父任务 B · 整组不铺底';
+  }
+  function applyTheme(mode) {
+    root.setAttribute('data-theme', mode);
+    Array.prototype.forEach.call(document.querySelectorAll('#themeSeg button'), function (b) {
+      b.classList.toggle('on', b.getAttribute('data-theme-v') === mode);
+    });
+    renderSwatches();
+  }
+  function token(name) {
+    return getComputedStyle(root).getPropertyValue(name).trim();
+  }
+  function renderSwatches() {
+    var names = ['--prio-row-bg', '--prio-row-bg-child', '--prio-row-bg-hover', '--prio-row-bg-child-hover'];
+    document.getElementById('swatches').innerHTML = names.map(function (n) {
+      return '<div class="sw"><i style="background:' + token(n) + '"></i>' + n.replace('--prio-row-', '') + '</div>';
+    }).join('');
+  }
+
+  document.getElementById('themeSeg').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    applyTheme(b.getAttribute('data-theme-v'));
+  });
+  document.getElementById('prioSeg').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    prio = b.getAttribute('data-prio');
+    Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) {
+      x.classList.toggle('on', x === b);
+    });
+    applyPrio();
+  });
+
+  document.getElementById('list').addEventListener('click', function (e) {
+    var cb = e.target.closest('.cb');
+    if (cb) { cb.classList.toggle('on'); cb.setAttribute('aria-label', cb.classList.contains('on') ? '取消完成' : '完成'); }
+  });
+
+  function closeMenu() { menuRoot.innerHTML = ''; }
+  document.addEventListener('mousedown', function (e) {
+    if (!e.target.closest('.menu') && !e.target.closest('.row')) closeMenu();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenu(); });
+
+  function openMenu(x, y, html, width) {
+    menuRoot.innerHTML = '<div class="menu" style="left:' + x + 'px;top:' + y + 'px;width:' + (width || 148) + 'px">' + html + '</div>';
+    var m = menuRoot.firstChild;
+    var r = m.getBoundingClientRect();
+    if (y + r.height > window.innerHeight - 8) m.style.top = Math.max(8, window.innerHeight - r.height - 8) + 'px';
+    if (x + r.width > window.innerWidth - 8) m.style.left = Math.max(8, window.innerWidth - r.width - 8) + 'px';
+  }
+
+  document.addEventListener('contextmenu', function (e) {
+    var row = e.target.closest('.row');
+    if (!row) return;
+    e.preventDefault();
+    var title = row.getAttribute('data-title') || '';
+    if (row.getAttribute('data-kind') === 'child') {
+      var done = row.querySelector('.cb').classList.contains('on');
+      openMenu(e.clientX, e.clientY,
+        '<button data-act="toggle">' + (done ? '取消完成' : '标记完成') + '<span class="k">X</span></button>' +
+        '<button class="del" data-act="del">删除<span class="k">⌫</span></button>' +
+        '<div class="note">文本在父任务里改</div>', 168);
+    } else {
+      openMenu(e.clientX, e.clientY,
+        '<button data-act="edit">编辑<span class="k">E</span></button>' +
+        '<button data-act="flag">优先级<span class="k">F</span></button>' +
+        '<button data-act="today">今天到期<span class="k">T</span></button>' +
+        '<button class="del" data-act="del">删除<span class="k">⌫</span></button>');
+    }
+    menuRoot.firstChild.setAttribute('data-row-title', title);
+    menuRoot.firstChild.setAttribute('data-row-kind', row.getAttribute('data-kind'));
+  });
+
+  menuRoot.addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    var m = b.closest('.menu');
+    var kind = m.getAttribute('data-row-kind');
+    var row = document.querySelector('.row[data-title="' + m.getAttribute('data-row-title') + '"]');
+    var act = b.getAttribute('data-act');
+    if (row) {
+      if (act === 'toggle' || act === 'del') {
+        if (act === 'del') row.style.display = 'none';
+        else row.querySelector('.cb').classList.toggle('on');
+      }
+    }
+    closeMenu();
+  });
+
+  applyPrio();
+  applyTheme('light');
+})();
+</script>
+</body>
+</html>

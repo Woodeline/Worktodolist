@@ -14,7 +14,14 @@ export default function InlineTitleEditor({ value, onCommit, onCancel }) {
     const el = inputRef.current;
     if (!el) return;
     el.focus();
-    el.select();
+    // 光标落到末尾；不整段选中 —— 编辑浮窗里的子任务行内编辑也不铺选区，
+    // 一进来就一块深色高亮会把标题本身盖住。
+    try {
+      const end = el.value.length;
+      el.setSelectionRange(end, end);
+    } catch {
+      // 非文本输入不支持选区时忽略
+    }
   }, []);
 
   // Enter / Esc / 失焦可能在同一轮里连着来（Esc 会让输入框卸载），

@@ -393,7 +393,7 @@ describe('编辑浮窗：2026-11-18 登记卡版式契约', () => {
     const cb = cssRule('.subtask-list .checkbox');
     expect(cb).toContain('width: 16px');
     expect(cb).toContain('height: 16px');
-    expect(cb).toContain('border-radius: var(--r-pill)');
+    expect(cb).toContain('border-radius: var(--r-xs)');
     expect(cssRule('.subtask-list .checkbox.checked')).toContain('background: var(--accent)');
     const edit = cssRule('.edit-window .subtask-list .subtask-title-input');
     expect(edit).toContain('height: 22px');

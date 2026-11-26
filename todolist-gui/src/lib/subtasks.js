@@ -71,6 +71,14 @@ export function buildNesting(entries) {
 }
 
 /** 某条任务的子任务（没建索引或没有子时返回空数组）。 */
+// 「这一条算不算子任务」的单一口径（2026-11-25）：父任务还在列表里才算。
+// 父被删后子行按顶层渲染（depth 0），此时它要拿回主行的全部入口，
+// 否则会留下一条右键只有两项、快捷键打不开的死行。
+export function isChildInList(entries, entry) {
+  if (!entry || !entry.parentId) return false;
+  return entries.some((x) => x.stableId === entry.parentId);
+}
+
 export function childrenOf(nesting, stableId) {
   if (!nesting || !stableId) return [];
   const parent = nesting.stableIndex.get(stableId);

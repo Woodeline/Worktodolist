@@ -4,7 +4,7 @@ import { isOverdue, PRIORITY_LABELS } from '../lib/sortFilter';
 import { describeRecurrence } from '../lib/recurrence';
 import { classifyRowClick } from '../lib/clickTiming.js';
 import { displayTitle } from '../lib/displayTitle.js';
-import { PRIORITY_STEPS } from '../lib/priority.js';
+import { PRIORITY_STEPS, priorityClass } from '../lib/priority.js';
 import { colorHex, resolveColorId, useListStyle } from '../lib/listStyle.js';
 import { useContextMenu } from '../hooks/useContextMenu.jsx';
 import PriorityMark from './PriorityMark.jsx';
@@ -62,16 +62,41 @@ function copyPlain(text) {
   }
 }
 
+// 子任务右键只给两项（2026-11-25）：完成与删除。
+// 单独抽出来是为了让「不给编辑入口」变成可测的纯数据，不用点开菜单才看得到。
+export function childMenuItems(task, store) {
+  return [
+    {
+      type: 'item',
+      label: task.completed ? '取消完成' : '标记完成',
+      onClick: () => store.toggleComplete(task),
+    },
+    { type: 'item', label: '删除', danger: true, onClick: () => store.deleteTask(task) },
+  ];
+}
+
+// 日志（done.txt）里的行：文字不提供编辑，但勾选框可以把这一条撤回成未完成。
+// 同样是抽成纯数据，让「能不能撤回」变成可断言的结构。
+export function doneMenuItems(task, store) {
+  return [
+    { type: 'item', label: '撤回为未完成', onClick: () => store.toggleComplete(task) },
+    { type: 'sep' },
+    { type: 'item', label: '复制任务文本', onClick: () => copyPlain(task.raw || task.title) },
+  ];
+}
+
 export default function TaskRow({
   task,
   store,
   query = '',
   readonly = false,
+  restorable = false,
   depth = 0,
   kids = null,
   dragDisabled = false,
   hideDue = false,
   hasChildren = false,
+  parentHigh = false,
   collapsed = false,
   onToggleExpand = null,
   childLast = false,
@@ -188,10 +213,22 @@ export default function TaskRow({
     setInlineEditing(false);
   };
 
+  // 日志视图的勾选框表示「撤回」（2026-11-25）：这一行 completed 为 true，
+  // 走 toggleComplete 的取消完成分支，从 done.txt 搬回 todo.txt。
   const handleCheck = () => {
-    if (readonly) return;
+    if (readonly && !restorable) return;
     store.toggleComplete(task);
   };
+
+  const checkTitle = isChild
+    ? undefined
+    : readonly
+      ? restorable
+        ? '撤回为未完成'
+        : '已完成（只读）'
+      : checked
+        ? '取消完成'
+        : '完成';
 
   // 旗标 = 优先级的唯一记号：点它弹出「高 / 中 / 低 / 无」四色小旗。
   // 用同一个上下文菜单渲染器（键盘 ↑↓ / Enter / Esc 全部现成），不另造弹层。
@@ -217,9 +254,15 @@ export default function TaskRow({
   // 右键菜单 = 这一行能做的全部操作。只读行（done.txt / 未识别行）只留复制。
   const handleContextMenu = (e) => {
     if (readonly) {
-      openMenu(e, [
+      openMenu(e, restorable ? doneMenuItems(task, store) : [
         { type: 'item', label: '复制任务文本', onClick: () => copyPlain(task.raw || task.title) },
       ]);
+      return;
+    }
+    // 子任务不提供单独编辑入口（2026-11-25）：右键只留完成与删除，
+    // 文本统一在父任务的编辑浮窗里改。双击 / 慢双击 / Enter / E 同样不进编辑。
+    if (isChild) {
+      openMenu(e, childMenuItems(task, store));
       return;
     }
     const due = task.dueDate || null;
@@ -402,6 +445,8 @@ export default function TaskRow({
         selected ? 'selected' : '',
         readonly ? 'row-readonly' : '',
         isChild ? 'is-child' : '',
+        task.priority ? priorityClass(task.priority) : '',
+        parentHigh ? 'parent-prio-high' : '',
         childLast ? 'is-child-last' : '',
         minimal ? 'is-minimal' : '',
         quickPinned ? 'is-quick-pinned' : '',
@@ -450,11 +495,11 @@ export default function TaskRow({
       }}
     >
       <button
-        className={`checkbox${checked ? ' checked' : ''}${readonly ? ' disabled' : ''}`}
+        className={`checkbox${checked ? ' checked' : ''}${readonly && !restorable ? ' disabled' : ''}`}
         onClick={handleCheck}
         // 子任务行不挂原生 tooltip（用户要求：鼠标悬停不弹任何提示）；
         // 无障碍标签照旧，读屏用户不受影响。
-        title={isChild ? undefined : readonly ? '已完成（只读）' : checked ? '取消完成' : '完成'}
+        title={checkTitle}
         aria-label="切换完成状态"
       />
       {/* 子任务行是**另一套版式**（2026-11-15 定稿）：单行，只放复选框 + 标题。

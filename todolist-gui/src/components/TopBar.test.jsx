@@ -24,9 +24,6 @@ function bar({ store: extra = {}, ...props } = {}) {
       tab="list"
       sidebarCollapsed={false}
       onToggleSidebar={noop}
-      listMode="list"
-      effectiveMode="list"
-      onPickListMode={noop}
       searchOpen={false}
       onOpenSearch={noop}
       onCloseSearch={noop}
@@ -60,21 +57,9 @@ describe('页眉：搜索平时只有一个按钮', () => {
   });
 });
 
-describe('页眉：排序是一枚图标钮', () => {
-  it('自动档画上下箭头，手动档画抓手，两者都不是文字按钮', () => {
-    const auto = chunk(bar({ store: { sortMode: 'auto' } }), 'data-sort="auto"');
-    expect(auto).toContain('aria-label="排序：自动"');
-    expect(svgOf(auto)).toContain('M17 20V4');
-    expect(auto).not.toContain('排序 ·');
-
-    const manual = chunk(bar({ store: { sortMode: 'manual' } }), 'data-sort="manual"');
-    expect(manual).toContain('aria-label="排序：手动"');
-    expect((svgOf(manual).match(/<circle/g) || []).length).toBe(6);
-  });
-
-  it('日历里不给排序钮（那里没有作用对象）', () => {
-    const html = bar({ listMode: 'calendar', effectiveMode: 'calendar' });
-    expect(html).not.toContain('data-sort');
+describe('页眉：排序已移到快录条', () => {
+  it('页眉不再承载排序钮（列表才有的动作跟写一行放在一起）', () => {
+    expect(bar()).not.toContain('data-sort');
   });
 });
 
@@ -104,17 +89,15 @@ describe('页眉：只留「我在哪」', () => {
   });
 });
 
-describe('页眉：左「开关 + 视图」/ 右「搜索 + 排序」', () => {
+describe('页眉：左「开关 + 视图」/ 右「搜索」', () => {
   it('DOM 顺序就是视觉顺序', () => {
     const html = bar();
     const iToggle = html.indexOf('aria-label="折叠侧栏"');
     const iCrumb = html.indexOf('class="crumb"');
     const iSearch = html.indexOf('aria-label="搜索任务"');
-    const iSort = html.indexOf('data-sort=');
     expect(iToggle).toBeGreaterThan(-1);
     expect(iToggle).toBeLessThan(iCrumb);
     expect(iCrumb).toBeLessThan(iSearch);
-    expect(iSearch).toBeLessThan(iSort);
   });
 
   it('列表/日历切换控件已移除 —— 日历降为侧栏入口，页眉不再有 mode-switch', () => {
@@ -130,9 +113,9 @@ describe('页眉：左「开关 + 视图」/ 右「搜索 + 排序」', () => {
     expect(svgOf(toggle)).toContain('M9 3v18');
   });
 
-  it('三枚图标钮同一个类名（同族 = 同尺寸同悬停）', () => {
+  it('两枚图标钮同一个类名（同族 = 同尺寸同悬停）', () => {
     const html = bar();
-    ['aria-label="折叠侧栏"', 'aria-label="搜索任务"', 'data-sort='].forEach((needle) => {
+    ['aria-label="折叠侧栏"', 'aria-label="搜索任务"'].forEach((needle) => {
       expect(chunk(html, needle)).toContain('class="ctx-btn ctx-btn-icon');
     });
   });

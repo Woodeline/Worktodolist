@@ -12,6 +12,7 @@ import {
   depthOf,
   depthWithin,
   filterCollapsed,
+  isChildInList,
   nestChildren,
   withDescendants,
 } from './subtasks.js';
@@ -241,5 +242,23 @@ describe('depthWithin（只数本屏祖先）', () => {
     expect(depthWithin(null, leaf, new Set([leaf.id]))).toBe(0);
     expect(depthWithin(n, null, new Set())).toBe(0);
     expect(depthWithin(n, leaf, null)).toBe(0);
+  });
+});
+
+describe('isChildInList：算不算子任务只认父还在不在列表里', () => {
+  const parent = { id: 'p1', stableId: 'id:aaaaaa', parentId: null };
+  const kid = { id: 'c1', stableId: 'id:bbbbbb', parentId: 'id:aaaaaa' };
+
+  it('父在列表里 → true', () => {
+    expect(isChildInList([parent, kid], kid)).toBe(true);
+  });
+
+  it('父被删（只剩子行）→ false，让这条拿回主行入口', () => {
+    expect(isChildInList([kid], kid)).toBe(false);
+  });
+
+  it('没有 parentId / 传空 → false', () => {
+    expect(isChildInList([parent, kid], parent)).toBe(false);
+    expect(isChildInList([parent, kid], null)).toBe(false);
   });
 });

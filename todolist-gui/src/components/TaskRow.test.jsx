@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
-import TaskRow, { Highlight } from './TaskRow.jsx';
+import TaskRow, { Highlight, childMenuItems, doneMenuItems } from './TaskRow.jsx';
 import InlineTitleEditor from './InlineTitleEditor.jsx';
 import { ContextMenuProvider } from '../hooks/useContextMenu.jsx';
 import { parseSingleLine } from '../lib/todoParser.js';
@@ -521,9 +521,44 @@ describe('TaskRow 子任务行：独立版式（2026-11-15）', () => {
     expect(body).toContain('border: 0');
     expect(body).toContain('border-radius: 0');
     expect(body).toContain('box-shadow: none');
-    const btnAt = css.indexOf('.row-quick-btn:hover {');
+    const btnAt = css.indexOf('.row-quick-btn:hover');
     const btn = css.slice(btnAt, css.indexOf('}', btnAt));
-    expect(btn).toContain('background: transparent');
+    expect(btn).toContain('background: var(--surface-3)');
+    expect(btn).toContain('color: var(--text)');
+    const delAt = css.indexOf('.row-quick-del:hover {');
+    const del = css.slice(delAt, css.indexOf('}', delAt));
+    expect(del).toContain('background: var(--danger-soft)');
+    expect(del).toContain('color: var(--danger)');
+  });
+
+  // 2026-11-23：行内标题编辑跟编辑浮窗的子任务行内编辑同一套 —— 一条 accent
+  // 下划线，不画方框、不铺底色，进来时也不整段选中。
+  it('样式契约：行内标题编辑是一条 accent 下划线，不画方框', () => {
+    const css = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'index.css'),
+      'utf8'
+    );
+    const at = css.indexOf('.row-title-input {');
+    const body = css.slice(at, css.indexOf('}', at));
+    expect(body).toContain('width: calc(100% - var(--row-quick-w))');
+    expect(css).toContain('--row-quick-w: 91px');
+    expect(body).toContain('height: 22px');
+    expect(body).toContain('padding: 0');
+    expect(body).toContain('border: 0');
+    expect(body).toContain('border-bottom: 1px solid var(--accent)');
+    expect(body).toContain('border-radius: 0');
+    expect(body).toContain('background: transparent');
+    expect(body).toContain('box-shadow: none');
+    expect(body).not.toContain('border: 1px solid');
+  });
+
+  it('行内编辑不整段选中（避免一进来就铺一块深色选区）', () => {
+    const src = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), 'InlineTitleEditor.jsx'),
+      'utf8'
+    );
+    expect(src).toContain('setSelectionRange');
+    expect(src).not.toContain('el.select()');
   });
 });
 
@@ -731,5 +766,117 @@ describe('TaskRow · 日历浮层的精简行（minimal）', () => {
 
   it('不加 minimal 时没有 is-minimal（主列表不受影响）', () => {
     expect(render(parseSingleLine('交周报'))).not.toContain('is-minimal');
+  });
+});
+
+// 2026-11-25：子任务一律不带单独编辑入口。右键只剩完成与删除；
+// 双击 / 慢双击早就不进编辑，Enter / E 由 App 的 focusedIsChild 守住。
+describe('子任务不提供单独编辑入口', () => {
+  const task = { id: 'k1', title: '收集各部门数据', completed: false };
+
+  it('右键菜单只有「标记完成」与「删除」，没有编辑项', () => {
+    const store = { toggleComplete: () => {}, deleteTask: () => {} };
+    const items = childMenuItems(task, store);
+    expect(items.map((i) => i.label)).toEqual(['标记完成', '删除']);
+    expect(items.some((i) => /编辑/.test(i.label || ''))).toBe(false);
+  });
+
+  it('已完成时第一项改口径为「取消完成」，删除仍留在菜单里', () => {
+    const items = childMenuItems({ ...task, completed: true }, {});
+    expect(items.map((i) => i.label)).toEqual(['取消完成', '删除']);
+    expect(items[1]).toMatchObject({ danger: true });
+  });
+
+  it('两项各自调 store 的完成 / 删除，不碰编辑浮窗', () => {
+    const calls = [];
+    const store = {
+      toggleComplete: (t) => calls.push(['toggle', t.title]),
+      deleteTask: (t) => calls.push(['delete', t.title]),
+      openEditor: (id) => calls.push(['edit', id]),
+    };
+    childMenuItems(task, store).forEach((i) => i.onClick());
+    expect(calls).toEqual([['toggle', '收集各部门数据'], ['delete', '收集各部门数据']]);
+  });
+});
+
+describe('高优先级行的底色谱（2026-11-25）', () => {
+  const css = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '../index.css'), 'utf8');
+
+  it('行上带 prio-high 类，父行与子行都带，供视图选择器铺底', () => {
+    const parent = render(parseSingleLine('(A) 准备季度复盘材料'));
+    expect(parent).toContain('prio-high');
+    const child = render(parseSingleLine('(A) 收集各部门数据'), { depth: 1 });
+    expect(child).toContain('is-child');
+    expect(child).toContain('prio-high');
+  });
+
+  it('只在 today / upcoming 两个视图生效，子行用更淡的一档', () => {
+    expect(css).toContain(".task-list[data-view='today'] .task-row.prio-high:not(.is-child):not(.selected)");
+    expect(css).toContain(".task-list[data-view='upcoming'] .task-row.prio-high:not(.is-child):not(.selected)");
+    expect(css).toContain(".task-list[data-view='today'] .task-row.is-child.prio-high:not(.selected)");
+    expect(css).toContain(".task-list[data-view='today'] .task-row.parent-prio-high:not(.selected)");
+    expect(css).toContain(".task-list[data-view='upcoming'] .task-row.parent-prio-high:not(.selected)");
+    expect(css).toContain('background: var(--prio-row-bg-child)');
+  });
+
+  it('四枚令牌明暗各一套，选中态不被底色盖掉', () => {
+    for (const k of ['--prio-row-bg', '--prio-row-bg-child', '--prio-row-bg-hover', '--prio-row-bg-child-hover']) {
+      expect((css.match(new RegExp(k + ':', 'g')) || []).length).toBe(2);
+    }
+    expect(css).toContain(':not(.selected)');
+  });
+});
+
+describe('日志行的撤回（2026-11-25）', () => {
+  const done = parseSingleLine('x 2026-09-25 季报复核 id:r3q9zm');
+
+  it('readonly + restorable 时勾选框可点，提示写「撤回为未完成」', () => {
+    const html = render(done, { readonly: true, restorable: true });
+    expect(html).toContain('撤回为未完成');
+    expect(html).not.toContain('checkbox checked disabled');
+  });
+
+  it('readonly 但不可撤回时勾选框仍是 disabled', () => {
+    const html = render(done, { readonly: true });
+    expect(html).toContain('已完成（只读）');
+    expect(html).toContain('checkbox checked disabled');
+  });
+
+  it('右键菜单给「撤回为未完成」与复制，不给编辑', () => {
+    const calls = [];
+    const store = { toggleComplete: (t) => calls.push(t.id) };
+    const items = doneMenuItems(done, store);
+    const labels = items.filter((i) => i.type === 'item').map((i) => i.label);
+    expect(labels).toEqual(['撤回为未完成', '复制任务文本']);
+    expect(items.some((i) => label(i) === '编辑…')).toBe(false);
+    items[0].onClick();
+    expect(calls).toEqual([done.id]);
+
+    function label(i) { return i.label || ''; }
+  });
+});
+
+describe('复选框方形（2026-11-25）', () => {
+  const css = readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'index.css'),
+    'utf8'
+  );
+
+  it('列表 18px 方形用 --r-xs，勾收到 10px', () => {
+    const rule = css.slice(css.indexOf('.task-row .checkbox {'), css.indexOf('.task-row .checkbox {') + 260);
+    expect(rule).toContain('border-radius: var(--r-xs)');
+    expect(rule).toContain('width: 18px');
+    expect(css).toContain('center / 10px 10px no-repeat');
+  });
+
+  it('子任务 14px 方框用 3px 圆角，勾收到 8px', () => {
+    const block = css.slice(css.indexOf('.task-row.is-child .checkbox {'));
+    expect(block.slice(0, 200)).toContain('border-radius: 3px');
+    expect(block.slice(0, 300)).toContain('mask-size: 8px 8px');
+  });
+
+  it('不再回退成圆形（--r-pill）', () => {
+    const listRule = css.slice(css.indexOf('.task-row .checkbox {'), css.indexOf('.task-row .checkbox {') + 260);
+    expect(listRule).not.toContain('--r-pill');
   });
 });

@@ -25,7 +25,7 @@ import { monthKey, projectionForMonth, shiftDate } from './lib/calendar.js';
 import { useListMode } from './lib/listMode.js';
 import { noticeState } from './lib/layoutMode.js';
 import { useLayoutMode } from './hooks/useLayoutMode.js';
-import { buildNesting, childProgress, depthWithin, filterCollapsed, nestChildren } from './lib/subtasks.js';
+import { buildNesting, childProgress, depthWithin, filterCollapsed, isChildInList, nestChildren } from './lib/subtasks.js';
 import { useRowCollapse } from './hooks/useRowCollapse.js';
 import { buildAppMenuItems } from './lib/appMenu.js';
 import TopBar from './components/TopBar.jsx';
@@ -33,6 +33,7 @@ import Sidebar from './components/Sidebar.jsx';
 import BottomNav from './components/BottomNav.jsx';
 import TaskRow from './components/TaskRow.jsx';
 import QuickAdd from './components/QuickAdd.jsx';
+import SortModeButton from './components/SortModeButton.jsx';
 import CalendarView from './components/CalendarView.jsx';
 import LayoutNotice from './components/LayoutNotice.jsx';
 import EditDrawer from './components/EditDrawer.jsx';
@@ -328,6 +329,11 @@ export function MainList({
       const kids = childProgress(nesting, t.stableId);
       const canExpand = canExpandTask(t);
       const key = t.stableId || t.id;
+      // 子任务的淡红底跟着父任务走（2026-11-25）：父是高优先级，子任务本身
+      // 不必也带 (A)，整组都该被「今日 / 即将到期」的提醒圈住。
+      const parentTask = t.parentId
+        ? store.todoEntries.find((x) => x.stableId === t.parentId)
+        : null;
       return {
         depth: depthOf(t),
         kids,
@@ -335,9 +341,10 @@ export function MainList({
         collapsed: canExpand && collapsed.has(key),
         onToggleExpand: canExpand ? () => toggleExpand(key) : null,
         childLast: childTail,
+        parentHigh: Boolean(parentTask && parentTask.priority === 'A'),
       };
     },
-    [nesting, canExpandTask, depthOf, collapsed, toggleExpand]
+    [nesting, canExpandTask, depthOf, collapsed, toggleExpand, store.todoEntries]
   );
 
   // 组头的一键按钮只作用于本屏真有可展开子项的父任务。
@@ -366,9 +373,9 @@ export function MainList({
     if (doneTasks.length === 0) return <div className="empty-state">日志还是空的</div>;
     return (
       <div className="task-list">
-        <GroupHead label="日志 · done.txt（只读）" count={doneTasks.length} />
+        <GroupHead label="日志 · done.txt" count={doneTasks.length} />
         {doneTasks.map((task) => (
-          <TaskRow key={task.id} task={task} store={store} query={query} readonly />
+          <TaskRow key={task.id} task={task} store={store} query={query} readonly restorable />
         ))}
       </div>
     );
@@ -413,7 +420,7 @@ export function MainList({
     // 可展开父项（不只是这一组），这样「今日」也有一眼可见的总开关。
     const topGroup = overdue.length > 0 ? 'overdue' : dueToday.length > 0 ? 'dueToday' : 'noDate';
     return (
-      <div className="task-list">
+      <div className="task-list" data-view="today">
         {overdue.length > 0 && (
           <GroupHead
             label="逾期"
@@ -474,7 +481,7 @@ export function MainList({
   const ordered = filterCollapsed(nested, nesting, collapsed);
   const childTails = childRunTails(ordered, depthOf);
   return (
-    <div className="task-list">
+    <div className="task-list" data-view={store.view}>
       <GroupHead
         label={store.view === 'inbox' ? '收集箱' : store.view === 'upcoming' ? '即将到期' : '全部任务'}
         count={visible.length}
@@ -917,6 +924,14 @@ export default function App() {
     [isCalendar, calProjection, calDay, orderedIds, store.focusedId, store.setFocusedId]
   );
 
+  // 子任务不提供单独编辑入口（2026-11-25）：全局 Enter / E 也不替它打开浮窗，
+  // 否则「右键没编辑项」只是遮住了其中一个入口。文本在父任务的子任务区里改。
+  const focusedIsChild = useMemo(() => {
+    if (!store.focusedId) return false;
+    const t = store.todoEntries.find((x) => x.id === store.focusedId);
+    return isChildInList(store.todoEntries, t);
+  }, [store.focusedId, store.todoEntries]);
+
   useHotkeys({
     // 设置页打开时禁用全局快捷键 —— 否则在设置里按 Esc 会顺手清掉列表页的搜索词。
     // 编辑浮窗打开时也禁用：e / n 不该穿透到浮窗后面的列表（Esc / 回车由浮窗自己处理）。
@@ -929,10 +944,10 @@ export default function App() {
     onSearch: openSearch,
     onMove: moveSelection,
     onEdit: () => {
-      if (store.focusedId) store.openEditor(store.focusedId);
+      if (store.focusedId && !focusedIsChild) store.openEditor(store.focusedId);
     },
     onEnter: () => {
-      if (store.focusedId) store.openEditor(store.focusedId);
+      if (store.focusedId && !focusedIsChild) store.openEditor(store.focusedId);
     },
     onEscape: () => {
       const action = resolveEscape({
@@ -1015,8 +1030,6 @@ export default function App() {
       sidebarCollapsed={sidebarCollapsed}
       onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
       chrome={customTitlebar}
-      listMode={preferredMode}
-      effectiveMode={effectiveMode}
       searchOpen={searchOpen}
       onOpenSearch={openSearch}
       onCloseSearch={closeSearch}
@@ -1120,6 +1133,7 @@ export default function App() {
                   <div className="list-col">
                     <div className="quick-add-bar">
                       <QuickAdd store={store} inputRef={store.quickAddRef} />
+                      <SortModeButton store={store} />
                     </div>
                     <LayoutNotice
                       state={layoutNotice}
